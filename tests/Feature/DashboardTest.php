@@ -21,6 +21,8 @@ class DashboardTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
+        // The dashboard route is `Route::redirect('dashboard', '/issues')`
+        // so an authenticated visit returns a 302 to /issues.
         $response = $this->get(route('dashboard'));
         $response->assertRedirect('/issues');
     }

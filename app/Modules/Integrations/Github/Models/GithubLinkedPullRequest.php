@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Integrations\Github\Models;
 
 use App\Modules\Issues\Models\Issue;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class GithubLinkedPullRequest extends Model
 {
+    use HasFactory;
+
     protected $table = 'github_linked_pull_requests';
 
     protected $fillable = [
