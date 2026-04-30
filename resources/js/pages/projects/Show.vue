@@ -41,6 +41,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { useFavourites } from '@/composables/useFavourites';
 import { renderMarkdown } from '@/lib/markdown';
 import { startedProgressByState } from '@/lib/states';
 
@@ -463,28 +464,21 @@ function cancelDesc() {
 }
 
 // =================================================================
-// Favourites
+// Favourites (server-side)
 // =================================================================
-const FAV_KEY = computed(
-    () => `aims:favourites:project:${props.project.slug}`,
+const { isFavourited, toggle: toggleFav } = useFavourites();
+const projectHref = computed<string>(() => `/projects/${props.project.slug}`);
+const isFavourite = computed<boolean>(() =>
+    isFavourited('project', projectHref.value),
 );
-const isFavourite = ref<boolean>(false);
 function toggleFavourite() {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    try {
-        if (isFavourite.value) {
-            window.localStorage.removeItem(FAV_KEY.value);
-            isFavourite.value = false;
-        } else {
-            window.localStorage.setItem(FAV_KEY.value, '1');
-            isFavourite.value = true;
-        }
-    } catch {
-        // ignore
-    }
+    toggleFav({
+        kind: 'project',
+        href: projectHref.value,
+        label: props.project.name,
+        icon: props.project.icon ?? 'FolderKanban',
+        color: props.project.color ?? null,
+    });
 }
 
 function copyLink() {
@@ -629,7 +623,7 @@ function submitMilestone() {
 }
 
 // =================================================================
-// Mounted: load favourite + collapse state
+// Mounted: load collapse state
 // =================================================================
 onMounted(() => {
     if (typeof window === 'undefined') {
@@ -637,7 +631,6 @@ onMounted(() => {
     }
 
     try {
-        isFavourite.value = window.localStorage.getItem(FAV_KEY.value) === '1';
         const raw = window.localStorage.getItem(COLLAPSE_KEY.value);
 
         if (raw) {
@@ -655,8 +648,6 @@ watch(
     () => props.project.slug,
     () => {
         try {
-            isFavourite.value =
-                window.localStorage.getItem(FAV_KEY.value) === '1';
             const raw = window.localStorage.getItem(COLLAPSE_KEY.value);
             collapsed.value = new Set(raw ? JSON.parse(raw) : []);
         } catch {

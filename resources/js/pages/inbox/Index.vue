@@ -14,6 +14,7 @@ import { computed, ref } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
+import { useFavourites } from '@/composables/useFavourites';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -48,7 +49,16 @@ const props = defineProps<{
     counts: { total: number; assigned: number; comments: number };
 }>();
 
-const starred = ref(false);
+const { isFavourited, toggle } = useFavourites();
+const starred = computed(() => isFavourited('inbox', '/inbox'));
+function toggleStar() {
+    toggle({
+        kind: 'inbox',
+        href: '/inbox',
+        label: 'Inbox',
+        icon: 'Inbox',
+    });
+}
 const filterAssigned = ref(true);
 const filterCreated = ref(true);
 const filterCommented = ref(true);
@@ -182,7 +192,7 @@ const grouped = computed(() => {
                 type="button"
                 class="ml-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 :title="starred ? 'Unfavourite' : 'Favourite'"
-                @click="starred = !starred"
+                @click="toggleStar"
             >
                 <Star
                     class="size-3.5"

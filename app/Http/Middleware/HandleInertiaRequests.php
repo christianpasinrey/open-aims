@@ -3,8 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Cycles\Models\Cycle;
+use App\Modules\Favourites\Models\UserFavourite;
 use App\Modules\Teams\Models\Team;
-use App\Modules\Views\Models\IssueView;
 use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\Request;
@@ -102,27 +102,24 @@ class HandleInertiaRequests extends Middleware
             ->all();
 
         $userId = (int) (auth()->id() ?? 0);
-        $favouriteViews = [];
+        $favourites = [];
         if ($userId > 0) {
-            $favouriteViews = IssueView::query()
+            $favourites = UserFavourite::query()
+                ->where('user_id', $userId)
                 ->where('workspace_id', $workspace->getKey())
-                ->where('is_favorite', true)
-                ->where(function ($q) use ($userId): void {
-                    $q->where(function ($qq) use ($userId): void {
-                        $qq->where('scope', 'personal')->where('owner_user_id', $userId);
-                    })
-                        ->orWhere('scope', 'team')
-                        ->orWhere('scope', 'workspace');
-                })
-                ->with('team:id,key,name')
                 ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(['id', 'name', 'scope', 'team_id', 'owner_user_id', 'sort_order'])
-                ->map(fn (IssueView $v): array => [
-                    'id' => $v->id,
-                    'name' => $v->name,
-                    'scope' => $v->scope?->value,
-                    'team_key' => $v->team?->key,
+                ->orderBy('id')
+                ->limit(50)
+                ->get()
+                ->map(fn (UserFavourite $f): array => [
+                    'id' => (int) $f->id,
+                    'kind' => (string) $f->kind,
+                    'label' => (string) $f->label,
+                    'icon' => $f->icon,
+                    'color' => $f->color,
+                    'href' => (string) $f->href,
+                    'target_id' => $f->target_id !== null ? (int) $f->target_id : null,
+                    'target_type' => $f->target_type,
                 ])
                 ->all();
         }
@@ -134,7 +131,7 @@ class HandleInertiaRequests extends Middleware
             'color' => self::workspaceColor($workspace),
             'logo_url' => $workspace->logo_url,
             'teams' => $teams,
-            'favourite_views' => $favouriteViews,
+            'favourites' => $favourites,
         ];
     }
 

@@ -12,11 +12,12 @@ import {
     SlidersHorizontal,
     Star,
 } from 'lucide-vue-next';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
+import { useFavourites } from '@/composables/useFavourites';
 import {
     Dialog,
     DialogClose,
@@ -231,94 +232,42 @@ function clearFilters() {
     applyParams({ status: null, lead: null });
 }
 
-// ---- Favourites (localStorage) ----
-const FAV_PREFIX = 'aims:favourites:project:';
-const favourites = ref<Set<string>>(new Set());
+// ---- Favourites (server-side) ----
+const { isFavourited, toggle: toggleFavourite } = useFavourites();
 const favouritesView = ref<boolean>(false);
 
-function readFavourites(): Set<string> {
-    if (typeof window === 'undefined') {
-        return new Set();
-    }
-
-    const out = new Set<string>();
-
-    try {
-        for (let i = 0; i < window.localStorage.length; i++) {
-            const key = window.localStorage.key(i);
-
-            if (!key || !key.startsWith(FAV_PREFIX)) {
-                continue;
-            }
-
-            if (window.localStorage.getItem(key) === '1') {
-                out.add(key.slice(FAV_PREFIX.length));
-            }
-        }
-    } catch {
-        // localStorage may be unavailable in private mode
-    }
-
-    return out;
+function isFav(project: Project): boolean {
+    return isFavourited('project', `/projects/${project.slug}`);
 }
 
-function isFav(slug: string): boolean {
-    return favourites.value.has(slug);
-}
-
-function toggleFav(slug: string, event?: Event) {
+function toggleFav(project: Project, event?: Event) {
     if (event) {
         event.preventDefault();
         event.stopPropagation();
     }
 
-    const key = FAV_PREFIX + slug;
-    const next = new Set(favourites.value);
-
-    if (next.has(slug)) {
-        next.delete(slug);
-
-        try {
-            window.localStorage.removeItem(key);
-        } catch {
-            /* ignore */
-        }
-    } else {
-        next.add(slug);
-
-        try {
-            window.localStorage.setItem(key, '1');
-        } catch {
-            /* ignore */
-        }
-    }
-
-    favourites.value = next;
+    toggleFavourite({
+        kind: 'project',
+        href: `/projects/${project.slug}`,
+        label: project.name,
+        icon: project.icon ?? 'FolderKanban',
+        color: project.color ?? null,
+    });
 }
 
 onMounted(() => {
-    favourites.value = readFavourites();
-
     if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
         favouritesView.value = url.searchParams.get('fav') === '1';
     }
 });
 
-// Re-read favourites on Inertia navigations (e.g. user comes back from a project)
-watch(
-    () => props.projects.map((p) => p.slug).join(','),
-    () => {
-        favourites.value = readFavourites();
-    },
-);
-
 const visibleProjects = computed<Project[]>(() => {
     if (!favouritesView.value) {
         return props.projects;
     }
 
-    return props.projects.filter((p) => favourites.value.has(p.slug));
+    return props.projects.filter((p) => isFav(p));
 });
 
 // Grouping for the list. The backend already orders the rows; we just bucket.
@@ -935,28 +884,22 @@ const activeFilterCount = computed<number>(() => {
                             type="button"
                             class="absolute top-1/2 right-1 -translate-y-1/2 rounded p-1 transition-opacity"
                             :class="[
-                                isFav(project.slug)
+                                isFav(project)
                                     ? 'text-amber-400 opacity-100 hover:bg-accent'
                                     : 'text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:bg-accent hover:text-foreground',
                             ]"
                             :aria-label="
-                                isFav(project.slug)
-                                    ? 'Unfavourite'
-                                    : 'Favourite'
+                                isFav(project) ? 'Unfavourite' : 'Favourite'
                             "
                             :title="
-                                isFav(project.slug)
-                                    ? 'Unfavourite'
-                                    : 'Favourite'
+                                isFav(project) ? 'Unfavourite' : 'Favourite'
                             "
-                            @click.stop="toggleFav(project.slug, $event)"
+                            @click.stop="toggleFav(project, $event)"
                         >
                             <Star
                                 class="size-3.5"
                                 :fill="
-                                    isFav(project.slug)
-                                        ? 'currentColor'
-                                        : 'none'
+                                    isFav(project) ? 'currentColor' : 'none'
                                 "
                             />
                         </button>

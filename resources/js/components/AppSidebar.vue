@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
+import * as LucideIcons from 'lucide-vue-next';
 import {
     Inbox,
     LayoutGrid,
@@ -27,7 +28,11 @@ import {
     Target,
     Layers,
     Star,
+    Eye,
+    Circle,
 } from 'lucide-vue-next';
+import { resolveEmoji } from '@/lib/emoji';
+import type { Favourite, FavouriteKind } from '@/composables/useFavourites';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import Avatar from '@/components/repo/Avatar.vue';
@@ -75,12 +80,6 @@ type WorkspaceTeam = {
     current_cycle_number?: number | null;
     upcoming_cycle_number?: number | null;
 };
-type FavouriteView = {
-    id: number;
-    name: string;
-    scope: 'personal' | 'team' | 'workspace' | null;
-    team_key: string | null;
-};
 type WorkspaceProp = {
     id: number;
     name: string;
@@ -88,7 +87,7 @@ type WorkspaceProp = {
     color?: string | null;
     logo_url?: string | null;
     teams: WorkspaceTeam[];
-    favourite_views?: FavouriteView[];
+    favourites?: Favourite[];
 };
 type UserWorkspace = {
     id: number;
@@ -124,9 +123,39 @@ const userWorkspaces = computed<UserWorkspace[]>(() => {
     return Array.isArray(list) ? list : [];
 });
 const teams = computed<WorkspaceTeam[]>(() => workspace.value?.teams ?? []);
-const favouriteViews = computed<FavouriteView[]>(
-    () => workspace.value?.favourite_views ?? [],
+const favourites = computed<Favourite[]>(
+    () => workspace.value?.favourites ?? [],
 );
+
+// Resolve a favourite's display icon: emoji shortcode → emoji, lucide name →
+// component, falls back to Star.
+const KIND_DEFAULT_ICON: Record<FavouriteKind, string> = {
+    view: 'Eye',
+    issue: 'Circle',
+    project: 'FolderKanban',
+    cycle: 'CalendarRange',
+    inbox: 'Inbox',
+    team_view: 'LayoutGrid',
+    page: 'Star',
+};
+
+type IconMap = Record<string, unknown>;
+
+function favouriteIconComponent(fav: Favourite): unknown | null {
+    const raw = fav.icon ?? KIND_DEFAULT_ICON[fav.kind] ?? 'Star';
+    const map = LucideIcons as unknown as IconMap;
+    if (raw && Object.prototype.hasOwnProperty.call(map, raw)) {
+        return map[raw];
+    }
+    return Star;
+}
+
+function favouriteEmoji(fav: Favourite): string | null {
+    if (!fav.icon) {
+        return null;
+    }
+    return resolveEmoji(fav.icon);
+}
 
 const currentUrl = computed<string>(() => {
     const url = (page as unknown as { url?: string }).url;
@@ -519,7 +548,7 @@ const tryOpen = ref(false);
                 </SidebarMenu>
             </SidebarGroup>
 
-            <SidebarGroup v-if="favouriteViews.length" class="px-2 py-0">
+            <SidebarGroup v-if="favourites.length" class="px-2 py-0">
                 <button
                     type="button"
                     class="flex w-full items-center gap-1 px-2 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
@@ -533,13 +562,28 @@ const tryOpen = ref(false);
                 </button>
                 <SidebarMenu v-show="favouritesOpen">
                     <SidebarMenuItem
-                        v-for="fv in favouriteViews"
-                        :key="fv.id"
+                        v-for="fav in favourites"
+                        :key="fav.id"
                     >
-                        <SidebarMenuButton as-child :tooltip="fv.name">
-                            <Link :href="`/views/${fv.id}`">
-                                <Star class="text-amber-400" />
-                                <span class="truncate">{{ fv.name }}</span>
+                        <SidebarMenuButton as-child :tooltip="fav.label">
+                            <Link :href="fav.href">
+                                <span
+                                    v-if="favouriteEmoji(fav)"
+                                    class="text-[14px] leading-none"
+                                    aria-hidden="true"
+                                >
+                                    {{ favouriteEmoji(fav) }}
+                                </span>
+                                <component
+                                    v-else
+                                    :is="favouriteIconComponent(fav)"
+                                    :style="
+                                        fav.color
+                                            ? { color: fav.color }
+                                            : undefined
+                                    "
+                                />
+                                <span class="truncate">{{ fav.label }}</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -578,7 +622,7 @@ const tryOpen = ref(false);
                             <DropdownMenuTrigger as-child>
                                 <button
                                     type="button"
-                                    class="absolute top-1.5 right-1.5 hidden rounded p-0.5 text-muted-foreground group-hover/team:flex hover:bg-sidebar-accent hover:text-foreground"
+                                    class="absolute top-1.5 right-1.5 flex rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/team:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 hover:bg-sidebar-accent hover:text-foreground"
                                     aria-label="Team menu"
                                     title="Team menu"
                                 >
@@ -586,6 +630,7 @@ const tryOpen = ref(false);
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
+                                side="right"
                                 align="start"
                                 :side-offset="4"
                                 class="w-48"

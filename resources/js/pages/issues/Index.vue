@@ -14,6 +14,7 @@ import ProjectChip from '@/components/repo/ProjectChip.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import { startedProgressByState } from '@/lib/states';
+import { useFavourites } from '@/composables/useFavourites';
 
 type State = {
     id: number;
@@ -386,36 +387,41 @@ watch(
 );
 
 // ------- Favourite (star) ----------------------------------------------
-function favouriteKey(): string {
-    return `aims:favourites:/issues?team=${props.team?.key ?? ''}`;
-}
-const favourited = ref(false);
-function loadFavourite(): void {
-    if (typeof window === 'undefined') {
-        return;
+const { isFavourited, toggle: toggleFav } = useFavourites();
+const favouriteHref = computed<string>(() => {
+    const params = new URLSearchParams();
+
+    if (props.team?.key) {
+        params.set('team', props.team.key);
     }
 
-    try {
-        favourited.value = window.localStorage.getItem(favouriteKey()) === '1';
-    } catch {
-        favourited.value = false;
+    if (safeFilters.value.assignee) {
+        params.set('assignee', safeFilters.value.assignee);
     }
-}
+
+    const q = params.toString();
+
+    return q ? `/issues?${q}` : '/issues';
+});
+const favouriteLabel = computed<string>(() => {
+    if (props.team) {
+        return `${props.team.name} · ${headerLabel.value}`;
+    }
+
+    return headerLabel.value;
+});
+const favourited = computed<boolean>(() =>
+    isFavourited('team_view', favouriteHref.value),
+);
 function toggleFavourite(): void {
-    favourited.value = !favourited.value;
-
-    try {
-        if (favourited.value) {
-            window.localStorage.setItem(favouriteKey(), '1');
-        } else {
-            window.localStorage.removeItem(favouriteKey());
-        }
-    } catch {
-        // ignore quota / private mode errors.
-    }
+    toggleFav({
+        kind: 'team_view',
+        href: favouriteHref.value,
+        label: favouriteLabel.value,
+        icon: 'LayoutGrid',
+        color: props.team?.color ?? null,
+    });
 }
-onMounted(loadFavourite);
-watch(() => props.team?.key, loadFavourite);
 
 // ------- Inline composer ------------------------------------------------
 const composerOpen = ref<string | null>(null); // group key currently composing
