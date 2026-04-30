@@ -17,7 +17,8 @@ return new class extends Migration
             'triage' => '#fb923c',
             'backlog' => '#bec2c8',
             'unstarted' => '#95a2b3',
-            'completed' => '#10b981',
+            // repo's Done is brand purple, not green.
+            'completed' => '#5e6ad2',
             'canceled' => '#95a2b3',
         ];
 
@@ -43,14 +44,17 @@ return new class extends Migration
                 continue;
             }
 
+            // repo-ish gradient within started: yellow (early) → purple
+            // (late, mirroring "In Review"). Avoids clashing with Done's
+            // purple by using a slightly different hue for the very-late slot.
             $palette = match (true) {
                 $count === 1 => ['#f2c94c'],
-                $count === 2 => ['#f2c94c', '#10b981'],
-                default => ['#f2c94c', '#3b82f6', '#10b981'],
+                $count === 2 => ['#f2c94c', '#a855f7'],
+                default => ['#f2c94c', '#3b82f6', '#a855f7'],
             };
 
             foreach ($started as $i => $s) {
-                $color = $palette[$i] ?? '#10b981';
+                $color = $palette[$i] ?? '#a855f7';
                 DB::table('workflow_states')
                     ->where('id', $s->id)
                     ->update(['color' => $color]);
