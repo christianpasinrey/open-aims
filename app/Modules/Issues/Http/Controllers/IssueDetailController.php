@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Issues\Http\Controllers;
 
+use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Enums\IssuePriority;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Projects\Models\Project;
+use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
@@ -70,6 +73,22 @@ final class IssueDetailController
             ->where('team_id', $team->id)
             ->orderBy('position')
             ->get(['id', 'name', 'type', 'color', 'position']);
+
+        $cycles = Cycle::query()
+            ->where('team_id', $team->id)
+            ->orderByDesc('starts_at')
+            ->limit(50)
+            ->get(['id', 'number', 'name', 'starts_at', 'ends_at']);
+
+        $labels = Label::query()
+            ->where('team_id', $team->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'color']);
+
+        $projects = Project::query()
+            ->where('workspace_id', $workspace->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'color', 'icon']);
 
         return Inertia::render('issues/Show', [
             'team' => [
@@ -164,7 +183,41 @@ final class IssueDetailController
                 'name' => $s->name,
                 'type' => $s->type,
                 'color' => $s->color,
+                'position' => $s->position,
+            ])->all(),
+            'priorities' => $this->priorityOptions(),
+            'cycles' => $cycles->map(fn (Cycle $c): array => [
+                'id' => $c->id,
+                'number' => $c->number,
+                'name' => $c->name,
+                'starts_at' => $c->starts_at?->toDateString(),
+                'ends_at' => $c->ends_at?->toDateString(),
+            ])->all(),
+            'labels' => $labels->map(fn (Label $l): array => [
+                'id' => $l->id,
+                'name' => $l->name,
+                'color' => $l->color,
+            ])->all(),
+            'projects' => $projects->map(fn (Project $p): array => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'slug' => $p->slug,
+                'color' => $p->color,
+                'icon' => $p->icon,
             ])->all(),
         ]);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function priorityOptions(): array
+    {
+        $out = [];
+        foreach (IssuePriority::cases() as $case) {
+            $out[$case->value] = $case->label();
+        }
+
+        return $out;
     }
 }

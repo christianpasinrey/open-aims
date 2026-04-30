@@ -1,29 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, onMounted, ref, watch } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
-    SlidersHorizontal,
     Bell,
-    Star,
-    LayoutGrid,
     ChevronDown,
     ChevronRight,
     Plus,
+    Star,
 } from 'lucide-vue-next';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import ProjectChip from '@/components/repo/ProjectChip.vue';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import ProjectIcon from '@/components/repo/ProjectIcon.vue';
+import FilterMenu from '@/components/repo/issues/FilterMenu.vue';
+import DisplayMenu from '@/components/repo/issues/DisplayMenu.vue';
+import InlineComposer from '@/components/repo/issues/InlineComposer.vue';
 import { startedProgressByState } from '@/lib/states';
+import { toast } from 'vue-sonner';
 
 type State = {
     id: number;
@@ -56,18 +51,38 @@ type Issue = {
 };
 type Team = { id: number; name: string; key: string; color: string | null };
 
+type GroupKey = 'status' | 'priority' | 'assignee' | 'project';
+
 const props = defineProps<{
     team: Team | null;
     states: State[];
     issues: Issue[];
+    labels: Label[];
+    projects: Project[];
     priorities: Record<string, string>;
-    filters?: { team: string | null; assignee: string | null; state: string | null };
+    filters?: {
+        team: string | null;
+        assignee: string | null;
+        state: string | null;
+        priority: number | null;
+        project: number | null;
+        labels: number[];
+        group: string;
+        sort: string;
+    };
 }>();
 
-// repo orders status groups by lifecycle: Triage → Started → Unstarted →
-// Backlog → Completed → Canceled. Within a type we keep the workflow's
-// position so customised states (e.g. "In Progress" before "In Review") stay
-// in their team's natural order.
+const safeFilters = computed(() => ({
+    team: props.filters?.team ?? null,
+    assignee: props.filters?.assignee ?? null,
+    state: props.filters?.state ?? null,
+    priority: props.filters?.priority ?? null,
+    project: props.filters?.project ?? null,
+    labels: props.filters?.labels ?? [],
+    group: (props.filters?.group ?? 'status') as GroupKey,
+    sort: props.filters?.sort ?? 'priority',
+}));
+
 const TYPE_RANK: Record<string, number> = {
     triage: 0,
     started: 1,
@@ -85,7 +100,120 @@ const stateOrder = computed(() =>
     }),
 );
 
-const grouped = computed(() => {
+const startedProgress = computed(() => startedProgressByState(props.states));
+
+// ------- Grouping --------------------------------------------------------
+type GroupBucket = {
+    /** Stable id for collapse state + composer routing. */
+    key: string;
+    title: string;
+    count: number;
+    issues: Issue[];
+    // Only one of these is populated, depending on the group dimension.
+    state?: State;
+    priority?: number;
+    assignee?: Assignee | null;
+    project?: Project | null;
+};
+
+const grouped = computed<GroupBucket[]>(() => {
+    const g = safeFilters.value.group;
+
+    if (g === 'priority') {
+        const order = [1, 2, 3, 4, 0]; // Urgent → No priority
+        const buckets = new Map<number, Issue[]>();
+        for (const p of order) buckets.set(p, []);
+        for (const i of props.issues) {
+            const k = order.includes(i.priority) ? i.priority : 0;
+            buckets.get(k)!.push(i);
+        }
+        return order
+            .map<GroupBucket>((p) => ({
+                key: `priority:${p}`,
+                title: props.priorities[String(p)] ?? '',
+                count: buckets.get(p)!.length,
+                issues: buckets.get(p)!,
+                priority: p,
+            }))
+            .filter((b) => b.count > 0);
+    }
+
+    if (g === 'assignee') {
+        const buckets = new Map<string, { assignee: Assignee | null; issues: Issue[] }>();
+        for (const i of props.issues) {
+            const k = i.assignee ? String(i.assignee.id) : 'none';
+            if (!buckets.has(k)) {
+                buckets.set(k, { assignee: i.assignee, issues: [] });
+            }
+            buckets.get(k)!.issues.push(i);
+        }
+        const out: GroupBucket[] = [];
+        // Assigned first (alpha), then Unassigned at the end.
+        const assigned = [...buckets.entries()]
+            .filter(([k]) => k !== 'none')
+            .sort(([, a], [, b]) =>
+                (a.assignee?.name ?? '').localeCompare(b.assignee?.name ?? ''),
+            );
+        for (const [k, v] of assigned) {
+            out.push({
+                key: `assignee:${k}`,
+                title: v.assignee?.name ?? 'Unknown',
+                count: v.issues.length,
+                issues: v.issues,
+                assignee: v.assignee,
+            });
+        }
+        if (buckets.has('none')) {
+            const v = buckets.get('none')!;
+            out.push({
+                key: 'assignee:none',
+                title: 'Unassigned',
+                count: v.issues.length,
+                issues: v.issues,
+                assignee: null,
+            });
+        }
+        return out;
+    }
+
+    if (g === 'project') {
+        const buckets = new Map<string, { project: Project | null; issues: Issue[] }>();
+        for (const i of props.issues) {
+            const k = i.project ? String(i.project.id) : 'none';
+            if (!buckets.has(k)) {
+                buckets.set(k, { project: i.project, issues: [] });
+            }
+            buckets.get(k)!.issues.push(i);
+        }
+        const out: GroupBucket[] = [];
+        const projected = [...buckets.entries()]
+            .filter(([k]) => k !== 'none')
+            .sort(([, a], [, b]) =>
+                (a.project?.name ?? '').localeCompare(b.project?.name ?? ''),
+            );
+        for (const [k, v] of projected) {
+            out.push({
+                key: `project:${k}`,
+                title: v.project?.name ?? '',
+                count: v.issues.length,
+                issues: v.issues,
+                project: v.project,
+            });
+        }
+        if (buckets.has('none')) {
+            const v = buckets.get('none')!;
+            out.push({
+                key: 'project:none',
+                title: 'No project',
+                count: v.issues.length,
+                issues: v.issues,
+                project: null,
+            });
+        }
+        return out;
+    }
+
+    // status (default)
     const buckets = new Map<number, Issue[]>();
     for (const s of stateOrder.value) buckets.set(s.id, []);
     for (const i of props.issues) {
@@ -93,18 +221,25 @@ const grouped = computed(() => {
         if (bucket) bucket.push(i);
     }
     return stateOrder.value
-        .map((s) => ({ state: s, issues: buckets.get(s.id) ?? [] }))
-        .filter((g) => g.issues.length > 0);
+        .map<GroupBucket>((s) => ({
+            key: `status:${s.id}`,
+            title: s.name,
+            count: buckets.get(s.id)?.length ?? 0,
+            issues: buckets.get(s.id) ?? [],
+            state: s,
+        }))
+        .filter((b) => b.count > 0);
 });
 
 const totalIssues = computed(() => props.issues.length);
 
 const headerLabel = computed<string>(() => {
-    if (props.filters?.assignee === 'me') return 'My Issues';
-    if (props.filters?.assignee === 'unassigned') return 'Unassigned';
-    return 'Issues';
+    if (safeFilters.value.assignee === 'me') return 'My Issues';
+    if (safeFilters.value.assignee === 'unassigned') return 'Unassigned';
+    return 'All issues';
 });
 
+// ------- Tabs ------------------------------------------------------------
 const tabs = computed(() => {
     const base = props.team ? `?team=${props.team.key}` : '';
     return [
@@ -122,7 +257,7 @@ const tabs = computed(() => {
     ];
 });
 const activeTab = computed<string | null>(() => {
-    const s = props.filters?.state;
+    const s = safeFilters.value.state;
     if (s === 'started') return 'active';
     if (s === 'backlog') return 'backlog';
     return null;
@@ -134,13 +269,119 @@ function relativeTime(iso: string | null): string {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-const startedProgress = computed(() => startedProgressByState(props.states));
+// ------- Collapse persisted in localStorage -----------------------------
+const collapsed = ref<Set<string>>(new Set());
 
-const collapsed = ref<Set<number>>(new Set());
-function toggleGroup(id: number) {
-    if (collapsed.value.has(id)) collapsed.value.delete(id);
-    else collapsed.value.add(id);
-    collapsed.value = new Set(collapsed.value);
+function collapseStorageKey(groupKey: string): string {
+    const team = props.team?.key ?? '';
+    return `aims:collapsed:/issues?team=${team}:group=${safeFilters.value.group}:groupKey=${groupKey}`;
+}
+
+function loadCollapsed(): void {
+    if (typeof window === 'undefined') return;
+    const next = new Set<string>();
+    for (const b of grouped.value) {
+        try {
+            if (window.localStorage.getItem(collapseStorageKey(b.key)) === '1') {
+                next.add(b.key);
+            }
+        } catch {
+            // ignore quota / private mode errors.
+        }
+    }
+    collapsed.value = next;
+}
+
+function toggleGroup(groupKey: string): void {
+    const next = new Set(collapsed.value);
+    if (next.has(groupKey)) {
+        next.delete(groupKey);
+        try {
+            window.localStorage.removeItem(collapseStorageKey(groupKey));
+        } catch {
+            // ignore
+        }
+    } else {
+        next.add(groupKey);
+        try {
+            window.localStorage.setItem(collapseStorageKey(groupKey), '1');
+        } catch {
+            // ignore
+        }
+    }
+    collapsed.value = next;
+}
+
+onMounted(loadCollapsed);
+watch(
+    () => [grouped.value.map((g) => g.key).join('|'), safeFilters.value.group],
+    loadCollapsed,
+);
+
+// ------- Favourite (star) ----------------------------------------------
+function favouriteKey(): string {
+    return `aims:favourites:/issues?team=${props.team?.key ?? ''}`;
+}
+const favourited = ref(false);
+function loadFavourite(): void {
+    if (typeof window === 'undefined') return;
+    try {
+        favourited.value = window.localStorage.getItem(favouriteKey()) === '1';
+    } catch {
+        favourited.value = false;
+    }
+}
+function toggleFavourite(): void {
+    favourited.value = !favourited.value;
+    try {
+        if (favourited.value) {
+            window.localStorage.setItem(favouriteKey(), '1');
+        } else {
+            window.localStorage.removeItem(favouriteKey());
+        }
+    } catch {
+        // ignore quota / private mode errors.
+    }
+}
+onMounted(loadFavourite);
+watch(() => props.team?.key, loadFavourite);
+
+// ------- Inline composer ------------------------------------------------
+const composerOpen = ref<string | null>(null); // group key currently composing
+
+function openComposer(groupKey: string): void {
+    composerOpen.value = groupKey;
+}
+function closeComposer(): void {
+    composerOpen.value = null;
+}
+
+function composerContext(bucket: GroupBucket): Record<string, string | number | null> {
+    const ctx: Record<string, string | number | null> = {};
+    const g = safeFilters.value.group;
+    if (g === 'status' && bucket.state) {
+        ctx.state_id = bucket.state.id;
+    } else if (g === 'priority' && bucket.priority !== undefined) {
+        ctx.priority = bucket.priority;
+    } else if (g === 'assignee' && bucket.assignee) {
+        ctx.assignee_user_id = bucket.assignee.id;
+    } else if (g === 'project' && bucket.project) {
+        ctx.project_id = bucket.project.id;
+    }
+    return ctx;
+}
+
+// ------- Cmd/Ctrl+click on identifier to copy ---------------------------
+function onIdentifierClick(e: MouseEvent, identifier: string): void {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard
+            .writeText(identifier)
+            .then(() => toast.success(`Copied ${identifier}`))
+            .catch(() => toast.error('Could not copy'));
+    }
 }
 </script>
 
@@ -148,7 +389,7 @@ function toggleGroup(id: number) {
     <Head :title="team ? `${team.name} · ${headerLabel}` : headerLabel" />
 
     <div class="flex h-full flex-1 flex-col overflow-hidden">
-        <!-- Top bar: title + actions -->
+        <!-- Top bar -->
         <header
             class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5"
         >
@@ -163,19 +404,25 @@ function toggleGroup(id: number) {
                 <h1 class="text-[13px] font-medium text-foreground">{{ headerLabel }}</h1>
                 <button
                     type="button"
-                    class="text-muted-foreground transition-colors hover:text-foreground"
+                    class="transition-colors"
+                    :class="
+                        favourited
+                            ? 'text-amber-400 hover:text-amber-300'
+                            : 'text-muted-foreground hover:text-foreground'
+                    "
                     aria-label="Favourite"
+                    @click="toggleFavourite"
                 >
-                    <Star class="size-3.5" />
+                    <Star class="size-3.5" :fill="favourited ? 'currentColor' : 'none'" />
                 </button>
             </div>
-            <button
-                type="button"
+            <Link
+                href="/inbox"
                 class="text-muted-foreground transition-colors hover:text-foreground"
                 aria-label="Notifications"
             >
                 <Bell class="size-3.5" />
-            </button>
+            </Link>
         </header>
 
         <!-- Tabs + filter pills -->
@@ -198,51 +445,15 @@ function toggleGroup(id: number) {
                 </Link>
             </nav>
             <div class="flex items-center gap-1 text-muted-foreground">
-                <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                        <button
-                            type="button"
-                            class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
-                            aria-label="Filter"
-                            title="Filter"
-                        >
-                            <SlidersHorizontal class="size-3.5" />
-                        </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-56">
-                        <DropdownMenuLabel>Filter by</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem disabled>Status</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Priority</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Assignee</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Label</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Project</DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                        <button
-                            type="button"
-                            class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
-                            aria-label="Display options"
-                            title="Display options"
-                        >
-                            <LayoutGrid class="size-3.5" />
-                        </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-56">
-                        <DropdownMenuLabel>Group by</DropdownMenuLabel>
-                        <DropdownMenuItem disabled>Status</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Priority</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Assignee</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Project</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel>Ordering</DropdownMenuLabel>
-                        <DropdownMenuItem disabled>Priority (default)</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Last updated</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Created</DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <FilterMenu
+                    :team-key="team?.key ?? null"
+                    :states="states"
+                    :labels="labels"
+                    :projects="projects"
+                    :priorities="priorities"
+                    :filters="safeFilters"
+                />
+                <DisplayMenu :filters="safeFilters" />
             </div>
         </div>
 
@@ -265,38 +476,85 @@ function toggleGroup(id: number) {
 
         <!-- Grouped list -->
         <div v-else class="flex-1 overflow-y-auto">
-            <section
-                v-for="group in grouped"
-                :key="group.state.id"
-            >
-                <button
-                    type="button"
-                    class="sticky top-0 z-10 flex w-full items-center gap-2 bg-muted/40 px-4 py-1.5 text-left backdrop-blur transition-colors hover:bg-muted/60"
-                    @click="toggleGroup(group.state.id)"
+            <section v-for="group in grouped" :key="group.key">
+                <div
+                    class="sticky top-0 z-10 flex w-full items-center gap-2 bg-muted/40 px-4 py-1.5 text-left backdrop-blur"
                 >
-                    <component
-                        :is="collapsed.has(group.state.id) ? ChevronRight : ChevronDown"
-                        class="size-3 text-muted-foreground"
-                    />
-                    <StatusIcon
-                        :type="group.state.type"
-                        :color="group.state.color"
-                        :progress="startedProgress[group.state.id]"
-                        :size="14"
-                    />
-                    <span class="text-[12.5px] font-medium text-foreground">{{ group.state.name }}</span>
-                    <span class="text-[12px] text-muted-foreground">{{ group.issues.length }}</span>
-                    <span
+                    <button
                         type="button"
-                        class="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                        aria-label="New issue in this status"
-                        @click.stop
+                        class="flex flex-1 items-center gap-2 transition-colors hover:text-foreground"
+                        @click="toggleGroup(group.key)"
+                    >
+                        <component
+                            :is="collapsed.has(group.key) ? ChevronRight : ChevronDown"
+                            class="size-3 text-muted-foreground"
+                        />
+                        <!-- Status group icon -->
+                        <StatusIcon
+                            v-if="safeFilters.group === 'status' && group.state"
+                            :type="group.state.type"
+                            :color="group.state.color"
+                            :progress="startedProgress[group.state.id]"
+                            :size="14"
+                        />
+                        <!-- Priority group icon -->
+                        <PriorityIcon
+                            v-else-if="safeFilters.group === 'priority' && group.priority !== undefined"
+                            :priority="group.priority"
+                            :size="14"
+                        />
+                        <!-- Assignee avatar -->
+                        <template v-else-if="safeFilters.group === 'assignee'">
+                            <Avatar
+                                v-if="group.assignee"
+                                :name="group.assignee.name"
+                                :email="group.assignee.email"
+                                :size="16"
+                            />
+                            <span
+                                v-else
+                                class="size-3.5 rounded-full border border-dashed border-border"
+                            ></span>
+                        </template>
+                        <!-- Project icon -->
+                        <template v-else-if="safeFilters.group === 'project'">
+                            <ProjectIcon
+                                v-if="group.project"
+                                :icon="group.project.icon"
+                                :color="group.project.color"
+                                :size="14"
+                            />
+                            <span
+                                v-else
+                                class="size-3.5 rounded-full border border-dashed border-border"
+                            ></span>
+                        </template>
+
+                        <span class="text-[12.5px] font-medium text-foreground">{{
+                            group.title
+                        }}</span>
+                        <span class="text-[12px] text-muted-foreground">{{ group.count }}</span>
+                    </button>
+                    <button
+                        v-if="team"
+                        type="button"
+                        class="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        aria-label="New issue in this group"
+                        @click.stop="openComposer(group.key)"
                     >
                         <Plus class="size-3.5" />
-                    </span>
-                </button>
+                    </button>
+                </div>
 
-                <ul v-show="!collapsed.has(group.state.id)" class="divide-y divide-border">
+                <InlineComposer
+                    v-if="team"
+                    :open="composerOpen === group.key"
+                    :team-key="team.key"
+                    :context="composerContext(group)"
+                    @close="closeComposer"
+                />
+
+                <ul v-show="!collapsed.has(group.key)" class="divide-y divide-border">
                     <li v-for="issue in group.issues" :key="issue.id">
                         <Link
                             :href="`/issues/${issue.identifier}`"
@@ -306,6 +564,7 @@ function toggleGroup(id: number) {
 
                             <span
                                 class="font-mono text-[11px] text-muted-foreground tabular-nums"
+                                @click="onIdentifierClick($event, issue.identifier)"
                                 >{{ issue.identifier }}</span
                             >
 
