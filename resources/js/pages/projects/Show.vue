@@ -1,20 +1,20 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import type { FormDataConvertible } from '@inertiajs/core';
 import {
+    Bell,
     Calendar,
     ChevronDown,
+    ChevronRight,
     Diamond,
     Flag,
-    Plus,
-    SlidersHorizontal,
-    LayoutGrid,
-    Star,
-    Bell,
-    MoreHorizontal,
     Link as LinkIcon,
-    UserPlus,
+    MoreHorizontal,
     Package,
+    Plus,
+    Star,
+    UserPlus,
 } from 'lucide-vue-next';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
@@ -23,6 +23,24 @@ import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import { renderMarkdown } from '@/lib/markdown';
 import { startedProgressByState } from '@/lib/states';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 type Project = {
     id: number;
@@ -73,6 +91,7 @@ type AssigneeStat = {
     completed: number;
     percent: number;
 };
+type WorkspaceMember = { id: number; name: string; email: string };
 
 const props = defineProps<{
     project: Project;
@@ -83,6 +102,18 @@ const props = defineProps<{
     labels: Array<{ id: number; name: string; color?: string | null }>;
     tab: 'overview' | 'activity' | 'issues';
 }>();
+
+const page = usePage<{ workspace: { teams: Array<{ id: number; name: string; key: string; color: string | null }> } | null }>();
+
+const PROJECT_STATES = ['backlog', 'planned', 'started', 'paused', 'completed', 'canceled'] as const;
+const STATE_LABELS: Record<string, string> = {
+    backlog: 'Backlog',
+    planned: 'Planned',
+    started: 'In progress',
+    paused: 'Paused',
+    completed: 'Completed',
+    canceled: 'Canceled',
+};
 
 const descriptionHtml = computed<string>(() =>
     renderMarkdown(props.project.description),
@@ -111,7 +142,7 @@ const grouped = computed(() => {
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key)!.push(i);
     }
-    const ordered: Array<{ state: State | { name: string; type: string; color: string; position: number }; issues: Issue[] }> = [];
+    const ordered: Array<{ state: State | { id: number | null; name: string; type: string; color: string; position: number }; issues: Issue[] }> = [];
     for (const s of stateOrder.value) {
         const bucket = buckets.get(s.name);
         if (bucket && bucket.length) {
@@ -121,7 +152,7 @@ const grouped = computed(() => {
     }
     for (const [name, list] of buckets.entries()) {
         ordered.push({
-            state: { name, type: 'unstarted', color: '#94a3b8', position: 999 },
+            state: { id: null, name, type: 'unstarted', color: '#94a3b8', position: 999 },
             issues: list,
         });
     }
@@ -129,13 +160,6 @@ const grouped = computed(() => {
 });
 
 const startedProgress = computed(() => startedProgressByState(props.states));
-
-const collapsed = ref<Set<string>>(new Set());
-function toggleGroup(name: string) {
-    if (collapsed.value.has(name)) collapsed.value.delete(name);
-    else collapsed.value.add(name);
-    collapsed.value = new Set(collapsed.value);
-}
 
 const teamForBreadcrumb = computed(() => props.project.teams[0] ?? null);
 
@@ -174,7 +198,6 @@ const ringStroke = computed(() => {
     return '#a1a1aa';
 });
 
-// Map project.state → StatusIcon type
 const projectStatusType = computed<'backlog' | 'started' | 'unstarted' | 'completed' | 'canceled'>(() => {
     switch (props.project.state) {
         case 'started':
@@ -191,17 +214,28 @@ const projectStatusType = computed<'backlog' | 'started' | 'unstarted' | 'comple
             return 'backlog';
     }
 });
+function statusTypeFor(state: string): 'backlog' | 'started' | 'unstarted' | 'completed' | 'canceled' {
+    switch (state) {
+        case 'started':
+            return 'started';
+        case 'paused':
+            return 'unstarted';
+        case 'completed':
+            return 'completed';
+        case 'canceled':
+            return 'canceled';
+        default:
+            return 'backlog';
+    }
+}
 
 function projectStateLabel() {
-    return props.project.state ?? 'backlog';
+    return STATE_LABELS[props.project.state ?? 'backlog'] ?? 'Backlog';
 }
 
 // ---- Right-rail Progress > tabs ----
 const progressTab = ref<'assignees' | 'labels' | 'cycles'>('assignees');
 
-// Burndown chart geometry. We render a 256x140 viewBox; the polylines
-// are derived from the project progress percentage so the chart always
-// reflects the live data without persisting per-day points.
 const burndownIdealPoints = '12,18 244,122';
 const burndownActualPoints = computed<string>(() => {
     const startX = 12;
@@ -218,7 +252,6 @@ const burndownActualPoints = computed<string>(() => {
     const pts: string[] = [];
     for (let i = 0; i <= segs; i++) {
         const x = startX + (i / segs) * (endX - startX);
-        // Slight ease-in so the line reads as a real burndown
         const eased = Math.pow(i / segs, 1.4) * t;
         const y = topY + eased * (bottomY - topY);
         pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
@@ -226,7 +259,6 @@ const burndownActualPoints = computed<string>(() => {
     return pts.join(' ');
 });
 
-// Donut math for per-assignee progress
 const donutR = 5;
 const donutC = 2 * Math.PI * donutR;
 function donutOffset(percent: number): number {
@@ -237,6 +269,259 @@ function donutStroke(percent: number): string {
     if (percent > 0) return '#6366f1';
     return '#a1a1aa';
 }
+
+// =================================================================
+// Mutations: PATCH /projects/{slug}
+// =================================================================
+function patchProject(payload: Record<string, FormDataConvertible>) {
+    router.patch(`/projects/${props.project.slug}`, payload, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+function setState(state: string) {
+    if (state === props.project.state) return;
+    patchProject({ state });
+}
+function setLead(userId: number | null) {
+    if ((props.project.lead?.id ?? null) === userId) return;
+    patchProject({ lead_user_id: userId });
+}
+function setStartDate(date: string) {
+    patchProject({ start_date: date === '' ? null : date });
+}
+function setTargetDate(date: string) {
+    patchProject({ target_date: date === '' ? null : date });
+}
+
+// ---- Workspace members fetched on demand for the lead picker ----
+const workspaceMembers = ref<WorkspaceMember[]>([]);
+const membersLoaded = ref<boolean>(false);
+async function loadMembers() {
+    if (membersLoaded.value) return;
+    try {
+        const res = await fetch('/workspace/members', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        });
+        if (res.ok) {
+            const json = (await res.json()) as { data: WorkspaceMember[] };
+            workspaceMembers.value = json.data;
+        }
+    } catch {
+        // silent — picker just shows the current lead
+    } finally {
+        membersLoaded.value = true;
+    }
+}
+
+// =================================================================
+// Inline editing: name + description
+// =================================================================
+const editingName = ref<boolean>(false);
+const nameDraft = ref<string>('');
+const nameInput = ref<HTMLInputElement | null>(null);
+
+function startEditName() {
+    nameDraft.value = props.project.name;
+    editingName.value = true;
+    nextTick(() => {
+        nameInput.value?.focus();
+        nameInput.value?.select();
+    });
+}
+function commitName() {
+    const v = nameDraft.value.trim();
+    editingName.value = false;
+    if (v === '' || v === props.project.name) return;
+    patchProject({ name: v });
+}
+function cancelName() {
+    editingName.value = false;
+}
+
+const editingDesc = ref<boolean>(false);
+const descDraft = ref<string>('');
+const descTextarea = ref<HTMLTextAreaElement | null>(null);
+
+function startEditDesc() {
+    descDraft.value = props.project.description ?? '';
+    editingDesc.value = true;
+    nextTick(() => {
+        descTextarea.value?.focus();
+    });
+}
+function commitDesc() {
+    editingDesc.value = false;
+    if ((descDraft.value ?? '') === (props.project.description ?? '')) return;
+    patchProject({ description: descDraft.value === '' ? null : descDraft.value });
+}
+function cancelDesc() {
+    editingDesc.value = false;
+}
+
+// =================================================================
+// Favourites
+// =================================================================
+const FAV_KEY = computed(() => `aims:favourites:project:${props.project.slug}`);
+const isFavourite = ref<boolean>(false);
+function toggleFavourite() {
+    if (typeof window === 'undefined') return;
+    try {
+        if (isFavourite.value) {
+            window.localStorage.removeItem(FAV_KEY.value);
+            isFavourite.value = false;
+        } else {
+            window.localStorage.setItem(FAV_KEY.value, '1');
+            isFavourite.value = true;
+        }
+    } catch {
+        // ignore
+    }
+}
+
+function copyLink() {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+    void navigator.clipboard.writeText(window.location.href);
+}
+
+// =================================================================
+// Issues tab: collapse persistence + inline composer
+// =================================================================
+const COLLAPSE_KEY = computed(() => `aims:project-issue-collapse:${props.project.slug}`);
+const collapsed = ref<Set<string>>(new Set());
+function toggleGroup(name: string) {
+    const n = new Set(collapsed.value);
+    if (n.has(name)) n.delete(name);
+    else n.add(name);
+    collapsed.value = n;
+    try {
+        window.localStorage.setItem(COLLAPSE_KEY.value, JSON.stringify(Array.from(n)));
+    } catch {
+        // ignore
+    }
+}
+
+const composerStateName = ref<string | null>(null);
+const composerTitle = ref<string>('');
+const composerInput = ref<HTMLInputElement | null>(null);
+const composerSubmitting = ref<boolean>(false);
+
+function openComposer(stateName: string) {
+    composerStateName.value = stateName;
+    composerTitle.value = '';
+    nextTick(() => composerInput.value?.focus());
+}
+function cancelComposer() {
+    composerStateName.value = null;
+    composerTitle.value = '';
+}
+function submitComposer() {
+    const title = composerTitle.value.trim();
+    const teamKey = props.project.teams[0]?.key;
+    if (!title || !teamKey) {
+        cancelComposer();
+        return;
+    }
+    const stateId = props.states.find((s) => s.name === composerStateName.value)?.id;
+    composerSubmitting.value = true;
+    router.post(
+        '/issues',
+        {
+            title,
+            team_key: teamKey,
+            project_id: props.project.id,
+            ...(stateId !== undefined ? { state_id: stateId } : {}),
+        },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                composerSubmitting.value = false;
+                cancelComposer();
+            },
+        },
+    );
+}
+
+// =================================================================
+// Milestone dialog
+// =================================================================
+const milestoneDialogOpen = ref<boolean>(false);
+const milestoneForm = ref<{ name: string; description: string; target_date: string }>({
+    name: '',
+    description: '',
+    target_date: '',
+});
+const milestoneSubmitting = ref<boolean>(false);
+const milestoneError = ref<string | null>(null);
+
+function openMilestoneDialog() {
+    milestoneForm.value = { name: '', description: '', target_date: '' };
+    milestoneError.value = null;
+    milestoneDialogOpen.value = true;
+}
+function submitMilestone() {
+    if (!milestoneForm.value.name.trim()) {
+        milestoneError.value = 'Name is required.';
+        return;
+    }
+    milestoneSubmitting.value = true;
+    milestoneError.value = null;
+    const payload: Record<string, FormDataConvertible> = {
+        name: milestoneForm.value.name.trim(),
+    };
+    if (milestoneForm.value.description.trim() !== '') {
+        payload.description = milestoneForm.value.description.trim();
+    }
+    if (milestoneForm.value.target_date !== '') {
+        payload.target_date = milestoneForm.value.target_date;
+    }
+    router.post(`/projects/${props.project.slug}/milestones`, payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            milestoneDialogOpen.value = false;
+        },
+        onError: (errors) => {
+            const first = Object.values(errors)[0];
+            milestoneError.value = (first as string | undefined) ?? 'Could not create milestone.';
+        },
+        onFinish: () => {
+            milestoneSubmitting.value = false;
+        },
+    });
+}
+
+// =================================================================
+// Mounted: load favourite + collapse state
+// =================================================================
+onMounted(() => {
+    if (typeof window === 'undefined') return;
+    try {
+        isFavourite.value = window.localStorage.getItem(FAV_KEY.value) === '1';
+        const raw = window.localStorage.getItem(COLLAPSE_KEY.value);
+        if (raw) {
+            const arr = JSON.parse(raw) as string[];
+            collapsed.value = new Set(Array.isArray(arr) ? arr : []);
+        }
+        loadMembers();
+    } catch {
+        // ignore
+    }
+});
+
+watch(
+    () => props.project.slug,
+    () => {
+        try {
+            isFavourite.value = window.localStorage.getItem(FAV_KEY.value) === '1';
+            const raw = window.localStorage.getItem(COLLAPSE_KEY.value);
+            collapsed.value = new Set(raw ? JSON.parse(raw) : []);
+        } catch {
+            // ignore
+        }
+    },
+);
 </script>
 
 <template>
@@ -273,10 +558,20 @@ function donutStroke(percent: number): string {
                 <h1 class="truncate text-foreground">{{ project.name }}</h1>
                 <button
                     type="button"
-                    class="text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label="Favourite"
+                    :class="[
+                        'transition-colors',
+                        isFavourite
+                            ? 'text-amber-400'
+                            : 'text-muted-foreground hover:text-foreground',
+                    ]"
+                    :aria-label="isFavourite ? 'Unfavourite' : 'Favourite'"
+                    :title="isFavourite ? 'Unfavourite' : 'Favourite'"
+                    @click="toggleFavourite"
                 >
-                    <Star class="size-3.5" />
+                    <Star
+                        class="size-3.5"
+                        :fill="isFavourite ? 'currentColor' : 'none'"
+                    />
                 </button>
             </nav>
             <div class="flex items-center gap-1 text-muted-foreground">
@@ -284,6 +579,8 @@ function donutStroke(percent: number): string {
                     type="button"
                     class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
                     aria-label="Copy link"
+                    title="Copy link"
+                    @click="copyLink"
                 >
                     <LinkIcon class="size-3.5" />
                 </button>
@@ -294,13 +591,23 @@ function donutStroke(percent: number): string {
                 >
                     <Bell class="size-3.5" />
                 </button>
-                <button
-                    type="button"
-                    class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
-                    aria-label="More"
-                >
-                    <MoreHorizontal class="size-3.5" />
-                </button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            type="button"
+                            class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                            aria-label="More"
+                        >
+                            <MoreHorizontal class="size-3.5" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-48">
+                        <DropdownMenuItem disabled>Duplicate</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Archive</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem disabled class="text-rose-400">Delete project</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </header>
 
@@ -340,22 +647,6 @@ function donutStroke(percent: number): string {
                     >Issues</Link
                 >
             </nav>
-            <div v-if="tab === 'issues'" class="flex items-center gap-1 text-muted-foreground">
-                <button
-                    type="button"
-                    class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
-                    aria-label="Filter"
-                >
-                    <SlidersHorizontal class="size-3.5" />
-                </button>
-                <button
-                    type="button"
-                    class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
-                    aria-label="Display"
-                >
-                    <LayoutGrid class="size-3.5" />
-                </button>
-            </div>
         </div>
 
         <!-- Body: split with right rail -->
@@ -370,7 +661,21 @@ function donutStroke(percent: number): string {
                         rounded="lg"
                         class="mb-4"
                     />
-                    <h2 class="text-[22px] font-semibold tracking-tight">{{ project.name }}</h2>
+                    <h2
+                        v-if="!editingName"
+                        class="cursor-text rounded-md px-1 -mx-1 py-0.5 text-[22px] font-semibold tracking-tight transition-colors hover:bg-accent/40"
+                        @click="startEditName"
+                    >{{ project.name }}</h2>
+                    <input
+                        v-else
+                        ref="nameInput"
+                        v-model="nameDraft"
+                        type="text"
+                        class="w-full rounded-md border border-input bg-transparent px-1 -mx-1 py-0.5 text-[22px] font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        @blur="commitName"
+                        @keydown.enter.prevent="commitName"
+                        @keydown.escape="cancelName"
+                    />
                     <p
                         v-if="project.description"
                         class="mt-2 text-[14px] text-muted-foreground"
@@ -381,25 +686,134 @@ function donutStroke(percent: number): string {
                     <!-- Properties row -->
                     <div class="mt-6 flex flex-wrap items-center gap-2 text-[12.5px]">
                         <span class="text-muted-foreground">Properties</span>
+
+                        <!-- Status chip -->
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 text-foreground transition-colors hover:bg-accent/40"
+                                >
+                                    <StatusIcon :type="projectStatusType" />
+                                    <span class="capitalize">{{ projectStateLabel() }}</span>
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent class="w-44">
+                                <DropdownMenuLabel>Set status</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    v-for="key in PROJECT_STATES"
+                                    :key="key"
+                                    @select="setState(key)"
+                                >
+                                    <span class="flex items-center gap-2">
+                                        <StatusIcon :type="statusTypeFor(key)" :size="12" />
+                                        {{ STATE_LABELS[key] }}
+                                    </span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <!-- Lead chip -->
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button
+                                    type="button"
+                                    :class="[
+                                        'inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 transition-colors hover:bg-accent/40',
+                                        project.lead ? 'text-foreground' : 'text-muted-foreground',
+                                    ]"
+                                    @click="loadMembers"
+                                >
+                                    <Avatar
+                                        v-if="project.lead"
+                                        :name="project.lead.name"
+                                        :email="project.lead.email"
+                                        :size="14"
+                                    />
+                                    <span
+                                        v-else
+                                        class="size-3.5 rounded-full border border-dashed border-border"
+                                    ></span>
+                                    <span>{{ project.lead?.name ?? 'No lead' }}</span>
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent class="max-h-72 w-56 overflow-y-auto">
+                                <DropdownMenuLabel>Set lead</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem @select="setLead(null)">
+                                    <span class="flex items-center gap-2 text-muted-foreground">
+                                        <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                                        No lead
+                                    </span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    v-for="m in workspaceMembers"
+                                    :key="m.id"
+                                    @select="setLead(m.id)"
+                                >
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <Avatar :name="m.name" :email="m.email" :size="14" />
+                                        <span class="truncate">{{ m.name }}</span>
+                                    </span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem v-if="!workspaceMembers.length && membersLoaded" disabled>
+                                    No workspace members
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <!-- Dates chip (popover-like dropdown with two date inputs) -->
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button
+                                    type="button"
+                                    :class="[
+                                        'inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 transition-colors hover:bg-accent/40',
+                                        project.target_date || project.start_date ? 'text-foreground' : 'text-muted-foreground',
+                                    ]"
+                                >
+                                    <Calendar class="size-3" />
+                                    <span v-if="project.target_date">{{ fmtDate(project.target_date) }}</span>
+                                    <span v-else>Set dates</span>
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent class="w-64 p-3" :side-offset="4">
+                                <div class="space-y-2">
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Start</label>
+                                        <input
+                                            type="date"
+                                            :value="project.start_date ?? ''"
+                                            class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
+                                            @change="(e) => setStartDate((e.target as HTMLInputElement).value)"
+                                        />
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Target</label>
+                                        <input
+                                            type="date"
+                                            :value="project.target_date ?? ''"
+                                            class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
+                                            @change="(e) => setTargetDate((e.target as HTMLInputElement).value)"
+                                        />
+                                    </div>
+                                </div>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <!-- Teams (read-only chips) -->
                         <span
-                            class="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 text-foreground"
+                            v-for="t in project.teams"
+                            :key="t.id"
+                            class="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-0.5 text-[12px]"
+                            :title="`${t.name} (read-only — TODO: edit teams endpoint)`"
                         >
-                            <StatusIcon :type="projectStatusType" />
-                            <span class="capitalize">{{ projectStateLabel() }}</span>
-                        </span>
-                        <span
-                            v-if="project.lead"
-                            class="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 text-foreground"
-                        >
-                            <Avatar :name="project.lead.name" :email="project.lead.email" :size="16" />
-                            <span>{{ project.lead.name }}</span>
-                        </span>
-                        <span
-                            v-if="project.target_date"
-                            class="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 text-muted-foreground"
-                        >
-                            <Calendar class="size-3" />
-                            {{ fmtDate(project.target_date) }}
+                            <Package
+                                class="size-3"
+                                :style="{ color: t.color || '#6366f1' }"
+                            />
+                            <span class="text-foreground">{{ t.key }}</span>
                         </span>
                     </div>
 
@@ -422,24 +836,76 @@ function donutStroke(percent: number): string {
                     </div>
 
                     <!-- Description -->
-                    <section v-if="descriptionHtml" class="mt-8">
+                    <section class="mt-8">
                         <div class="mb-3 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                             Description <ChevronDown class="size-3" />
                         </div>
-                        <div class="markdown-body" v-html="descriptionHtml"></div>
+                        <div
+                            v-if="!editingDesc && descriptionHtml"
+                            class="markdown-body cursor-text rounded-md p-2 -m-2 transition-colors hover:bg-accent/30"
+                            @click="startEditDesc"
+                            v-html="descriptionHtml"
+                        ></div>
+                        <button
+                            v-else-if="!editingDesc"
+                            type="button"
+                            class="w-full rounded-md border border-dashed border-border px-3 py-3 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+                            @click="startEditDesc"
+                        >
+                            Add description…
+                        </button>
+                        <textarea
+                            v-else
+                            ref="descTextarea"
+                            v-model="descDraft"
+                            rows="6"
+                            class="w-full rounded-md border border-input bg-transparent p-2 text-[13.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                            placeholder="Describe the project… (markdown supported)"
+                            @blur="commitDesc"
+                            @keydown.escape="cancelDesc"
+                            @keydown.meta.enter.prevent="commitDesc"
+                            @keydown.ctrl.enter.prevent="commitDesc"
+                        />
                     </section>
 
-                    <section v-if="project.milestones.length" class="mt-10">
-                        <h3 class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">Milestones</h3>
-                        <ul class="divide-y divide-border rounded-md border border-border">
+                    <!-- Milestones -->
+                    <section class="mt-10">
+                        <div class="mb-3 flex items-center justify-between">
+                            <h3 class="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">Milestones</h3>
+                            <button
+                                type="button"
+                                class="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                aria-label="New milestone"
+                                title="New milestone"
+                                @click="openMilestoneDialog"
+                            >
+                                <Plus class="size-3.5" />
+                            </button>
+                        </div>
+                        <ul
+                            v-if="project.milestones.length"
+                            class="divide-y divide-border rounded-md border border-border"
+                        >
                             <li v-for="ms in project.milestones" :key="ms.id" class="px-3 py-2">
                                 <div class="flex items-center justify-between gap-3">
-                                    <span class="text-[13px] font-medium">{{ ms.name }}</span>
+                                    <div class="flex min-w-0 items-center gap-2">
+                                        <Diamond
+                                            class="size-3 shrink-0"
+                                            :style="{
+                                                color: project.color || '#6366f1',
+                                                fill: project.color || '#6366f1',
+                                            }"
+                                        />
+                                        <span class="truncate text-[13px] font-medium">{{ ms.name }}</span>
+                                    </div>
                                     <span v-if="ms.target_date" class="text-[12px] text-muted-foreground">{{ fmtShort(ms.target_date) }}</span>
                                 </div>
                                 <p v-if="ms.description" class="mt-1 text-[12.5px] text-muted-foreground">{{ ms.description }}</p>
                             </li>
                         </ul>
+                        <p v-else class="text-[12.5px] text-muted-foreground">
+                            Break the project into milestones to track progress in stages.
+                        </p>
                     </section>
                 </div>
 
@@ -468,25 +934,75 @@ function donutStroke(percent: number): string {
                         v-for="group in grouped"
                         :key="group.state.name"
                     >
-                        <div
-                            class="sticky top-0 z-10 flex items-center gap-2 bg-muted/40 px-4 py-1.5 backdrop-blur"
+                        <button
+                            type="button"
+                            class="sticky top-0 z-10 flex w-full items-center gap-2 bg-muted/40 px-4 py-1.5 text-left backdrop-blur transition-colors hover:bg-muted/60"
+                            @click="toggleGroup(group.state.name)"
                         >
-                            <ChevronDown class="size-3 text-muted-foreground" />
+                            <component
+                                :is="collapsed.has(group.state.name) ? ChevronRight : ChevronDown"
+                                class="size-3 text-muted-foreground"
+                            />
                             <StatusIcon
                                 :type="group.state.type"
                                 :color="group.state.color"
+                                :progress="group.state.id != null ? startedProgress[group.state.id] : undefined"
                             />
                             <span class="text-[12.5px] font-medium text-foreground">{{ group.state.name }}</span>
                             <span class="text-[12px] text-muted-foreground">{{ group.issues.length }}</span>
-                            <button
-                                type="button"
+                            <span
                                 class="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                 aria-label="New issue"
+                                title="New issue"
+                                @click.stop="openComposer(group.state.name)"
                             >
                                 <Plus class="size-3.5" />
-                            </button>
+                            </span>
+                        </button>
+                        <!-- Inline composer -->
+                        <div
+                            v-if="composerStateName === group.state.name"
+                            class="border-b border-border bg-background"
+                        >
+                            <form
+                                class="flex items-center gap-2 px-4 py-1.5"
+                                @submit.prevent="submitComposer"
+                            >
+                                <PriorityIcon :priority="0" />
+                                <StatusIcon
+                                    :type="group.state.type"
+                                    :color="group.state.color"
+                                    :progress="group.state.id != null ? startedProgress[group.state.id] : undefined"
+                                />
+                                <input
+                                    ref="composerInput"
+                                    v-model="composerTitle"
+                                    type="text"
+                                    placeholder="Issue title"
+                                    class="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+                                    :disabled="composerSubmitting"
+                                    @keydown.escape="cancelComposer"
+                                />
+                                <button
+                                    type="button"
+                                    class="rounded-md px-2 py-0.5 text-[11.5px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    @click="cancelComposer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    class="rounded-md bg-foreground px-2 py-0.5 text-[11.5px] font-medium text-background hover:opacity-90 disabled:opacity-50"
+                                    :disabled="!composerTitle.trim() || composerSubmitting"
+                                >
+                                    Create
+                                </button>
+                            </form>
                         </div>
-                        <ul class="divide-y divide-border">
+                        <ul
+                            v-show="!collapsed.has(group.state.name)"
+                            class="divide-y divide-border"
+                        >
                             <li v-for="issue in group.issues" :key="issue.id">
                                 <Link
                                     :href="`/issues/${issue.identifier}`"
@@ -551,9 +1067,30 @@ function donutStroke(percent: number): string {
                         <dl class="grid grid-cols-[80px_1fr] items-center gap-x-3 gap-y-2">
                             <!-- Status -->
                             <dt class="text-[12.5px] text-muted-foreground">Status</dt>
-                            <dd class="flex items-center gap-1.5 text-[13px] text-foreground">
-                                <StatusIcon :type="projectStatusType" />
-                                <span class="capitalize">{{ projectStateLabel() }}</span>
+                            <dd>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="-mx-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] text-foreground transition-colors hover:bg-accent/40"
+                                        >
+                                            <StatusIcon :type="projectStatusType" />
+                                            <span class="capitalize">{{ projectStateLabel() }}</span>
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent class="w-44">
+                                        <DropdownMenuItem
+                                            v-for="key in PROJECT_STATES"
+                                            :key="key"
+                                            @select="setState(key)"
+                                        >
+                                            <span class="flex items-center gap-2">
+                                                <StatusIcon :type="statusTypeFor(key)" :size="12" />
+                                                {{ STATE_LABELS[key] }}
+                                            </span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </dd>
 
                             <!-- Priority -->
@@ -565,13 +1102,48 @@ function donutStroke(percent: number): string {
 
                             <!-- Lead -->
                             <dt class="text-[12.5px] text-muted-foreground">Lead</dt>
-                            <dd v-if="project.lead" class="flex items-center gap-1.5 text-[13px] text-foreground">
-                                <Avatar :name="project.lead.name" :email="project.lead.email" :size="16" />
-                                <span class="truncate">{{ project.lead.name }}</span>
-                            </dd>
-                            <dd v-else class="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-                                <span class="size-4 rounded-full border border-dashed border-border"></span>
-                                <span>No lead</span>
+                            <dd>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="-mx-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] transition-colors hover:bg-accent/40"
+                                            @click="loadMembers"
+                                        >
+                                            <Avatar
+                                                v-if="project.lead"
+                                                :name="project.lead.name"
+                                                :email="project.lead.email"
+                                                :size="16"
+                                            />
+                                            <span
+                                                v-else
+                                                class="size-4 rounded-full border border-dashed border-border"
+                                            ></span>
+                                            <span :class="project.lead ? 'truncate text-foreground' : 'text-muted-foreground'">
+                                                {{ project.lead?.name ?? 'No lead' }}
+                                            </span>
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent class="max-h-72 w-56 overflow-y-auto">
+                                        <DropdownMenuItem @select="setLead(null)">
+                                            <span class="flex items-center gap-2 text-muted-foreground">
+                                                <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                                                No lead
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            v-for="m in workspaceMembers"
+                                            :key="m.id"
+                                            @select="setLead(m.id)"
+                                        >
+                                            <span class="flex min-w-0 items-center gap-2">
+                                                <Avatar :name="m.name" :email="m.email" :size="14" />
+                                                <span class="truncate">{{ m.name }}</span>
+                                            </span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </dd>
 
                             <!-- Members -->
@@ -593,7 +1165,9 @@ function donutStroke(percent: number): string {
                                 <button
                                     v-else
                                     type="button"
-                                    class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground hover:text-foreground"
+                                    disabled
+                                    class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground opacity-60"
+                                    title="TODO: members edit endpoint not implemented yet"
                                 >
                                     <UserPlus class="size-3.5" />
                                     Add members
@@ -602,43 +1176,75 @@ function donutStroke(percent: number): string {
 
                             <!-- Dates: 📅 start → 🚩 target -->
                             <dt class="text-[12.5px] text-muted-foreground">Dates</dt>
-                            <dd class="flex flex-wrap items-center gap-1.5 text-[12.5px]">
-                                <span
-                                    v-if="project.start_date"
-                                    class="inline-flex items-center gap-1 text-foreground"
-                                >
-                                    <Calendar class="size-3 text-muted-foreground" />
-                                    {{ fmtShort(project.start_date) }}
-                                </span>
-                                <button
-                                    v-else
-                                    type="button"
-                                    class="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
-                                >
-                                    <Calendar class="size-3" />
-                                    Start
-                                </button>
-                                <span class="text-muted-foreground">→</span>
-                                <span
-                                    v-if="project.target_date"
-                                    class="inline-flex items-center gap-1 text-foreground"
-                                >
-                                    <Flag class="size-3 text-muted-foreground" />
-                                    {{ fmtShort(project.target_date) }}
-                                </span>
-                                <button
-                                    v-else
-                                    type="button"
-                                    class="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
-                                >
-                                    <Flag class="size-3" />
-                                    Target
-                                </button>
+                            <dd>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="-mx-1 flex w-full flex-wrap items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[12.5px] transition-colors hover:bg-accent/40"
+                                        >
+                                            <span
+                                                v-if="project.start_date"
+                                                class="inline-flex items-center gap-1 text-foreground"
+                                            >
+                                                <Calendar class="size-3 text-muted-foreground" />
+                                                {{ fmtShort(project.start_date) }}
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-muted-foreground"
+                                            >
+                                                <Calendar class="size-3" />
+                                                Start
+                                            </span>
+                                            <span class="text-muted-foreground">→</span>
+                                            <span
+                                                v-if="project.target_date"
+                                                class="inline-flex items-center gap-1 text-foreground"
+                                            >
+                                                <Flag class="size-3 text-muted-foreground" />
+                                                {{ fmtShort(project.target_date) }}
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-muted-foreground"
+                                            >
+                                                <Flag class="size-3" />
+                                                Target
+                                            </span>
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent class="w-64 p-3">
+                                        <div class="space-y-2">
+                                            <div class="space-y-1">
+                                                <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Start</label>
+                                                <input
+                                                    type="date"
+                                                    :value="project.start_date ?? ''"
+                                                    class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
+                                                    @change="(e) => setStartDate((e.target as HTMLInputElement).value)"
+                                                />
+                                            </div>
+                                            <div class="space-y-1">
+                                                <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Target</label>
+                                                <input
+                                                    type="date"
+                                                    :value="project.target_date ?? ''"
+                                                    class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
+                                                    @change="(e) => setTargetDate((e.target as HTMLInputElement).value)"
+                                                />
+                                            </div>
+                                        </div>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </dd>
 
-                            <!-- Teams -->
+                            <!-- Teams (read-only) -->
                             <dt class="text-[12.5px] text-muted-foreground">Teams</dt>
-                            <dd class="flex flex-wrap gap-1">
+                            <dd
+                                class="flex flex-wrap gap-1"
+                                title="TODO: edit teams endpoint not implemented yet"
+                            >
                                 <span
                                     v-for="t in project.teams"
                                     :key="t.id"
@@ -666,7 +1272,8 @@ function donutStroke(percent: number): string {
                                 <button
                                     v-else
                                     type="button"
-                                    class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground hover:text-foreground"
+                                    disabled
+                                    class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground opacity-60"
                                 >
                                     <Plus class="size-3.5" />
                                     Add label
@@ -688,6 +1295,8 @@ function donutStroke(percent: number): string {
                                 type="button"
                                 class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                                 aria-label="Add milestone"
+                                title="Add milestone"
+                                @click="openMilestoneDialog"
                             >
                                 <Plus class="size-3" />
                             </button>
@@ -725,11 +1334,6 @@ function donutStroke(percent: number): string {
 
                         <p v-else class="text-[12.5px] leading-[18px] text-muted-foreground">
                             Add milestones to organize work within your project and break it into more granular stages.
-                            <a
-                                href="#"
-                                class="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                                >Learn more</a
-                            >
                         </p>
                     </section>
 
@@ -777,11 +1381,9 @@ function donutStroke(percent: number): string {
                                 class="absolute inset-0 h-full w-full"
                                 aria-hidden="true"
                             >
-                                <!-- Y gridlines -->
                                 <line x1="12" y1="18" x2="244" y2="18" stroke="currentColor" stroke-width="0.5" class="text-border" />
                                 <line x1="12" y1="70" x2="244" y2="70" stroke="currentColor" stroke-width="0.5" class="text-border" stroke-dasharray="2 3" />
                                 <line x1="12" y1="122" x2="244" y2="122" stroke="currentColor" stroke-width="0.5" class="text-border" />
-                                <!-- Ideal line -->
                                 <polyline
                                     :points="burndownIdealPoints"
                                     fill="none"
@@ -789,7 +1391,6 @@ function donutStroke(percent: number): string {
                                     stroke-width="1"
                                     stroke-dasharray="3 3"
                                 />
-                                <!-- Actual line -->
                                 <polyline
                                     :points="burndownActualPoints"
                                     fill="none"
@@ -823,7 +1424,6 @@ function donutStroke(percent: number): string {
                             </button>
                         </div>
 
-                        <!-- Tab body -->
                         <div class="mt-2">
                             <ul v-if="progressTab === 'assignees'" class="space-y-1.5">
                                 <li v-if="!assignees.length" class="text-[12.5px] text-muted-foreground">
@@ -873,7 +1473,6 @@ function donutStroke(percent: number): string {
                             <p v-else class="text-[12.5px] text-muted-foreground">Coming soon</p>
                         </div>
 
-                        <!-- Footer % + ring -->
                         <div class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2">
                             <span class="text-[12px] text-muted-foreground">{{ progress.percent }}% complete</span>
                             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -895,5 +1494,69 @@ function donutStroke(percent: number): string {
                 </div>
             </aside>
         </div>
+
+        <!-- New milestone dialog -->
+        <Dialog v-model:open="milestoneDialogOpen">
+            <DialogContent class="sm:max-w-[480px]">
+                <DialogHeader>
+                    <DialogTitle>New milestone</DialogTitle>
+                    <DialogDescription>
+                        Break the project into milestones to track progress in stages.
+                    </DialogDescription>
+                </DialogHeader>
+                <form class="space-y-4" @submit.prevent="submitMilestone">
+                    <div class="space-y-1">
+                        <label class="text-[12px] font-medium text-foreground" for="ms-name">Name</label>
+                        <Input
+                            id="ms-name"
+                            v-model="milestoneForm.name"
+                            type="text"
+                            placeholder="e.g. v1 launch"
+                            class="h-8 text-[13px]"
+                            autofocus
+                        />
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[12px] font-medium text-foreground" for="ms-desc">Description</label>
+                        <textarea
+                            id="ms-desc"
+                            v-model="milestoneForm.description"
+                            rows="3"
+                            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                            placeholder="What is delivered at this milestone?"
+                        />
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[12px] font-medium text-foreground" for="ms-target">Target date</label>
+                        <input
+                            id="ms-target"
+                            v-model="milestoneForm.target_date"
+                            type="date"
+                            class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
+                        />
+                    </div>
+                    <p
+                        v-if="milestoneError"
+                        class="text-[12px] text-rose-400"
+                    >
+                        {{ milestoneError }}
+                    </p>
+                    <DialogFooter>
+                        <DialogClose
+                            class="rounded-md px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                            Cancel
+                        </DialogClose>
+                        <button
+                            type="submit"
+                            :disabled="milestoneSubmitting"
+                            class="rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                            {{ milestoneSubmitting ? 'Creating…' : 'Create milestone' }}
+                        </button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>
