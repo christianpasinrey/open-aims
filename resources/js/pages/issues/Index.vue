@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
 import {
     SlidersHorizontal,
     Bell,
     Star,
     LayoutGrid,
     ChevronDown,
+    ChevronRight,
     Plus,
 } from 'lucide-vue-next';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
@@ -14,6 +15,15 @@ import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import ProjectChip from '@/components/repo/ProjectChip.vue';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { startedProgressByState } from '@/lib/states';
 
 type State = {
     id: number;
@@ -123,6 +133,15 @@ function relativeTime(iso: string | null): string {
     const d = new Date(iso);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+const startedProgress = computed(() => startedProgressByState(props.states));
+
+const collapsed = ref<Set<number>>(new Set());
+function toggleGroup(id: number) {
+    if (collapsed.value.has(id)) collapsed.value.delete(id);
+    else collapsed.value.add(id);
+    collapsed.value = new Set(collapsed.value);
+}
 </script>
 
 <template>
@@ -179,20 +198,51 @@ function relativeTime(iso: string | null): string {
                 </Link>
             </nav>
             <div class="flex items-center gap-1 text-muted-foreground">
-                <button
-                    type="button"
-                    class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="Filter"
-                >
-                    <SlidersHorizontal class="size-3.5" />
-                </button>
-                <button
-                    type="button"
-                    class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="Display"
-                >
-                    <LayoutGrid class="size-3.5" />
-                </button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            type="button"
+                            class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
+                            aria-label="Filter"
+                            title="Filter"
+                        >
+                            <SlidersHorizontal class="size-3.5" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-56">
+                        <DropdownMenuLabel>Filter by</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem disabled>Status</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Priority</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Assignee</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Label</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Project</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            type="button"
+                            class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
+                            aria-label="Display options"
+                            title="Display options"
+                        >
+                            <LayoutGrid class="size-3.5" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-56">
+                        <DropdownMenuLabel>Group by</DropdownMenuLabel>
+                        <DropdownMenuItem disabled>Status</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Priority</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Assignee</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Project</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Ordering</DropdownMenuLabel>
+                        <DropdownMenuItem disabled>Priority (default)</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Last updated</DropdownMenuItem>
+                        <DropdownMenuItem disabled>Created</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </div>
 
@@ -219,23 +269,34 @@ function relativeTime(iso: string | null): string {
                 v-for="group in grouped"
                 :key="group.state.id"
             >
-                <div
-                    class="sticky top-0 z-10 flex items-center gap-2 bg-muted/40 px-4 py-1.5 backdrop-blur"
+                <button
+                    type="button"
+                    class="sticky top-0 z-10 flex w-full items-center gap-2 bg-muted/40 px-4 py-1.5 text-left backdrop-blur transition-colors hover:bg-muted/60"
+                    @click="toggleGroup(group.state.id)"
                 >
-                    <ChevronDown class="size-3 text-muted-foreground" />
-                    <StatusIcon :type="group.state.type" :color="group.state.color" :size="14" />
+                    <component
+                        :is="collapsed.has(group.state.id) ? ChevronRight : ChevronDown"
+                        class="size-3 text-muted-foreground"
+                    />
+                    <StatusIcon
+                        :type="group.state.type"
+                        :color="group.state.color"
+                        :progress="startedProgress[group.state.id]"
+                        :size="14"
+                    />
                     <span class="text-[12.5px] font-medium text-foreground">{{ group.state.name }}</span>
                     <span class="text-[12px] text-muted-foreground">{{ group.issues.length }}</span>
-                    <button
+                    <span
                         type="button"
                         class="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         aria-label="New issue in this status"
+                        @click.stop
                     >
                         <Plus class="size-3.5" />
-                    </button>
-                </div>
+                    </span>
+                </button>
 
-                <ul class="divide-y divide-border">
+                <ul v-show="!collapsed.has(group.state.id)" class="divide-y divide-border">
                     <li v-for="issue in group.issues" :key="issue.id">
                         <Link
                             :href="`/issues/${issue.identifier}`"
@@ -251,6 +312,7 @@ function relativeTime(iso: string | null): string {
                             <StatusIcon
                                 :type="issue.state?.type ?? 'unstarted'"
                                 :color="issue.state?.color"
+                                :progress="startedProgress[issue.state_id]"
                                 :size="14"
                             />
 

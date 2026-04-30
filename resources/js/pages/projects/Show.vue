@@ -22,6 +22,7 @@ import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import { renderMarkdown } from '@/lib/markdown';
+import { startedProgressByState } from '@/lib/states';
 
 type Project = {
     id: number;
@@ -126,6 +127,15 @@ const grouped = computed(() => {
     }
     return ordered;
 });
+
+const startedProgress = computed(() => startedProgressByState(props.states));
+
+const collapsed = ref<Set<string>>(new Set());
+function toggleGroup(name: string) {
+    if (collapsed.value.has(name)) collapsed.value.delete(name);
+    else collapsed.value.add(name);
+    collapsed.value = new Set(collapsed.value);
+}
 
 const teamForBreadcrumb = computed(() => props.project.teams[0] ?? null);
 
