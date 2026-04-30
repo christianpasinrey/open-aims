@@ -50,7 +50,16 @@ const props = defineProps<{
     states: State[];
     issues: Issue[];
     priorities: Record<string, string>;
+    filters?: { team: string | null; assignee: string | null; state: string | null };
 }>();
+
+const headerTitle = computed<string>(() => {
+    if (!props.team) return 'All issues';
+    if (props.filters?.assignee === 'me') return `${props.team.name} · My issues`;
+    if (props.filters?.assignee === 'unassigned')
+        return `${props.team.name} · Unassigned`;
+    return `${props.team.name} · All issues`;
+});
 
 const stateOrder = computed(() =>
     [...props.states].sort((a, b) => a.position - b.position),
@@ -156,7 +165,7 @@ function relativeTime(iso: string | null): string {
                     {{ team.key.charAt(0) }}
                 </span>
                 <h1 class="text-[13px] font-medium text-foreground">
-                    {{ team ? `${team.name} · All issues` : 'All issues' }}
+                    {{ headerTitle }}
                 </h1>
                 <span class="text-[12px] text-muted-foreground">{{ totalIssues }}</span>
             </div>
@@ -198,9 +207,9 @@ function relativeTime(iso: string | null): string {
                 </div>
 
                 <ul v-if="group.issues.length" class="divide-y divide-border">
-                    <li
-                        v-for="issue in group.issues"
-                        :key="issue.id"
+                    <li v-for="issue in group.issues" :key="issue.id">
+                    <Link
+                        :href="`/issues/${issue.identifier}`"
                         class="group flex items-center gap-3 px-5 py-2 hover:bg-accent/50"
                     >
                         <component
@@ -276,6 +285,7 @@ function relativeTime(iso: string | null): string {
                         >
                             <Circle class="size-3" />
                         </span>
+                    </Link>
                     </li>
                 </ul>
                 <div

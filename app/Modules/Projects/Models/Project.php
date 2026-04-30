@@ -6,6 +6,7 @@ namespace App\Modules\Projects\Models;
 
 use App\Core\Concerns\BelongsToWorkspace;
 use App\Models\User;
+use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Enums\ProjectState;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Database\Eloquent\Model;
@@ -58,5 +59,10 @@ class Project extends Model
     public function members(): HasMany
     {
         return $this->hasMany(ProjectMember::class);
+    }
+
+    public function issues(): HasMany
+    {
+        return $this->hasMany(Issue::class);
     }
 }

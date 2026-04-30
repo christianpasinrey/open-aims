@@ -5,6 +5,7 @@ import {
     Inbox,
     LayoutGrid,
     CheckCircle2,
+    CalendarRange,
     FolderKanban,
     Settings,
     Users,
@@ -25,7 +26,6 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
-import { useCurrentUrl } from '@/composables/useCurrentUrl';
 
 type WorkspaceTeam = {
     id: number;
@@ -37,7 +37,6 @@ type WorkspaceTeam = {
 type WorkspaceProp = { id: number; name: string; slug: string; teams: WorkspaceTeam[] };
 
 const page = usePage();
-const { isCurrentUrl } = useCurrentUrl();
 
 const workspace = computed<WorkspaceProp | null>(() => {
     const ws = (page.props as { workspace?: WorkspaceProp }).workspace;
@@ -45,28 +44,39 @@ const workspace = computed<WorkspaceProp | null>(() => {
 });
 const teams = computed<WorkspaceTeam[]>(() => workspace.value?.teams ?? []);
 
-const teamHref = (key: string) => `/issues?team=${encodeURIComponent(key)}`;
-
 const currentUrl = computed<string>(() => {
     const url = (page as unknown as { url?: string }).url;
     return typeof url === 'string' ? url : '/';
 });
-const currentTeamParam = computed<string | null>(() => {
+const currentPath = computed<string>(() => currentUrl.value.split('?')[0] ?? '/');
+const currentParams = computed<URLSearchParams>(() => {
     const url = currentUrl.value;
     const qIdx = url.indexOf('?');
-    if (qIdx === -1) return null;
-    const params = new URLSearchParams(url.slice(qIdx + 1));
-    const team = params.get('team');
-    return team ? team.toUpperCase() : null;
+    return new URLSearchParams(qIdx === -1 ? '' : url.slice(qIdx + 1));
 });
-const onIssuesIndex = computed<boolean>(() => {
-    const url = currentUrl.value;
-    const path = url.split('?')[0];
-    return path === '/issues';
+const currentTeamParam = computed<string | null>(() => {
+    const t = currentParams.value.get('team');
+    return t ? t.toUpperCase() : null;
 });
-const isMyIssuesActive = computed<boolean>(() => onIssuesIndex.value && currentTeamParam.value === null);
+const currentAssigneeParam = computed<string | null>(() =>
+    currentParams.value.get('assignee'),
+);
+
+const onIssuesIndex = computed<boolean>(() => currentPath.value === '/issues');
+const isInboxActive = computed<boolean>(() => currentPath.value === '/inbox');
+const isMyIssuesActive = computed<boolean>(
+    () => onIssuesIndex.value && currentAssigneeParam.value === 'me',
+);
+const isProjectsActive = computed<boolean>(() =>
+    currentPath.value.startsWith('/projects'),
+);
 const isTeamActive = (key: string) =>
     onIssuesIndex.value && currentTeamParam.value === key.toUpperCase();
+const isTeamCyclesActive = (key: string) =>
+    currentPath.value === '/cycles' && currentTeamParam.value === key.toUpperCase();
+const isTeamMembersActive = (key: string) =>
+    currentPath.value === `/teams/${key.toUpperCase()}/members` ||
+    currentPath.value === `/teams/${key.toLowerCase()}/members`;
 </script>
 
 <template>
@@ -89,7 +99,7 @@ const isTeamActive = (key: string) =>
                     <SidebarMenuItem>
                         <SidebarMenuButton
                             as-child
-                            :is-active="isCurrentUrl('/inbox')"
+                            :is-active="isInboxActive"
                             tooltip="Inbox"
                         >
                             <Link :href="'/inbox'">
@@ -104,7 +114,7 @@ const isTeamActive = (key: string) =>
                             :is-active="isMyIssuesActive"
                             tooltip="My Issues"
                         >
-                            <Link :href="'/issues'">
+                            <Link :href="'/issues?assignee=me'">
                                 <CheckCircle2 />
                                 <span>My Issues</span>
                             </Link>
@@ -113,7 +123,7 @@ const isTeamActive = (key: string) =>
                     <SidebarMenuItem>
                         <SidebarMenuButton
                             as-child
-                            :is-active="isCurrentUrl('/projects')"
+                            :is-active="isProjectsActive"
                             tooltip="Projects"
                         >
                             <Link :href="'/projects'">
@@ -134,7 +144,7 @@ const isTeamActive = (key: string) =>
                             :is-active="isTeamActive(team.key)"
                             :tooltip="team.name"
                         >
-                            <Link :href="teamHref(team.key)">
+                            <Link :href="`/issues?team=${team.key}`">
                                 <span
                                     aria-hidden="true"
                                     class="flex size-5 items-center justify-center rounded-[5px] text-[10px] font-semibold uppercase tracking-tight text-white"
@@ -154,24 +164,28 @@ const isTeamActive = (key: string) =>
                                     as-child
                                     :is-active="isTeamActive(team.key)"
                                 >
-                                    <Link :href="teamHref(team.key)">
+                                    <Link :href="`/issues?team=${team.key}`">
                                         <LayoutGrid class="size-3.5" />
                                         <span>Issues</span>
                                     </Link>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
-                                <SidebarMenuSubButton as-child>
-                                    <Link
-                                        :href="`/projects?team=${team.key}`"
-                                    >
-                                        <FolderKanban class="size-3.5" />
-                                        <span>Projects</span>
+                                <SidebarMenuSubButton
+                                    as-child
+                                    :is-active="isTeamCyclesActive(team.key)"
+                                >
+                                    <Link :href="`/cycles?team=${team.key}`">
+                                        <CalendarRange class="size-3.5" />
+                                        <span>Cycles</span>
                                     </Link>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
-                                <SidebarMenuSubButton as-child>
+                                <SidebarMenuSubButton
+                                    as-child
+                                    :is-active="isTeamMembersActive(team.key)"
+                                >
                                     <Link
                                         :href="`/teams/${team.key}/members`"
                                     >
@@ -191,7 +205,7 @@ const isTeamActive = (key: string) =>
                 <SidebarMenuItem>
                     <SidebarMenuButton
                         as-child
-                        :is-active="isCurrentUrl('/settings/profile')"
+                        :is-active="currentPath.startsWith('/settings')"
                         tooltip="Settings"
                     >
                         <Link :href="'/settings/profile'">

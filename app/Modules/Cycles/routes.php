@@ -2,5 +2,9 @@
 
 declare(strict_types=1);
 
-// Cycles module routes — populated as features are added.
-// Convention: ['auth', 'workspace', 'module:cycles']
+use App\Modules\Cycles\Http\Controllers\CycleListController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
+    Route::get('cycles', [CycleListController::class, 'index'])->name('cycles.index');
+});

@@ -19,15 +19,14 @@ final class IssueListController
     {
         $teamKey = $request->query('team');
         $teamKey = is_string($teamKey) && $teamKey !== '' ? strtoupper($teamKey) : null;
+        $assigneeFilter = $request->query('assignee');
+        $assigneeFilter = is_string($assigneeFilter) && $assigneeFilter !== '' ? strtolower($assigneeFilter) : null;
+        $stateFilter = $request->query('state');
+        $stateFilter = is_string($stateFilter) && $stateFilter !== '' ? strtolower($stateFilter) : null;
 
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
         if (! $workspace instanceof Workspace) {
-            return Inertia::render('issues/Index', [
-                'issues' => [],
-                'states' => [],
-                'team' => null,
-                'priorities' => $this->priorityOptions(),
-            ]);
+            return $this->emptyResponse($assigneeFilter, $stateFilter);
         }
 
         $teamQuery = Team::query()->where('workspace_id', $workspace->id);
@@ -36,12 +35,7 @@ final class IssueListController
             : $teamQuery->orderBy('name')->first();
 
         if ($team === null) {
-            return Inertia::render('issues/Index', [
-                'issues' => [],
-                'states' => [],
-                'team' => null,
-                'priorities' => $this->priorityOptions(),
-            ]);
+            return $this->emptyResponse($assigneeFilter, $stateFilter, $teamKey);
         }
 
         $states = WorkflowState::query()
@@ -49,9 +43,24 @@ final class IssueListController
             ->orderBy('position')
             ->get(['id', 'name', 'type', 'color', 'position']);
 
-        $issues = Issue::query()
+        $issuesQuery = Issue::query()
             ->where('team_id', $team->id)
-            ->whereNull('archived_at')
+            ->whereNull('archived_at');
+
+        if ($assigneeFilter === 'me') {
+            $issuesQuery->where('assignee_user_id', (int) $request->user()?->getKey());
+        } elseif ($assigneeFilter === 'unassigned') {
+            $issuesQuery->whereNull('assignee_user_id');
+        }
+
+        if ($stateFilter !== null) {
+            $issuesQuery->whereHas(
+                'workflowState',
+                static fn ($q) => $q->where('type', $stateFilter),
+            );
+        }
+
+        $issues = $issuesQuery
             ->with([
                 'assignee:id,name,email',
                 'creator:id,name,email',
@@ -109,6 +118,26 @@ final class IssueListController
                 'updated_at' => $i->updated_at?->toIso8601String(),
             ])->all(),
             'priorities' => $this->priorityOptions(),
+            'filters' => [
+                'team' => $team->key,
+                'assignee' => $assigneeFilter,
+                'state' => $stateFilter,
+            ],
+        ]);
+    }
+
+    private function emptyResponse(?string $assigneeFilter, ?string $stateFilter, ?string $teamKey = null): Response
+    {
+        return Inertia::render('issues/Index', [
+            'issues' => [],
+            'states' => [],
+            'team' => null,
+            'priorities' => $this->priorityOptions(),
+            'filters' => [
+                'team' => $teamKey,
+                'assignee' => $assigneeFilter,
+                'state' => $stateFilter,
+            ],
         ]);
     }
 

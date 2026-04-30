@@ -12,6 +12,7 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/issues')->name('dashboard');
+    Route::inertia('inbox', 'inbox/Index')->name('inbox.index');
 });
 
 require __DIR__.'/settings.php';
