@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import {
     Bell,
     ChevronDown,
@@ -17,6 +17,7 @@ import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import FilterMenu from '@/components/repo/issues/FilterMenu.vue';
 import DisplayMenu from '@/components/repo/issues/DisplayMenu.vue';
 import InlineComposer from '@/components/repo/issues/InlineComposer.vue';
+import SaveViewButton from '@/components/repo/views/SaveViewButton.vue';
 import { startedProgressByState } from '@/lib/states';
 import { toast } from 'vue-sonner';
 
@@ -82,6 +83,11 @@ const safeFilters = computed(() => ({
     group: (props.filters?.group ?? 'status') as GroupKey,
     sort: props.filters?.sort ?? 'priority',
 }));
+
+const workspacePage = usePage<{
+    workspace: { teams: Array<{ id: number; name: string; key: string; color: string | null }> } | null;
+}>();
+const workspaceTeams = computed(() => workspacePage.props.workspace?.teams ?? []);
 
 const TYPE_RANK: Record<string, number> = {
     triage: 0,
@@ -415,6 +421,7 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                 >
                     <Star class="size-3.5" :fill="favourited ? 'currentColor' : 'none'" />
                 </button>
+                <SaveViewButton :filters="safeFilters" :teams="workspaceTeams" />
             </div>
             <Link
                 href="/inbox"
