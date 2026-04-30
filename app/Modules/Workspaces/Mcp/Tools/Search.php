@@ -21,7 +21,7 @@ use Laravel\Mcp\Server\Tool;
     .'workspace. Returns up to `limit` matches sorted by relevance proxy '
     .'(recency).'
 )]
-class WorkspaceSearch extends Tool
+class Search extends Tool
 {
     use ResolvesWorkspace;
 

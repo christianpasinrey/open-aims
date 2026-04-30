@@ -17,7 +17,7 @@ use Laravel\Mcp\Server\Tool;
     'Return the active workspace, the teams it contains (key + name + icon), '
     .'and the member count. Call this first to discover available team keys.'
 )]
-class WorkspaceCurrent extends Tool
+class Current extends Tool
 {
     use ResolvesWorkspace;
 
