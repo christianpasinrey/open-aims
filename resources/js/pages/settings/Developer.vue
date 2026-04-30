@@ -49,20 +49,16 @@ function copy(value: string, label: string) {
         .catch(() => toast.error('Could not copy'));
 }
 
-const claudeConfig = `{
+const claudeCodeConfig = `{
   "mcpServers": {
     "aims": {
       "type": "http",
-      "url": "${props.mcp.endpoint}",
-      "auth": {
-        "type": "oauth",
-        "authorize_url": "${props.mcp.oauth_authorize}",
-        "token_url": "${props.mcp.oauth_token}",
-        "scopes": ["mcp"]
-      }
+      "url": "${props.mcp.endpoint}"
     }
   }
 }`;
+
+const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint}`;
 </script>
 
 <template>
@@ -132,18 +128,27 @@ const claudeConfig = `{
             </div>
         </section>
 
-        <!-- Setup steps -->
-        <section class="space-y-3">
-            <h3 class="text-[13px] font-medium text-foreground">Setup</h3>
-            <ol class="space-y-3 text-[13px] text-muted-foreground">
+        <!-- Claude Desktop -->
+        <section class="space-y-3 rounded-md border border-border bg-card p-5">
+            <div class="flex items-center justify-between">
+                <h3 class="text-[14px] font-semibold text-foreground">
+                    Claude Desktop
+                </h3>
+                <span
+                    class="rounded-full border border-border bg-muted px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground"
+                >Recommended</span>
+            </div>
+            <p class="text-[12.5px] text-muted-foreground">
+                One-click OAuth from Claude's UI. No JSON to edit.
+            </p>
+            <ol class="space-y-2 text-[13px] text-muted-foreground">
                 <li class="flex gap-3">
                     <span
                         class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground"
                         >1</span
                     >
                     <span>
-                        Open Claude Desktop → Settings → Connectors → "Add
-                        custom connector".
+                        Settings → Connectors → <strong class="text-foreground">Add custom connector</strong>.
                     </span>
                 </li>
                 <li class="flex gap-3">
@@ -152,7 +157,7 @@ const claudeConfig = `{
                         >2</span
                     >
                     <span>
-                        Paste the connector URL above. Claude will discover
+                        Paste the connector URL from above. Claude discovers
                         the OAuth endpoints automatically.
                     </span>
                 </li>
@@ -162,48 +167,81 @@ const claudeConfig = `{
                         >3</span
                     >
                     <span>
-                        Approve the authorisation prompt — you'll be sent
-                        back here, signed into your aims workspace,
-                        and the connector goes green.
-                    </span>
-                </li>
-                <li class="flex gap-3">
-                    <span
-                        class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground"
-                        >4</span
-                    >
-                    <span>
-                        Claude can now read and operate aims. Try:
-                        <em>"List LAM issues in In Review"</em> or
+                        Approve in the consent screen → connector turns green.
+                        Try: <em>"List LAM issues in In Review"</em> or
                         <em>"Set LAM-275 to In Progress"</em>.
                     </span>
                 </li>
             </ol>
         </section>
 
-        <!-- Manual config snippet (for Claude Code, claude.ai, etc.) -->
-        <section class="space-y-2">
-            <h3 class="text-[13px] font-medium text-foreground">
-                Manual config (Claude Code / advanced)
+        <!-- Claude Code -->
+        <section class="space-y-3 rounded-md border border-border bg-card p-5">
+            <h3 class="text-[14px] font-semibold text-foreground">
+                Claude Code (CLI / IDE)
             </h3>
             <p class="text-[12.5px] text-muted-foreground">
-                For Claude Code's <code class="rounded bg-muted px-1 py-0.5 font-mono text-[11.5px]">.mcp.json</code>
-                or claude.ai's MCP block.
+                Two ways. Pick one.
             </p>
-            <div class="relative">
-                <pre
-                    class="overflow-x-auto rounded-md border border-border bg-card px-3 py-2.5 font-mono text-[12px] leading-snug text-foreground"
-                >{{ claudeConfig }}</pre>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    class="absolute top-1.5 right-1.5 h-7 gap-1 text-[12px]"
-                    @click="copy(claudeConfig, 'Config')"
-                >
-                    <Copy class="size-3.5" />
-                    Copy
-                </Button>
+
+            <div class="space-y-2">
+                <div class="flex items-center gap-2 text-[12.5px] text-foreground">
+                    <span
+                        class="flex size-5 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-brand-foreground"
+                        >A</span
+                    >
+                    <span>One-line CLI command (uses Claude Code's built-in MCP store)</span>
+                </div>
+                <div class="relative">
+                    <pre
+                        class="overflow-x-auto rounded-md border border-border bg-muted/30 px-3 py-2.5 font-mono text-[12px] leading-snug text-foreground"
+                    >{{ claudeCodeCli }}</pre>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        class="absolute top-1.5 right-1.5 h-7 gap-1 text-[12px]"
+                        @click="copy(claudeCodeCli, 'Command')"
+                    >
+                        <Copy class="size-3.5" />
+                        Copy
+                    </Button>
+                </div>
+                <p class="text-[12px] text-muted-foreground">
+                    Run it once. The next session opens a browser for OAuth
+                    consent and you're done — Claude Code can call
+                    <code class="rounded bg-muted px-1 py-0.5 font-mono text-[11.5px]">aims.issues.list</code>
+                    and friends from any prompt.
+                </p>
+            </div>
+
+            <div class="space-y-2 pt-1">
+                <div class="flex items-center gap-2 text-[12.5px] text-foreground">
+                    <span
+                        class="flex size-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground"
+                        >B</span
+                    >
+                    <span>Or commit to repo via <code class="rounded bg-muted px-1 py-0.5 font-mono text-[11.5px]">.mcp.json</code></span>
+                </div>
+                <p class="text-[12px] text-muted-foreground">
+                    Drop this at the project root. Anyone who clones the repo
+                    and runs Claude Code will be prompted to authorise.
+                </p>
+                <div class="relative">
+                    <pre
+                        class="overflow-x-auto rounded-md border border-border bg-muted/30 px-3 py-2.5 font-mono text-[12px] leading-snug text-foreground"
+                    >{{ claudeCodeConfig }}</pre>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        class="absolute top-1.5 right-1.5 h-7 gap-1 text-[12px]"
+                        @click="copy(claudeCodeConfig, 'Config')"
+                    >
+                        <Copy class="size-3.5" />
+                        Copy
+                    </Button>
+                </div>
             </div>
         </section>
 
