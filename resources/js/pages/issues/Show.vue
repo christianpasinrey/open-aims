@@ -1,18 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import {
-    AlertCircle,
-    ArrowLeft,
-    CheckCircle2,
-    Circle,
-    CircleDashed,
-    CircleDot,
-    CircleSlash,
-    Minus,
-    SignalHigh,
-    SignalLow,
-    SignalMedium,
-} from 'lucide-vue-next';
+import { ArrowLeft } from 'lucide-vue-next';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
+import PriorityIcon from '@/components/repo/PriorityIcon.vue';
+import Avatar from '@/components/repo/Avatar.vue';
+import LabelBadge from '@/components/repo/LabelBadge.vue';
+import ProjectChip from '@/components/repo/ProjectChip.vue';
+import { renderMarkdown } from '@/lib/markdown';
 
 type State = { id: number; name: string; type: string; color: string };
 type Label = { id: number; name: string; color?: string | null };
@@ -52,48 +47,21 @@ type Comment = {
     edited_at: string | null;
 };
 
-defineProps<{
+const props = defineProps<{
     team: { id: number; name: string; key: string; color: string | null };
     issue: Issue;
     comments: Comment[];
     states: State[];
 }>();
 
-function priorityIcon(p: number) {
-    switch (p) {
-        case 1: return AlertCircle;
-        case 2: return SignalHigh;
-        case 3: return SignalMedium;
-        case 4: return SignalLow;
-        default: return Minus;
-    }
-}
-function priorityClass(p: number) {
-    switch (p) {
-        case 1: return 'text-rose-500';
-        case 2: return 'text-orange-500';
-        case 3: return 'text-amber-500';
-        case 4: return 'text-zinc-500';
-        default: return 'text-zinc-500';
-    }
-}
-function stateIcon(type: string) {
-    switch (type) {
-        case 'completed': return CheckCircle2;
-        case 'started': return CircleDot;
-        case 'canceled': return CircleSlash;
-        case 'backlog': return CircleDashed;
-        default: return Circle;
-    }
-}
-function initials(name: string) {
-    return name
-        .split(' ')
-        .filter(Boolean)
-        .slice(0, 2)
-        .map(p => p.charAt(0).toUpperCase())
-        .join('');
-}
+const descriptionHtml = computed<string>(() =>
+    renderMarkdown(props.issue.description),
+);
+
+const commentBodies = computed<Record<number, string>>(() =>
+    Object.fromEntries(props.comments.map((c) => [c.id, renderMarkdown(c.body)])),
+);
+
 function fmtDate(iso: string | null): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleDateString(undefined, {
@@ -121,7 +89,7 @@ function relativeTime(iso: string | null): string {
 
     <div class="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <header
-            class="flex shrink-0 items-center gap-3 border-b border-border px-5 py-3"
+            class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5"
         >
             <Link
                 :href="`/issues?team=${team.key}`"
@@ -131,19 +99,17 @@ function relativeTime(iso: string | null): string {
                 <ArrowLeft class="size-4" />
             </Link>
             <span
-                class="flex size-6 items-center justify-center rounded-md text-[10px] font-semibold text-white"
+                class="flex size-5 items-center justify-center rounded-md text-[10px] font-semibold text-white"
                 :style="{ backgroundColor: team.color || '#6366f1' }"
             >
                 {{ team.key.charAt(0) }}
             </span>
-            <span
-                class="font-mono text-[12px] text-muted-foreground"
+            <span class="font-mono text-[12px] text-muted-foreground"
                 >{{ issue.identifier }}</span
             >
         </header>
 
         <div class="flex min-h-0 flex-1">
-            <!-- Main column -->
             <div class="flex min-w-0 flex-1 flex-col overflow-y-auto">
                 <div class="mx-auto w-full max-w-3xl px-8 py-8">
                     <h1
@@ -166,9 +132,10 @@ function relativeTime(iso: string | null): string {
                     </p>
 
                     <div
-                        v-if="issue.description"
-                        class="prose prose-sm dark:prose-invert mt-6 max-w-none whitespace-pre-wrap text-[14px] leading-relaxed text-foreground/90"
-                    >{{ issue.description }}</div>
+                        v-if="descriptionHtml"
+                        class="markdown-body mt-6"
+                        v-html="descriptionHtml"
+                    ></div>
                     <p
                         v-else
                         class="mt-6 text-[14px] italic text-muted-foreground"
@@ -176,7 +143,6 @@ function relativeTime(iso: string | null): string {
                         No description.
                     </p>
 
-                    <!-- Children -->
                     <section v-if="issue.children.length" class="mt-10">
                         <h2 class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
                             Sub-issues
@@ -187,30 +153,23 @@ function relativeTime(iso: string | null): string {
                                     :href="`/issues/${child.identifier}`"
                                     class="flex items-center gap-3 px-3 py-2 hover:bg-accent/50"
                                 >
-                                    <component
-                                        :is="priorityIcon(child.priority)"
-                                        :class="['size-3.5 shrink-0', priorityClass(child.priority)]"
-                                    />
-                                    <component
-                                        :is="stateIcon(child.state?.type ?? 'unstarted')"
-                                        class="size-3.5 shrink-0"
-                                        :style="{ color: child.state?.color ?? '#94a3b8' }"
+                                    <PriorityIcon :priority="child.priority" :size="14" />
+                                    <StatusIcon
+                                        :type="child.state?.type ?? 'unstarted'"
+                                        :color="child.state?.color"
                                     />
                                     <span class="font-mono text-[11px] text-muted-foreground">{{ child.identifier }}</span>
                                     <span class="min-w-0 flex-1 truncate text-[13px]">{{ child.title }}</span>
-                                    <span
+                                    <Avatar
                                         v-if="child.assignee"
-                                        class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium"
-                                        :title="child.assignee.name"
-                                    >
-                                        {{ initials(child.assignee.name) }}
-                                    </span>
+                                        :name="child.assignee.name"
+                                        :size="18"
+                                    />
                                 </Link>
                             </li>
                         </ul>
                     </section>
 
-                    <!-- Comments -->
                     <section class="mt-10">
                         <h2 class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
                             Activity
@@ -225,111 +184,94 @@ function relativeTime(iso: string | null): string {
                                 class="rounded-md border border-border bg-card p-3"
                             >
                                 <div class="flex items-center gap-2 text-[12px]">
-                                    <span
-                                        class="flex size-5 items-center justify-center rounded-full bg-muted text-[9px] font-medium"
-                                    >
-                                        {{ c.user ? initials(c.user.name) : '?' }}
-                                    </span>
+                                    <Avatar
+                                        v-if="c.user"
+                                        :name="c.user.name"
+                                        :email="c.user.email"
+                                        :size="20"
+                                    />
                                     <span class="font-medium text-foreground">{{ c.user?.name ?? 'Unknown' }}</span>
                                     <span class="text-muted-foreground">{{ relativeTime(c.created_at) }}</span>
                                 </div>
                                 <div
-                                    class="prose prose-sm dark:prose-invert mt-2 whitespace-pre-wrap text-[13.5px] text-foreground/90"
-                                >{{ c.body }}</div>
+                                    class="markdown-body mt-2"
+                                    v-html="commentBodies[c.id]"
+                                ></div>
                             </li>
                         </ul>
                     </section>
                 </div>
             </div>
 
-            <!-- Right rail -->
             <aside
-                class="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 p-5 lg:block"
+                class="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 px-5 py-5 lg:block"
             >
-                <div class="space-y-5 text-[13px]">
+                <div class="space-y-4 text-[13px]">
                     <div>
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Status</div>
+                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Status</div>
                         <div class="flex items-center gap-2 text-foreground">
-                            <component
-                                :is="stateIcon(issue.state?.type ?? 'unstarted')"
-                                class="size-3.5"
-                                :style="{ color: issue.state?.color ?? '#94a3b8' }"
+                            <StatusIcon
+                                :type="issue.state?.type ?? 'unstarted'"
+                                :color="issue.state?.color"
                             />
                             <span>{{ issue.state?.name ?? '—' }}</span>
                         </div>
                     </div>
 
                     <div>
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Priority</div>
+                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Priority</div>
                         <div class="flex items-center gap-2 text-foreground">
-                            <component
-                                :is="priorityIcon(issue.priority)"
-                                :class="['size-3.5', priorityClass(issue.priority)]"
-                            />
+                            <PriorityIcon :priority="issue.priority" :size="14" />
                             <span>{{ issue.priority_label }}</span>
                         </div>
                     </div>
 
                     <div>
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Assignee</div>
+                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Assignee</div>
                         <div v-if="issue.assignee" class="flex items-center gap-2 text-foreground">
-                            <span class="flex size-5 items-center justify-center rounded-full bg-muted text-[9px] font-medium">
-                                {{ initials(issue.assignee.name) }}
-                            </span>
+                            <Avatar :name="issue.assignee.name" :email="issue.assignee.email" :size="20" />
                             <span>{{ issue.assignee.name }}</span>
                         </div>
                         <span v-else class="text-muted-foreground">Unassigned</span>
                     </div>
 
-                    <div>
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Created by</div>
-                        <div v-if="issue.creator" class="flex items-center gap-2 text-foreground">
-                            <span class="flex size-5 items-center justify-center rounded-full bg-muted text-[9px] font-medium">
-                                {{ initials(issue.creator.name) }}
-                            </span>
+                    <div v-if="issue.creator">
+                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Created by</div>
+                        <div class="flex items-center gap-2 text-foreground">
+                            <Avatar :name="issue.creator.name" :email="issue.creator.email" :size="20" />
                             <span>{{ issue.creator.name }}</span>
                         </div>
-                        <span v-else class="text-muted-foreground">—</span>
                     </div>
 
                     <div v-if="issue.project">
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Project</div>
-                        <Link
+                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Project</div>
+                        <ProjectChip
+                            :name="issue.project.name"
+                            :color="issue.project.color"
+                            :slug="issue.project.slug"
                             :href="`/projects/${issue.project.slug}`"
-                            class="flex items-center gap-2 text-foreground hover:underline"
-                        >
-                            <span
-                                class="size-2 rounded-sm"
-                                :style="{ backgroundColor: issue.project.color || '#6366f1' }"
-                            ></span>
-                            <span>{{ issue.project.name }}</span>
-                        </Link>
+                        />
                     </div>
 
                     <div v-if="issue.labels.length">
                         <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Labels</div>
                         <div class="flex flex-wrap gap-1.5">
-                            <span
+                            <LabelBadge
                                 v-for="label in issue.labels"
                                 :key="label.id"
-                                class="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-[11px] text-foreground"
-                            >
-                                <span
-                                    class="size-1.5 rounded-full"
-                                    :style="{ backgroundColor: label.color || '#94a3b8' }"
-                                ></span>
-                                {{ label.name }}
-                            </span>
+                                :name="label.name"
+                                :color="label.color"
+                            />
                         </div>
                     </div>
 
                     <div v-if="issue.estimate !== null">
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Estimate</div>
+                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Estimate</div>
                         <div class="text-foreground">{{ issue.estimate }} pt</div>
                     </div>
 
                     <div v-if="issue.due_date">
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Due</div>
+                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Due</div>
                         <div class="text-foreground">{{ fmtDate(issue.due_date) }}</div>
                     </div>
 

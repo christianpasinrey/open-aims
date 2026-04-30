@@ -6,6 +6,7 @@ namespace App\Modules\Issues\Models;
 
 use App\Core\Concerns\BelongsToWorkspace;
 use App\Models\User;
+use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Enums\IssuePriority;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Label;
@@ -62,6 +63,11 @@ class Issue extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function cycle(): BelongsTo
+    {
+        return $this->belongsTo(Cycle::class);
     }
 
     public function workflowState(): BelongsTo

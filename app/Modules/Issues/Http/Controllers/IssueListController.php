@@ -66,7 +66,7 @@ final class IssueListController
                 'creator:id,name,email',
                 'workflowState:id,name,type,color,position',
                 'labels:id,name,color',
-                'project:id,name,color,icon',
+                'project:id,name,slug,color,icon',
             ])
             ->orderByRaw('CASE WHEN priority = 0 THEN 5 ELSE priority END')
             ->orderByDesc('updated_at')
@@ -107,6 +107,7 @@ final class IssueListController
                 'project' => $i->project ? [
                     'id' => $i->project->id,
                     'name' => $i->project->name,
+                    'slug' => $i->project->slug,
                     'color' => $i->project->color,
                     'icon' => $i->project->icon,
                 ] : null,

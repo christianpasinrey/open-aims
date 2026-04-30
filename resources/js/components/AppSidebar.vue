@@ -9,6 +9,9 @@ import {
     FolderKanban,
     Settings,
     Users,
+    ChevronDown,
+    Search,
+    PenSquare,
 } from 'lucide-vue-next';
 import AppLogo from '@/components/AppLogo.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -62,21 +65,21 @@ const currentAssigneeParam = computed<string | null>(() =>
     currentParams.value.get('assignee'),
 );
 
-const onIssuesIndex = computed<boolean>(() => currentPath.value === '/issues');
-const isInboxActive = computed<boolean>(() => currentPath.value === '/inbox');
-const isMyIssuesActive = computed<boolean>(
+const onIssuesIndex = computed(() => currentPath.value === '/issues');
+const onProjectsIndex = computed(() => currentPath.value === '/projects');
+const onCyclesIndex = computed(() => currentPath.value === '/cycles');
+const isInboxActive = computed(() => currentPath.value === '/inbox');
+const isMyIssuesActive = computed(
     () => onIssuesIndex.value && currentAssigneeParam.value === 'me',
 );
-const isProjectsActive = computed<boolean>(() =>
-    currentPath.value.startsWith('/projects'),
-);
-const isTeamActive = (key: string) =>
+const isTeamIssuesActive = (key: string) =>
     onIssuesIndex.value && currentTeamParam.value === key.toUpperCase();
+const isTeamProjectsActive = (key: string) =>
+    onProjectsIndex.value && currentTeamParam.value === key.toUpperCase();
 const isTeamCyclesActive = (key: string) =>
-    currentPath.value === '/cycles' && currentTeamParam.value === key.toUpperCase();
+    onCyclesIndex.value && currentTeamParam.value === key.toUpperCase();
 const isTeamMembersActive = (key: string) =>
-    currentPath.value === `/teams/${key.toUpperCase()}/members` ||
-    currentPath.value === `/teams/${key.toLowerCase()}/members`;
+    currentPath.value.toUpperCase() === `/TEAMS/${key.toUpperCase()}/MEMBERS`;
 </script>
 
 <template>
@@ -85,12 +88,32 @@ const isTeamMembersActive = (key: string) =>
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="'/issues'">
+                        <Link :href="'/issues'" class="!h-auto">
                             <AppLogo />
+                            <ChevronDown class="ml-auto size-3.5 text-muted-foreground" />
                         </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
             </SidebarMenu>
+
+            <div class="flex items-center gap-1 px-2">
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Search"
+                    title="Search"
+                >
+                    <Search class="size-3.5" />
+                </button>
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="New issue"
+                    title="New issue"
+                >
+                    <PenSquare class="size-3.5" />
+                </button>
+            </div>
         </SidebarHeader>
 
         <SidebarContent>
@@ -116,19 +139,7 @@ const isTeamMembersActive = (key: string) =>
                         >
                             <Link :href="'/issues?assignee=me'">
                                 <CheckCircle2 />
-                                <span>My Issues</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton
-                            as-child
-                            :is-active="isProjectsActive"
-                            tooltip="Projects"
-                        >
-                            <Link :href="'/projects'">
-                                <FolderKanban />
-                                <span>Projects</span>
+                                <span>My issues</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -141,8 +152,13 @@ const isTeamMembersActive = (key: string) =>
                     <SidebarMenuItem v-for="team in teams" :key="team.id">
                         <SidebarMenuButton
                             as-child
-                            :is-active="isTeamActive(team.key)"
                             :tooltip="team.name"
+                            :is-active="
+                                isTeamIssuesActive(team.key) ||
+                                isTeamProjectsActive(team.key) ||
+                                isTeamCyclesActive(team.key) ||
+                                isTeamMembersActive(team.key)
+                            "
                         >
                             <Link :href="`/issues?team=${team.key}`">
                                 <span
@@ -162,7 +178,7 @@ const isTeamMembersActive = (key: string) =>
                             <SidebarMenuSubItem>
                                 <SidebarMenuSubButton
                                     as-child
-                                    :is-active="isTeamActive(team.key)"
+                                    :is-active="isTeamIssuesActive(team.key)"
                                 >
                                     <Link :href="`/issues?team=${team.key}`">
                                         <LayoutGrid class="size-3.5" />
@@ -178,6 +194,17 @@ const isTeamMembersActive = (key: string) =>
                                     <Link :href="`/cycles?team=${team.key}`">
                                         <CalendarRange class="size-3.5" />
                                         <span>Cycles</span>
+                                    </Link>
+                                </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                                <SidebarMenuSubButton
+                                    as-child
+                                    :is-active="isTeamProjectsActive(team.key)"
+                                >
+                                    <Link :href="`/projects?team=${team.key}`">
+                                        <FolderKanban class="size-3.5" />
+                                        <span>Projects</span>
                                     </Link>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>

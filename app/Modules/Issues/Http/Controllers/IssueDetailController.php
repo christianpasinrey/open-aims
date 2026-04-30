@@ -48,6 +48,7 @@ final class IssueDetailController
                 'workflowState:id,name,type,color,position',
                 'labels:id,name,color',
                 'project:id,name,slug,color,icon',
+                'cycle:id,number,name,starts_at,ends_at',
                 'parent:id,team_id,number,title',
                 'children:id,team_id,number,title,workflow_state_id,priority,assignee_user_id',
                 'children.workflowState:id,name,type,color',

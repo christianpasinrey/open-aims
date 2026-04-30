@@ -6,15 +6,21 @@ namespace App\Modules\Projects\Http\Controllers;
 
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class ProjectDetailController
 {
-    public function show(string $slug): Response
+    public function show(Request $request, string $slug): Response
     {
+        $tab = $request->query('tab');
+        $tab = is_string($tab) && in_array($tab, ['overview', 'activity', 'issues'], true)
+            ? $tab
+            : 'overview';
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
         if (! $workspace instanceof Workspace) {
             throw new NotFoundHttpException('No active workspace.');
@@ -49,7 +55,33 @@ final class ProjectDetailController
             ->limit(500)
             ->get();
 
+        $statePositions = WorkflowState::query()
+            ->whereIn('team_id', $project->teams->pluck('id'))
+            ->orderBy('position')
+            ->get(['id', 'name', 'type', 'color', 'position'])
+            ->groupBy('name')
+            ->map(static fn ($group) => $group->first());
+
+        $totalIssues = $issues->count();
+        $completedIssues = $issues
+            ->filter(static fn (Issue $i) => $i->workflowState?->type === 'completed')
+            ->count();
+        $progress = $totalIssues > 0 ? (int) round(($completedIssues / $totalIssues) * 100) : 0;
+
         return Inertia::render('projects/Show', [
+            'tab' => $tab,
+            'progress' => [
+                'total' => $totalIssues,
+                'completed' => $completedIssues,
+                'percent' => $progress,
+            ],
+            'states' => $statePositions->values()->map(static fn ($s): array => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'type' => $s->type,
+                'color' => $s->color,
+                'position' => $s->position,
+            ])->all(),
             'project' => [
                 'id' => $project->id,
                 'name' => $project->name,
@@ -90,6 +122,7 @@ final class ProjectDetailController
                 'identifier' => ($i->team?->key ?? '?').'-'.$i->number,
                 'title' => $i->title,
                 'priority' => (int) ($i->priority?->value ?? 0),
+                'state_name' => $i->workflowState?->name,
                 'state' => $i->workflowState ? [
                     'name' => $i->workflowState->name,
                     'type' => $i->workflowState->type,
