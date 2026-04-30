@@ -359,11 +359,11 @@ const tryOpen = ref(false);
                         <DropdownMenuTrigger as-child>
                             <SidebarMenuButton
                                 size="lg"
-                                class="!h-auto flex-1 data-[state=open]:bg-sidebar-accent"
+                                class="!h-auto !w-auto data-[state=open]:bg-sidebar-accent"
                             >
                                 <AppLogo />
                                 <ChevronDown
-                                    class="ml-auto size-3.5 text-muted-foreground"
+                                    class="size-3.5 text-muted-foreground"
                                 />
                             </SidebarMenuButton>
                         </DropdownMenuTrigger>
@@ -498,29 +498,29 @@ const tryOpen = ref(false);
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <div class="ml-auto flex items-center gap-0.5">
+                        <button
+                            type="button"
+                            class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                            aria-label="Search"
+                            title="Search (Ctrl+K)"
+                            @click="openSearch"
+                        >
+                            <Search class="size-3.5" />
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                            aria-label="New issue"
+                            title="New issue"
+                            @click="newIssueOpen = true"
+                        >
+                            <PenSquare class="size-3.5" />
+                        </button>
+                    </div>
                 </SidebarMenuItem>
             </SidebarMenu>
-
-            <div class="flex items-center gap-1 px-2">
-                <button
-                    type="button"
-                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-                    aria-label="Search"
-                    title="Search (Ctrl+K)"
-                    @click="openSearch"
-                >
-                    <Search class="size-3.5" />
-                </button>
-                <button
-                    type="button"
-                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-                    aria-label="New issue"
-                    title="New issue"
-                    @click="newIssueOpen = true"
-                >
-                    <PenSquare class="size-3.5" />
-                </button>
-            </div>
         </SidebarHeader>
 
         <SidebarContent>

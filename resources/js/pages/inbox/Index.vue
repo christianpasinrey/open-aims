@@ -19,11 +19,11 @@ import {
 import { computed, ref } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
+import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectChip from '@/components/repo/ProjectChip.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import { useFavourites } from '@/composables/useFavourites';
-import { renderMarkdown } from '@/lib/markdown';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -103,15 +103,6 @@ function clearPreview() {
 function priorityLabel(p: number): string {
     return ['No priority', 'Urgent', 'High', 'Medium', 'Low'][p] ?? 'No priority';
 }
-
-const previewDescription = computed<string>(() =>
-    renderMarkdown(props.preview?.description ?? null),
-);
-const previewComments = computed<Record<number, string>>(() =>
-    Object.fromEntries(
-        (props.preview?.comments ?? []).map((c) => [c.id, renderMarkdown(c.body)]),
-    ),
-);
 
 const { isFavourited, toggle } = useFavourites();
 const starred = computed(() => isFavourited('inbox', '/inbox'));
@@ -535,11 +526,12 @@ const grouped = computed(() => {
                 <h1 class="text-[22px] font-semibold leading-tight tracking-tight text-foreground">
                     {{ preview.title }}
                 </h1>
-                <div
-                    v-if="previewDescription"
-                    class="markdown-body mt-6"
-                    v-html="previewDescription"
-                ></div>
+                <MarkdownContent
+                    v-if="preview.description"
+                    :source="preview.description"
+                    :identifier="preview.identifier"
+                    class="mt-6"
+                />
                 <p
                     v-else
                     class="mt-6 text-[14px] italic text-muted-foreground"
@@ -571,10 +563,10 @@ const grouped = computed(() => {
                                     relativeTime(c.created_at)
                                 }}</span>
                             </div>
-                            <div
-                                class="markdown-body mt-2"
-                                v-html="previewComments[c.id]"
-                            ></div>
+                            <MarkdownContent
+                                :source="c.body"
+                                class="mt-2"
+                            />
                         </li>
                     </ul>
                 </section>
@@ -585,9 +577,9 @@ const grouped = computed(() => {
     <!-- RIGHT: properties rail (mirror of issue/Show) -->
     <aside
         v-if="preview"
-        class="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 px-5 py-5 lg:block"
+        class="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border bg-background/40 px-3 py-3 lg:block"
     >
-        <div class="mb-3 flex items-center gap-1 text-muted-foreground">
+        <div class="mb-2 flex items-center justify-end gap-0.5 text-muted-foreground">
             <button
                 type="button"
                 class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
@@ -611,25 +603,25 @@ const grouped = computed(() => {
             </button>
         </div>
 
-        <div class="space-y-5 text-[13px]">
+        <div class="space-y-2 text-[13px]">
             <!-- Properties -->
-            <div>
-                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Properties
+            <div class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
+                <div class="mb-1.5 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span>Properties</span>
                 </div>
-                <div class="space-y-1.5">
-                    <div class="flex items-center gap-2 text-foreground">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2 px-1 py-1 text-foreground">
                         <StatusIcon
                             :type="preview.state?.type ?? 'unstarted'"
                             :color="preview.state?.color"
                         />
                         <span>{{ preview.state?.name ?? '—' }}</span>
                     </div>
-                    <div class="flex items-center gap-2 text-foreground">
+                    <div class="flex items-center gap-2 px-1 py-1 text-foreground">
                         <PriorityIcon :priority="preview.priority" />
                         <span>{{ priorityLabel(preview.priority) }}</span>
                     </div>
-                    <div v-if="preview.assignee" class="flex items-center gap-2 text-foreground">
+                    <div v-if="preview.assignee" class="flex items-center gap-2 px-1 py-1 text-foreground">
                         <Avatar
                             :name="preview.assignee.name"
                             :email="preview.assignee.email"
@@ -637,7 +629,7 @@ const grouped = computed(() => {
                         />
                         <span>{{ preview.assignee.name }}</span>
                     </div>
-                    <div v-else class="flex items-center gap-2 text-muted-foreground">
+                    <div v-else class="flex items-center gap-2 px-1 py-1 text-muted-foreground">
                         <span class="size-3.5 rounded-full border border-dashed border-border"></span>
                         <span>Unassigned</span>
                     </div>
@@ -645,11 +637,11 @@ const grouped = computed(() => {
             </div>
 
             <!-- Labels -->
-            <div>
-                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Labels
+            <div class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
+                <div class="mb-1.5 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span>Labels</span>
                 </div>
-                <div v-if="preview.labels.length" class="flex flex-wrap gap-1.5">
+                <div v-if="preview.labels.length" class="flex flex-wrap gap-1.5 px-1 py-0.5">
                     <LabelBadge
                         v-for="l in preview.labels"
                         :key="l.id"
@@ -657,13 +649,13 @@ const grouped = computed(() => {
                         :color="l.color"
                     />
                 </div>
-                <span v-else class="text-muted-foreground">—</span>
+                <span v-else class="px-1 text-muted-foreground">—</span>
             </div>
 
             <!-- Project -->
-            <div>
-                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Project
+            <div class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
+                <div class="mb-1.5 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span>Project</span>
                 </div>
                 <ProjectChip
                     v-if="preview.project"
@@ -673,12 +665,12 @@ const grouped = computed(() => {
                     :slug="preview.project.slug"
                     :href="`/projects/${preview.project.slug}`"
                 />
-                <span v-else class="text-muted-foreground">—</span>
+                <span v-else class="px-1 text-muted-foreground">—</span>
             </div>
 
-            <div class="border-t border-border pt-4 text-[12px] text-muted-foreground">
-                Updated {{ relativeTime(preview.updated_at) }}<br />
-                Created {{ relativeTime(preview.created_at) }}
+            <div class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5 text-[12px] text-muted-foreground">
+                <div>Updated {{ relativeTime(preview.updated_at) }}</div>
+                <div>Created {{ relativeTime(preview.created_at) }}</div>
             </div>
         </div>
     </aside>

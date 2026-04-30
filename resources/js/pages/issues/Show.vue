@@ -14,11 +14,11 @@ import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
 import IssueActions from '@/components/repo/issues/IssueActions.vue';
 import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
 import LinkedPullRequests from '@/components/repo/issues/LinkedPullRequests.vue';
+import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 import PriorityPicker from '@/components/repo/issues/PriorityPicker.vue';
 import ProjectPicker from '@/components/repo/issues/ProjectPicker.vue';
 import StatusPicker from '@/components/repo/issues/StatusPicker.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
-import { renderMarkdown } from '@/lib/markdown';
 
 type State = {
     id: number;
@@ -105,12 +105,6 @@ const props = defineProps<{
     priorities: Record<string, string>;
     linked_pull_requests?: LinkedPullRequest[];
 }>();
-
-const commentBodies = computed<Record<number, string>>(() =>
-    Object.fromEntries(
-        (props.comments ?? []).map((c) => [c.id, renderMarkdown(c.body)]),
-    ),
-);
 
 function fmtDate(iso: string | null): string {
     if (!iso) {
@@ -297,10 +291,10 @@ const isOverdue = computed<boolean>(() => {
                                         relativeTime(c.created_at)
                                     }}</span>
                                 </div>
-                                <div
-                                    class="markdown-body mt-2"
-                                    v-html="commentBodies[c.id]"
-                                ></div>
+                                <MarkdownContent
+                                    :source="c.body"
+                                    class="mt-2"
+                                />
                             </li>
                         </ul>
                     </section>
@@ -308,19 +302,21 @@ const isOverdue = computed<boolean>(() => {
             </div>
 
             <aside
-                class="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 px-5 py-5 lg:block"
+                class="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border bg-background/40 px-3 py-3 lg:block"
             >
-                <div class="space-y-5">
+                <div class="space-y-2">
                     <!-- Properties -->
-                    <section>
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Properties</span>
-                            <ChevronDown class="size-3" />
+                            <ChevronDown class="size-3 opacity-60" />
                         </button>
-                        <div class="mt-2 flex flex-col gap-1">
+                        <div class="mt-1.5 flex flex-col gap-0.5">
                             <StatusPicker
                                 :identifier="issue.identifier"
                                 :states="states"
@@ -354,15 +350,17 @@ const isOverdue = computed<boolean>(() => {
                     </section>
 
                     <!-- Labels -->
-                    <section>
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Labels</span>
-                            <ChevronDown class="size-3" />
+                            <ChevronDown class="size-3 opacity-60" />
                         </button>
-                        <div class="mt-2">
+                        <div class="mt-1.5">
                             <LabelsPicker
                                 :identifier="issue.identifier"
                                 :labels="labels"
@@ -372,15 +370,17 @@ const isOverdue = computed<boolean>(() => {
                     </section>
 
                     <!-- Project -->
-                    <section>
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Project</span>
-                            <ChevronDown class="size-3" />
+                            <ChevronDown class="size-3 opacity-60" />
                         </button>
-                        <div class="mt-2">
+                        <div class="mt-1.5">
                             <ProjectPicker
                                 :identifier="issue.identifier"
                                 :projects="projects"
@@ -398,13 +398,14 @@ const isOverdue = computed<boolean>(() => {
                                 linked_pull_requests.length) ||
                             issue.git_branch_name
                         "
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
                     >
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Relations</span>
-                            <ChevronDown class="size-3" />
+                            <ChevronDown class="size-3 opacity-60" />
                         </button>
 
                         <div class="mt-2 space-y-3">

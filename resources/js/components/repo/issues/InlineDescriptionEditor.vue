@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { computed, nextTick, ref, watch } from 'vue';
-import { renderMarkdown } from '@/lib/markdown';
+import { nextTick, ref, watch } from 'vue';
+import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 
 const props = defineProps<{
     identifier: string;
@@ -11,8 +11,6 @@ const props = defineProps<{
 const editing = ref(false);
 const local = ref(props.description ?? '');
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
-
-const html = computed<string>(() => renderMarkdown(props.description));
 
 watch(
     () => props.description,
@@ -94,12 +92,13 @@ function autosize(): void {
             @keydown="onKeydown"
             @input="autosize"
         ></textarea>
-        <div
-            v-else-if="html"
-            class="markdown-body -mx-3 cursor-text rounded-md px-3 py-2 transition-colors hover:bg-accent/40"
-            v-html="html"
-            @click="startEditing"
-        ></div>
+        <MarkdownContent
+            v-else-if="description"
+            :source="description"
+            :identifier="identifier"
+            class="-mx-3 cursor-text rounded-md px-3 py-2 transition-colors hover:bg-accent/40"
+            @dblclick="startEditing"
+        />
         <button
             v-else
             type="button"

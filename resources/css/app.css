@@ -213,36 +213,37 @@
 }
 
 /* Markdown rendering for issue / project descriptions.
-   Tight repo-flavour: smaller heading scale, mono inline code, no
-   exaggerated heading sizes that compete with the issue title above. */
+   repo-flavour prose: airy body, generous code spans, breathing tables. */
 @layer components {
     .markdown-body {
-        font-size: 14px;
-        line-height: 1.65;
+        font-size: 15px;
+        line-height: 1.7;
         color: var(--foreground);
     }
     .markdown-body > * + * {
-        margin-top: 0.85em;
+        margin-top: 1em;
     }
     .markdown-body h1,
     .markdown-body h2,
     .markdown-body h3,
     .markdown-body h4 {
         font-weight: 600;
-        line-height: 1.3;
-        margin-top: 1.4em;
+        line-height: 1.25;
+        margin-top: 1.8em;
+        color: var(--foreground);
+        letter-spacing: -0.005em;
     }
     .markdown-body h1 {
-        font-size: 1.15rem;
+        font-size: 1.4rem;
     }
     .markdown-body h2 {
-        font-size: 1.05rem;
+        font-size: 1.2rem;
     }
     .markdown-body h3 {
-        font-size: 0.95rem;
+        font-size: 1.05rem;
     }
     .markdown-body h4 {
-        font-size: 0.875rem;
+        font-size: 0.95rem;
         color: var(--muted-foreground);
     }
     .markdown-body p {
@@ -250,6 +251,7 @@
     }
     .markdown-body strong {
         font-weight: 600;
+        color: var(--foreground);
     }
     .markdown-body em {
         font-style: italic;
@@ -265,7 +267,7 @@
     .markdown-body ul,
     .markdown-body ol {
         margin: 0;
-        padding-left: 1.4em;
+        padding-left: 1.5em;
     }
     .markdown-body ul {
         list-style: disc;
@@ -274,65 +276,139 @@
         list-style: decimal;
     }
     .markdown-body li + li {
-        margin-top: 0.25em;
+        margin-top: 0.35em;
     }
     .markdown-body li > ul,
     .markdown-body li > ol {
-        margin-top: 0.25em;
+        margin-top: 0.35em;
+    }
+    .markdown-body li::marker {
+        color: var(--muted-foreground);
+    }
+    .markdown-body ul.contains-task-list,
+    .markdown-body ul:has(> li > input[type='checkbox']) {
+        list-style: none;
+        padding-left: 0;
+    }
+    .markdown-body li.task-list-item,
+    .markdown-body li:has(> input[type='checkbox']) {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.55em;
+        padding-left: 0;
+    }
+    .markdown-body input[type='checkbox'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        margin: 0.32em 0 0 0;
+        border: 1.4px solid var(--border);
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        flex-shrink: 0;
+        position: relative;
+        transition:
+            background 120ms ease,
+            border-color 120ms ease;
+    }
+    .markdown-body input[type='checkbox']:hover {
+        border-color: var(--ring);
+    }
+    .markdown-body input[type='checkbox']:checked {
+        background: var(--brand, #6366f1);
+        border-color: var(--brand, #6366f1);
+    }
+    .markdown-body input[type='checkbox']:checked::after {
+        content: '';
+        position: absolute;
+        left: 3.4px;
+        top: 0.5px;
+        width: 4px;
+        height: 8px;
+        border: solid #fff;
+        border-width: 0 1.6px 1.6px 0;
+        transform: rotate(45deg);
     }
     .markdown-body code {
         font-family:
             'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 0.85em;
-        padding: 0.1em 0.35em;
-        border-radius: 4px;
-        background: var(--muted);
+        font-size: 0.875em;
+        padding: 0.18em 0.45em;
+        border-radius: 5px;
+        background: color-mix(in srgb, var(--muted) 75%, transparent);
+        border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
         color: var(--foreground);
+        white-space: nowrap;
     }
     .markdown-body pre {
         font-family:
             'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 12.5px;
-        line-height: 1.55;
-        padding: 0.85em 1em;
-        border-radius: 6px;
-        background: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+        padding: 0.95em 1.1em;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--muted) 60%, transparent);
+        border: 1px solid var(--border);
         color: var(--foreground);
         overflow-x: auto;
     }
     .markdown-body pre code {
         padding: 0;
         background: transparent;
+        border: 0;
+        font-size: inherit;
+        white-space: pre;
     }
     .markdown-body blockquote {
         border-left: 2px solid var(--border);
-        padding-left: 0.85em;
+        padding-left: 1em;
         color: var(--muted-foreground);
     }
     .markdown-body hr {
         border: 0;
         border-top: 1px solid var(--border);
-        margin: 1.4em 0;
+        margin: 1.8em 0;
     }
     .markdown-body table {
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: 14px;
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
     }
     .markdown-body th,
     .markdown-body td {
-        border: 1px solid var(--border);
-        padding: 0.4em 0.6em;
+        border-bottom: 1px solid var(--border);
+        padding: 0.7em 0.95em;
         text-align: left;
+        vertical-align: top;
+    }
+    .markdown-body th + th,
+    .markdown-body td + td {
+        border-left: 1px solid var(--border);
+    }
+    .markdown-body tr:last-child td {
+        border-bottom: 0;
     }
     .markdown-body th {
-        background: var(--muted);
+        background: color-mix(in srgb, var(--muted) 65%, transparent);
         font-weight: 600;
+        font-size: 13px;
+        color: var(--muted-foreground);
+        text-transform: none;
+        letter-spacing: 0;
     }
     .markdown-body img {
         max-width: 100%;
         border-radius: 6px;
     }
     .markdown-body :first-child {
+        margin-top: 0;
+    }
+    .markdown-body :first-child:where(h1, h2, h3, h4) {
         margin-top: 0;
     }
 }
