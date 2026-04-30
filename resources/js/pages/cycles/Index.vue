@@ -114,7 +114,7 @@ const visibleCycles = computed<Cycle[]>(() => {
         return props.cycles;
     }
 
-    return props.cycles.filter((c) => !c.completed_at);
+    return (props.cycles ?? []).filter((c) => !c.completed_at);
 });
 
 function applySort(s: SortKey) {
@@ -172,11 +172,11 @@ const submitting = ref(false);
 const formError = ref<string | null>(null);
 
 const nextNumberSuggestion = computed<number>(() => {
-    if (!props.cycles.length) {
+    if (!(props.cycles ?? []).length) {
         return 1;
     }
 
-    return Math.max(...props.cycles.map((c) => c.number)) + 1;
+    return Math.max(...(props.cycles ?? []).map((c) => c.number)) + 1;
 });
 
 const form = ref({

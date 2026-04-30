@@ -21,7 +21,7 @@ const props = defineProps<{
 const open = ref(false);
 const query = ref('');
 const localSelection = ref<Set<number>>(
-    new Set(props.current.map((l) => l.id)),
+    new Set((props.current ?? []).map((l) => l.id)),
 );
 
 watch(
@@ -45,7 +45,7 @@ const filtered = computed(() => {
         return props.labels;
     }
 
-    return props.labels.filter((l) => l.name.toLowerCase().includes(q));
+    return (props.labels ?? []).filter((l) => l.name.toLowerCase().includes(q));
 });
 
 function toggle(id: number): void {

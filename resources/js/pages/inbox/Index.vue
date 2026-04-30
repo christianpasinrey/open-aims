@@ -130,7 +130,7 @@ function actionIcon(kind: Entry['kind']) {
 }
 
 const filteredFeed = computed<Entry[]>(() =>
-    props.feed.filter((e) => {
+    (props.feed ?? []).filter((e) => {
         if (e.kind === 'assigned' && !filterAssigned.value) {
             return false;
         }

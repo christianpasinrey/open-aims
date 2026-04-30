@@ -267,7 +267,7 @@ const visibleProjects = computed<Project[]>(() => {
         return props.projects;
     }
 
-    return props.projects.filter((p) => isFav(p));
+    return (props.projects ?? []).filter((p) => isFav(p));
 });
 
 // Grouping for the list. The backend already orders the rows; we just bucket.

@@ -269,7 +269,7 @@ const grouped = computed<GroupBucket[]>(() => {
         .filter((b) => b.count > 0);
 });
 
-const totalIssues = computed(() => props.issues.length);
+const totalIssues = computed(() => (props.issues ?? []).length);
 
 const headerLabel = computed<string>(() => {
     if (safeFilters.value.assignee === 'me') {

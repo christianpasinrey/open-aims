@@ -541,7 +541,7 @@ function submitComposer() {
         return;
     }
 
-    const stateId = props.states.find(
+    const stateId = (props.states ?? []).find(
         (s) => s.name === composerStateName.value,
     )?.id;
     composerSubmitting.value = true;

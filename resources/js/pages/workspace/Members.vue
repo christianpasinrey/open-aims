@@ -34,7 +34,7 @@ const filtered = computed<Member[]>(() => {
         return props.members;
     }
 
-    return props.members.filter(
+    return (props.members ?? []).filter(
         (m) =>
             m.user.name.toLowerCase().includes(q) ||
             m.user.email.toLowerCase().includes(q),

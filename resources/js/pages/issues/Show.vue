@@ -108,7 +108,7 @@ const props = defineProps<{
 
 const commentBodies = computed<Record<number, string>>(() =>
     Object.fromEntries(
-        props.comments.map((c) => [c.id, renderMarkdown(c.body)]),
+        (props.comments ?? []).map((c) => [c.id, renderMarkdown(c.body)]),
     ),
 );
 
