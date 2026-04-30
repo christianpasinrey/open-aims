@@ -5,15 +5,20 @@ import {
     LayoutGrid,
     CheckCircle2,
     CalendarRange,
-    FolderKanban,
-    Users,
     ChevronDown,
     ChevronRight,
+    ChevronUp,
+    FolderKanban,
+    Users,
     Search,
     PenSquare,
     Settings,
     Sparkles,
     UserPlus,
+    UserCircle,
+    KeyRound,
+    SunMoon,
+    Github,
     LogOut,
     Check,
     Plus,
@@ -24,6 +29,7 @@ import {
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
+import Avatar from '@/components/repo/Avatar.vue';
 import TeamIcon from '@/components/repo/TeamIcon.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -93,6 +99,17 @@ type UserWorkspace = {
 };
 
 const page = usePage();
+
+type CurrentUser = { id: number; name: string; email: string };
+const currentUser = computed<CurrentUser | null>(() => {
+    const u = (page.props as { auth?: { user?: CurrentUser | null } }).auth?.user;
+
+    return u ?? null;
+});
+
+function signOut() {
+    router.post('/logout', {}, { preserveScroll: false });
+}
 
 const workspace = computed<WorkspaceProp | null>(() => {
     const ws = (page.props as { workspace?: WorkspaceProp }).workspace;
@@ -707,6 +724,93 @@ const tryOpen = ref(false);
                 >
                 repo-lab Agent MCP support
             </a>
+
+            <!-- User menu — bottom of the sidebar -->
+            <SidebarMenu v-if="currentUser" class="mt-2">
+                <SidebarMenuItem>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <SidebarMenuButton
+                                size="lg"
+                                tooltip="Account"
+                                class="gap-2"
+                            >
+                                <Avatar
+                                    :name="currentUser.name"
+                                    :email="currentUser.email"
+                                    :size="24"
+                                />
+                                <span
+                                    class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden"
+                                >
+                                    <span class="truncate text-[13px] font-medium">{{ currentUser.name }}</span>
+                                    <span class="truncate text-[11px] text-muted-foreground">{{ currentUser.email }}</span>
+                                </span>
+                                <ChevronUp
+                                    class="ml-auto size-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden"
+                                />
+                            </SidebarMenuButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            side="top"
+                            align="end"
+                            class="w-60"
+                        >
+                            <div class="flex items-center gap-2 px-2 py-1.5">
+                                <Avatar
+                                    :name="currentUser.name"
+                                    :email="currentUser.email"
+                                    :size="28"
+                                />
+                                <div class="min-w-0">
+                                    <div class="truncate text-[13px] font-medium">{{ currentUser.name }}</div>
+                                    <div class="truncate text-[11.5px] text-muted-foreground">{{ currentUser.email }}</div>
+                                </div>
+                            </div>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem as-child>
+                                <Link :href="'/settings/profile'">
+                                    <UserCircle class="size-3.5" />
+                                    <span>Profile</span>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem as-child>
+                                <Link :href="'/settings/security'">
+                                    <KeyRound class="size-3.5" />
+                                    <span>Security & password</span>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem as-child>
+                                <Link :href="'/settings/appearance'">
+                                    <SunMoon class="size-3.5" />
+                                    <span>Appearance</span>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem as-child>
+                                <Link :href="'/workspace/settings'">
+                                    <Settings class="size-3.5" />
+                                    <span>Workspace settings</span>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem as-child>
+                                <Link :href="'/settings/github'">
+                                    <Github class="size-3.5" />
+                                    <span>GitHub integration</span>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                variant="destructive"
+                                @select="signOut"
+                            >
+                                <LogOut class="size-3.5" />
+                                <span>Sign out</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </SidebarMenuItem>
+            </SidebarMenu>
         </SidebarFooter>
 
         <!-- Search dialog -->
