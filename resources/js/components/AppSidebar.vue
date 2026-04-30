@@ -24,6 +24,7 @@ import {
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
+import TeamIcon from '@/components/repo/TeamIcon.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -546,16 +547,12 @@ const tryOpen = ref(false);
                             "
                         >
                             <Link :href="`/issues?team=${team.key}`">
-                                <span
-                                    aria-hidden="true"
-                                    class="flex size-5 items-center justify-center rounded-[5px] text-[10px] font-semibold tracking-tight text-white uppercase"
-                                    :style="{
-                                        backgroundColor:
-                                            team.color || '#6366f1',
-                                    }"
-                                >
-                                    {{ team.key.charAt(0) }}
-                                </span>
+                                <TeamIcon
+                                    :icon="team.icon"
+                                    :name="team.name"
+                                    :color="team.color"
+                                    :size="20"
+                                />
                                 <span class="truncate">{{ team.name }}</span>
                             </Link>
                         </SidebarMenuButton>
