@@ -389,7 +389,7 @@ const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint
         </section>
 
         <!-- Tokens (placeholder) -->
-        <section v-if="mcp.tokens.length" class="space-y-2">
+        <section v-if="mcp.tokens?.length" class="space-y-2">
             <h3 class="text-[13px] font-medium text-foreground">
                 Personal access tokens
             </h3>
