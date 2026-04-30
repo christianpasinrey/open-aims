@@ -147,7 +147,111 @@ final class InboxController
                 'assigned' => $assigned->count(),
                 'comments' => $comments->count(),
             ],
+            'preview' => $this->buildPreview(
+                $request->query('preview'),
+                $workspace,
+            ),
         ]);
+    }
+
+    /**
+     * Resolve the issue picked by `?preview=LAM-275` and return a
+     * compact payload the inbox right rail can render without leaving
+     * /inbox. Returns null when no preview is requested or the issue
+     * cannot be reached from this workspace.
+     */
+    private function buildPreview(mixed $identifier, Workspace $workspace): ?array
+    {
+        if (! is_string($identifier) || $identifier === '') {
+            return null;
+        }
+        if (preg_match('/^([A-Za-z]+)-(\d+)$/', $identifier, $m) !== 1) {
+            return null;
+        }
+        $team = \App\Modules\Teams\Models\Team::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('key', strtoupper($m[1]))
+            ->first();
+        if ($team === null) {
+            return null;
+        }
+        $issue = Issue::query()
+            ->where('team_id', $team->id)
+            ->where('number', (int) $m[2])
+            ->with([
+                'workflowState:id,name,type,color,position',
+                'assignee:id,name,email',
+                'creator:id,name,email',
+                'project:id,name,slug,color,icon',
+                'labels:id,name,color',
+            ])
+            ->first();
+        if ($issue === null) {
+            return null;
+        }
+
+        $description = $issue->description;
+        if ($description !== null && mb_strlen($description) > 8000) {
+            $description = mb_substr($description, 0, 8000)."\n\n…(truncated)";
+        }
+
+        $comments = Comment::query()
+            ->where('issue_id', $issue->id)
+            ->with('user:id,name,email')
+            ->orderBy('created_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (Comment $c): array => [
+                'id' => $c->id,
+                'body' => $c->body,
+                'user' => $c->user ? [
+                    'name' => $c->user->name,
+                    'email' => $c->user->email,
+                ] : null,
+                'created_at' => $c->created_at?->toIso8601String(),
+            ])
+            ->all();
+
+        return [
+            'identifier' => $team->key.'-'.$issue->number,
+            'title' => $issue->title,
+            'description' => $description,
+            'priority' => (int) ($issue->priority?->value ?? 0),
+            'state' => $issue->workflowState ? [
+                'name' => $issue->workflowState->name,
+                'type' => $issue->workflowState->type,
+                'color' => $issue->workflowState->color,
+            ] : null,
+            'assignee' => $issue->assignee ? [
+                'id' => $issue->assignee->id,
+                'name' => $issue->assignee->name,
+                'email' => $issue->assignee->email,
+            ] : null,
+            'creator' => $issue->creator ? [
+                'id' => $issue->creator->id,
+                'name' => $issue->creator->name,
+                'email' => $issue->creator->email,
+            ] : null,
+            'project' => $issue->project ? [
+                'name' => $issue->project->name,
+                'slug' => $issue->project->slug,
+                'color' => $issue->project->color,
+                'icon' => $issue->project->icon,
+            ] : null,
+            'labels' => $issue->labels->map(fn ($l) => [
+                'id' => $l->id,
+                'name' => $l->name,
+                'color' => $l->color,
+            ])->all(),
+            'comments' => $comments,
+            'team' => [
+                'key' => $team->key,
+                'name' => $team->name,
+                'color' => $team->color,
+            ],
+            'updated_at' => $issue->updated_at?->toIso8601String(),
+            'created_at' => $issue->created_at?->toIso8601String(),
+        ];
     }
 
     /**

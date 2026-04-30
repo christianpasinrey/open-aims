@@ -1,20 +1,29 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
-    Inbox,
-    UserPlus,
-    PenSquare,
-    MessageSquare,
-    Star,
-    Filter,
-    CheckCheck,
+    Bell,
     Check,
+    CheckCheck,
+    Filter,
+    Inbox,
+    Link as LinkIcon,
+    MessageSquare,
+    MoreHorizontal,
+    PenSquare,
+    Star,
+    UserPlus,
+    History,
+    Network,
+    GitBranch,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
+import LabelBadge from '@/components/repo/LabelBadge.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
+import ProjectChip from '@/components/repo/ProjectChip.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import { useFavourites } from '@/composables/useFavourites';
+import { renderMarkdown } from '@/lib/markdown';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -44,10 +53,65 @@ type Entry = {
     snippet: string | null;
 };
 
+type PreviewLabel = { id: number; name: string; color: string | null };
+type PreviewProject = {
+    name: string;
+    slug: string;
+    color: string | null;
+    icon: string | null;
+};
+type PreviewComment = {
+    id: number;
+    body: string;
+    user: { name: string; email: string } | null;
+    created_at: string | null;
+};
+type Preview = {
+    identifier: string;
+    title: string;
+    description: string | null;
+    priority: number;
+    state: IssueState | null;
+    assignee: { id: number; name: string; email: string } | null;
+    creator: { id: number; name: string; email: string } | null;
+    project: PreviewProject | null;
+    labels: PreviewLabel[];
+    comments: PreviewComment[];
+    team: Team;
+    updated_at: string | null;
+    created_at: string | null;
+};
+
 const props = defineProps<{
     feed: Entry[];
     counts: { total: number; assigned: number; comments: number };
+    preview: Preview | null;
 }>();
+
+function selectEntry(identifier: string) {
+    router.get(
+        '/inbox',
+        { preview: identifier },
+        { preserveScroll: true, preserveState: true, replace: true },
+    );
+}
+
+function clearPreview() {
+    router.get('/inbox', {}, { preserveScroll: true, preserveState: true, replace: true });
+}
+
+function priorityLabel(p: number): string {
+    return ['No priority', 'Urgent', 'High', 'Medium', 'Low'][p] ?? 'No priority';
+}
+
+const previewDescription = computed<string>(() =>
+    renderMarkdown(props.preview?.description ?? null),
+);
+const previewComments = computed<Record<number, string>>(() =>
+    Object.fromEntries(
+        (props.preview?.comments ?? []).map((c) => [c.id, renderMarkdown(c.body)]),
+    ),
+);
 
 const { isFavourited, toggle } = useFavourites();
 const starred = computed(() => isFavourited('inbox', '/inbox'));
@@ -178,7 +242,9 @@ const grouped = computed(() => {
 <template>
     <Head title="Inbox" />
 
-    <div class="flex h-full flex-1 flex-col overflow-hidden">
+    <div class="flex h-full flex-1 overflow-hidden">
+    <!-- LEFT: feed list -->
+    <aside class="flex w-[400px] shrink-0 flex-col border-r border-border">
         <header
             class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5"
         >
@@ -296,9 +362,15 @@ const grouped = computed(() => {
                         :key="`${entry.kind}-${entry.issue.id}-${idx}`"
                         class="group/row relative"
                     >
-                        <Link
-                            :href="`/issues/${entry.issue.identifier}`"
-                            class="flex items-start gap-3 px-4 py-2.5 hover:bg-accent/40"
+                        <button
+                            type="button"
+                            :class="[
+                                'flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors',
+                                preview?.identifier === entry.issue.identifier
+                                    ? 'bg-accent/60'
+                                    : 'hover:bg-accent/40',
+                            ]"
+                            @click="selectEntry(entry.issue.identifier)"
                         >
                             <Avatar
                                 v-if="entry.actor"
@@ -373,7 +445,7 @@ const grouped = computed(() => {
                                     {{ entry.snippet }}
                                 </p>
                             </div>
-                        </Link>
+                        </button>
                         <button
                             type="button"
                             class="absolute top-3 right-3 hidden items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground group-hover/row:flex hover:bg-accent disabled:opacity-50"
@@ -387,5 +459,228 @@ const grouped = computed(() => {
                 </ul>
             </section>
         </div>
+    </aside>
+
+    <!-- MIDDLE: preview body or empty state -->
+    <div v-if="!preview" class="flex min-w-0 flex-1 items-center justify-center text-muted-foreground">
+        <div class="text-center">
+            <div class="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
+                <Inbox class="size-5" />
+            </div>
+            <p class="mt-3 text-[13px]">Select a notification to preview</p>
+        </div>
+    </div>
+    <section v-else class="flex min-w-0 flex-1 flex-col">
+        <!-- Breadcrumb / actions -->
+        <header
+            class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5"
+        >
+            <nav class="flex min-w-0 items-center gap-2 text-[12.5px] text-muted-foreground">
+                <Link
+                    v-if="preview.project"
+                    :href="`/projects/${preview.project.slug}`"
+                    class="flex shrink-0 items-center gap-1.5 truncate transition-colors hover:text-foreground"
+                >
+                    <ProjectChip
+                        :name="preview.project.name"
+                        :color="preview.project.color"
+                        :icon="preview.project.icon"
+                    />
+                </Link>
+                <span v-if="preview.project" class="text-muted-foreground/60">›</span>
+                <Link
+                    :href="`/issues/${preview.identifier}`"
+                    class="truncate text-foreground transition-colors hover:underline"
+                >
+                    <span class="font-mono text-[11.5px]">{{ preview.identifier }}</span>
+                    <span class="ml-1.5">{{ preview.title }}</span>
+                </Link>
+                <button
+                    type="button"
+                    class="text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Favourite"
+                >
+                    <Star class="size-3.5" />
+                </button>
+            </nav>
+            <div class="flex items-center gap-1 text-muted-foreground">
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                    aria-label="Notifications"
+                >
+                    <Bell class="size-3.5" />
+                </button>
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                    aria-label="History"
+                >
+                    <History class="size-3.5" />
+                </button>
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                    aria-label="Close preview"
+                    @click="clearPreview"
+                >
+                    <MoreHorizontal class="size-3.5" />
+                </button>
+            </div>
+        </header>
+
+        <!-- Body -->
+        <div class="flex-1 overflow-y-auto">
+            <div class="mx-auto w-full max-w-3xl px-8 py-8">
+                <h1 class="text-[22px] font-semibold leading-tight tracking-tight text-foreground">
+                    {{ preview.title }}
+                </h1>
+                <div
+                    v-if="previewDescription"
+                    class="markdown-body mt-6"
+                    v-html="previewDescription"
+                ></div>
+                <p
+                    v-else
+                    class="mt-6 text-[14px] italic text-muted-foreground"
+                >
+                    No description.
+                </p>
+
+                <section v-if="preview.comments.length" class="mt-10">
+                    <h2 class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Activity
+                    </h2>
+                    <ul class="space-y-4">
+                        <li
+                            v-for="c in preview.comments"
+                            :key="c.id"
+                            class="rounded-md border border-border bg-card p-3"
+                        >
+                            <div class="flex items-center gap-2 text-[12px]">
+                                <Avatar
+                                    v-if="c.user"
+                                    :name="c.user.name"
+                                    :email="c.user.email"
+                                    :size="20"
+                                />
+                                <span class="font-medium text-foreground">{{
+                                    c.user?.name ?? 'Unknown'
+                                }}</span>
+                                <span class="text-muted-foreground">{{
+                                    relativeTime(c.created_at)
+                                }}</span>
+                            </div>
+                            <div
+                                class="markdown-body mt-2"
+                                v-html="previewComments[c.id]"
+                            ></div>
+                        </li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+    </section>
+
+    <!-- RIGHT: properties rail (mirror of issue/Show) -->
+    <aside
+        v-if="preview"
+        class="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 px-5 py-5 lg:block"
+    >
+        <div class="mb-3 flex items-center gap-1 text-muted-foreground">
+            <button
+                type="button"
+                class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                aria-label="Copy link"
+            >
+                <LinkIcon class="size-3.5" />
+            </button>
+            <button
+                type="button"
+                class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                aria-label="Branch"
+            >
+                <GitBranch class="size-3.5" />
+            </button>
+            <button
+                type="button"
+                class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                aria-label="Network"
+            >
+                <Network class="size-3.5" />
+            </button>
+        </div>
+
+        <div class="space-y-5 text-[13px]">
+            <!-- Properties -->
+            <div>
+                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Properties
+                </div>
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2 text-foreground">
+                        <StatusIcon
+                            :type="preview.state?.type ?? 'unstarted'"
+                            :color="preview.state?.color"
+                        />
+                        <span>{{ preview.state?.name ?? '—' }}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-foreground">
+                        <PriorityIcon :priority="preview.priority" />
+                        <span>{{ priorityLabel(preview.priority) }}</span>
+                    </div>
+                    <div v-if="preview.assignee" class="flex items-center gap-2 text-foreground">
+                        <Avatar
+                            :name="preview.assignee.name"
+                            :email="preview.assignee.email"
+                            :size="18"
+                        />
+                        <span>{{ preview.assignee.name }}</span>
+                    </div>
+                    <div v-else class="flex items-center gap-2 text-muted-foreground">
+                        <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                        <span>Unassigned</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Labels -->
+            <div>
+                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Labels
+                </div>
+                <div v-if="preview.labels.length" class="flex flex-wrap gap-1.5">
+                    <LabelBadge
+                        v-for="l in preview.labels"
+                        :key="l.id"
+                        :name="l.name"
+                        :color="l.color"
+                    />
+                </div>
+                <span v-else class="text-muted-foreground">—</span>
+            </div>
+
+            <!-- Project -->
+            <div>
+                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Project
+                </div>
+                <ProjectChip
+                    v-if="preview.project"
+                    :name="preview.project.name"
+                    :color="preview.project.color"
+                    :icon="preview.project.icon"
+                    :slug="preview.project.slug"
+                    :href="`/projects/${preview.project.slug}`"
+                />
+                <span v-else class="text-muted-foreground">—</span>
+            </div>
+
+            <div class="border-t border-border pt-4 text-[12px] text-muted-foreground">
+                Updated {{ relativeTime(preview.updated_at) }}<br />
+                Created {{ relativeTime(preview.created_at) }}
+            </div>
+        </div>
+    </aside>
     </div>
 </template>

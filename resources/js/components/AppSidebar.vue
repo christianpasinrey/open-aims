@@ -52,6 +52,9 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -351,12 +354,12 @@ const tryOpen = ref(false);
     <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
             <SidebarMenu>
-                <SidebarMenuItem>
+                <SidebarMenuItem class="flex items-center gap-1">
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
                             <SidebarMenuButton
                                 size="lg"
-                                class="!h-auto data-[state=open]:bg-sidebar-accent"
+                                class="!h-auto flex-1 data-[state=open]:bg-sidebar-accent"
                             >
                                 <AppLogo />
                                 <ChevronDown
@@ -369,57 +372,16 @@ const tryOpen = ref(false);
                             align="start"
                             :side-offset="6"
                         >
-                            <DropdownMenuLabel
-                                class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
-                            >
-                                Workspaces
-                            </DropdownMenuLabel>
-                            <DropdownMenuItem
-                                v-for="ws in userWorkspaces"
-                                :key="ws.id"
-                                class="flex cursor-pointer items-center gap-2"
-                                @click="switchTo(ws.slug)"
-                            >
-                                <span
-                                    v-if="!ws.logo_url"
-                                    aria-hidden="true"
-                                    class="flex size-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white uppercase"
-                                    :style="{
-                                        backgroundColor: ws.color || '#6366f1',
-                                    }"
-                                >
-                                    {{ ws.name.charAt(0) }}
-                                </span>
-                                <img
-                                    v-else
-                                    :src="ws.logo_url"
-                                    :alt="ws.name"
-                                    class="size-5 shrink-0 rounded-[5px] object-cover"
-                                />
-                                <span
-                                    class="min-w-0 flex-1 truncate text-[13px]"
-                                    >{{ ws.name }}</span
-                                >
-                                <Check
-                                    v-if="workspace && ws.id === workspace.id"
-                                    class="size-3.5 text-foreground"
-                                />
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                v-if="!userWorkspaces.length"
-                                disabled
-                                class="text-[12px] text-muted-foreground"
-                            >
-                                No workspaces.
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem as-child>
                                 <Link
                                     :href="'/workspace/settings'"
-                                    class="flex w-full cursor-pointer items-center"
+                                    class="flex w-full cursor-pointer items-center justify-between"
                                 >
-                                    <Settings class="mr-2 size-3.5" />
-                                    Workspace settings
+                                    <span>Settings</span>
+                                    <span
+                                        class="font-mono text-[11px] text-muted-foreground"
+                                        >G then S</span
+                                    >
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem as-child>
@@ -427,17 +389,112 @@ const tryOpen = ref(false);
                                     :href="'/workspace/members'"
                                     class="flex w-full cursor-pointer items-center"
                                 >
-                                    <Users class="mr-2 size-3.5" />
-                                    Members
+                                    Invite and manage members
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                                class="flex cursor-pointer items-center text-destructive focus:bg-destructive/10 focus:text-destructive"
+                                class="cursor-pointer"
+                                @select="(e: Event) => e.preventDefault()"
+                            >
+                                <a
+                                    href="https://the app/download"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    class="flex w-full items-center"
+                                    >Download desktop app</a
+                                >
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger
+                                    class="flex w-full items-center justify-between"
+                                >
+                                    <span class="flex items-center gap-2">
+                                        <span>Switch workspace</span>
+                                    </span>
+                                    <span
+                                        class="ml-auto pr-1 font-mono text-[11px] text-muted-foreground"
+                                        >O then W</span
+                                    >
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent
+                                    class="min-w-64 rounded-lg"
+                                >
+                                    <DropdownMenuLabel
+                                        class="truncate text-[12px] font-normal text-muted-foreground"
+                                    >
+                                        {{ currentUser?.email ?? '' }}
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuItem
+                                        v-for="ws in userWorkspaces"
+                                        :key="ws.id"
+                                        class="flex cursor-pointer items-center gap-2"
+                                        @click="switchTo(ws.slug)"
+                                    >
+                                        <span
+                                            v-if="!ws.logo_url"
+                                            aria-hidden="true"
+                                            class="flex size-5 shrink-0 items-center justify-center rounded-full text-[9.5px] font-semibold text-white uppercase tracking-tight"
+                                            :style="{
+                                                backgroundColor:
+                                                    ws.color || '#6366f1',
+                                            }"
+                                        >
+                                            {{
+                                                ws.name
+                                                    .replace(/\s+/g, '')
+                                                    .slice(0, 2)
+                                                    .toUpperCase()
+                                            }}
+                                        </span>
+                                        <img
+                                            v-else
+                                            :src="ws.logo_url"
+                                            :alt="ws.name"
+                                            class="size-5 shrink-0 rounded-full object-cover"
+                                        />
+                                        <span
+                                            class="min-w-0 flex-1 truncate text-[13px]"
+                                            >{{ ws.name.toLowerCase() }}</span
+                                        >
+                                        <Check
+                                            v-if="
+                                                workspace &&
+                                                ws.id === workspace.id
+                                            "
+                                            class="size-3.5 text-foreground"
+                                        />
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel
+                                        class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                    >
+                                        Account
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuItem
+                                        disabled
+                                        class="cursor-pointer"
+                                    >
+                                        Create or join a workspace…
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        disabled
+                                        class="cursor-pointer"
+                                    >
+                                        Add an account…
+                                    </DropdownMenuItem>
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                            <DropdownMenuItem
+                                class="flex cursor-pointer items-center justify-between"
                                 @click="logout"
                             >
-                                <LogOut class="mr-2 size-3.5" />
-                                Sign out
+                                <span>Log out</span>
+                                <span
+                                    class="font-mono text-[11px] text-muted-foreground"
+                                    >Alt ⇧ Q</span
+                                >
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
