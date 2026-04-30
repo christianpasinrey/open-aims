@@ -53,12 +53,21 @@ function wrapIssueRefs(html: string): string {
 const REPO_ISSUE_TAG_RE =
     /<issue\b[^>]*>([A-Z][A-Z0-9]*-\d+)<\/issue>/g;
 
+/**
+ * Defensive scrub for the repo-MCP truncation marker that may appear in
+ * imported descriptions. We never want to surface it in the UI.
+ */
+const TRUNCATION_MARKER_RE =
+    /\s*\(truncated,\s*use\s*`?get_(?:issue|project)`?\s*for\s*full\s*description\)\s*/gi;
+
 export function renderMarkdown(source: string | null | undefined): string {
     if (!source) {
         return '';
     }
 
-    const preprocessed = source.replace(REPO_ISSUE_TAG_RE, '$1');
+    const preprocessed = source
+        .replace(TRUNCATION_MARKER_RE, '')
+        .replace(REPO_ISSUE_TAG_RE, '$1');
     const html = marked.parse(preprocessed, { async: false }) as string;
     const sanitized = html.replace(RAW_HTML_RE, '').replace(ON_ATTR_RE, '');
 
