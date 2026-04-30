@@ -1,20 +1,31 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import type { FormDataConvertible } from '@inertiajs/core';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import {
     Calendar,
     Check,
     ChevronDown,
     ChevronRight,
     LayoutGrid,
+    Loader2,
     Plus,
     SlidersHorizontal,
     Star,
 } from 'lucide-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -29,15 +40,6 @@ import {
     DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
 type Member = { id: number; name: string };
@@ -76,7 +78,12 @@ type Filters = {
 const props = defineProps<{
     projects: Project[];
     states: Record<string, string>;
-    team: { id: number; name: string; key: string; color: string | null } | null;
+    team: {
+        id: number;
+        name: string;
+        key: string;
+        color: string | null;
+    } | null;
     members: WorkspaceMember[];
     filters: Filters;
 }>();
@@ -97,7 +104,14 @@ const STATE_LABELS: Record<string, string> = {
     completed: 'Completed',
     canceled: 'Canceled',
 };
-const STATE_ORDER = ['backlog', 'planned', 'started', 'paused', 'completed', 'canceled'];
+const STATE_ORDER = [
+    'backlog',
+    'planned',
+    'started',
+    'paused',
+    'completed',
+    'canceled',
+];
 
 function projectStatusType(
     state: string | null,
@@ -117,13 +131,22 @@ function projectStatusType(
 }
 
 const headerTitle = computed<string>(() => {
-    if (props.team) return `${props.team.name} · Projects`;
-    if (favouritesView.value) return 'Favourite projects';
+    if (props.team) {
+        return `${props.team.name} · Projects`;
+    }
+
+    if (favouritesView.value) {
+        return 'Favourite projects';
+    }
+
     return 'Projects';
 });
 
 function fmtDate(iso: string | null): string {
-    if (!iso) return '';
+    if (!iso) {
+        return '';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
@@ -131,7 +154,10 @@ function fmtDate(iso: string | null): string {
 }
 
 function isOverdue(target: string | null, completedAt: string | null) {
-    if (!target || completedAt) return false;
+    if (!target || completedAt) {
+        return false;
+    }
+
     return new Date(target).getTime() < Date.now();
 }
 
@@ -141,9 +167,18 @@ function ringDashOffset(percent: number) {
     return ringC * (1 - Math.max(0, Math.min(100, percent)) / 100);
 }
 function ringStroke(percent: number, state: string | null) {
-    if (state === 'canceled') return '#a1a1aa';
-    if (state === 'completed' || percent >= 100) return '#10b981';
-    if (percent > 0) return '#f59e0b';
+    if (state === 'canceled') {
+        return '#a1a1aa';
+    }
+
+    if (state === 'completed' || percent >= 100) {
+        return '#10b981';
+    }
+
+    if (percent > 0) {
+        return '#f59e0b';
+    }
+
     return '#a1a1aa';
 }
 
@@ -168,10 +203,15 @@ function applyParams(patch: ParamPatch) {
         ...patch,
     };
     const merged: Record<string, string> = {};
+
     for (const [k, v] of Object.entries(current)) {
-        if (v === null || v === undefined || v === '') continue;
+        if (v === null || v === undefined || v === '') {
+            continue;
+        }
+
         merged[k] = String(v);
     }
+
     router.get('/projects', merged, { preserveState: false, replace: false });
 }
 
@@ -197,12 +237,20 @@ const favourites = ref<Set<string>>(new Set());
 const favouritesView = ref<boolean>(false);
 
 function readFavourites(): Set<string> {
-    if (typeof window === 'undefined') return new Set();
+    if (typeof window === 'undefined') {
+        return new Set();
+    }
+
     const out = new Set<string>();
+
     try {
         for (let i = 0; i < window.localStorage.length; i++) {
             const key = window.localStorage.key(i);
-            if (!key || !key.startsWith(FAV_PREFIX)) continue;
+
+            if (!key || !key.startsWith(FAV_PREFIX)) {
+                continue;
+            }
+
             if (window.localStorage.getItem(key) === '1') {
                 out.add(key.slice(FAV_PREFIX.length));
             }
@@ -210,6 +258,7 @@ function readFavourites(): Set<string> {
     } catch {
         // localStorage may be unavailable in private mode
     }
+
     return out;
 }
 
@@ -222,20 +271,34 @@ function toggleFav(slug: string, event?: Event) {
         event.preventDefault();
         event.stopPropagation();
     }
+
     const key = FAV_PREFIX + slug;
     const next = new Set(favourites.value);
+
     if (next.has(slug)) {
         next.delete(slug);
-        try { window.localStorage.removeItem(key); } catch { /* ignore */ }
+
+        try {
+            window.localStorage.removeItem(key);
+        } catch {
+            /* ignore */
+        }
     } else {
         next.add(slug);
-        try { window.localStorage.setItem(key, '1'); } catch { /* ignore */ }
+
+        try {
+            window.localStorage.setItem(key, '1');
+        } catch {
+            /* ignore */
+        }
     }
+
     favourites.value = next;
 }
 
 onMounted(() => {
     favourites.value = readFavourites();
+
     if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
         favouritesView.value = url.searchParams.get('fav') === '1';
@@ -251,7 +314,10 @@ watch(
 );
 
 const visibleProjects = computed<Project[]>(() => {
-    if (!favouritesView.value) return props.projects;
+    if (!favouritesView.value) {
+        return props.projects;
+    }
+
     return props.projects.filter((p) => favourites.value.has(p.slug));
 });
 
@@ -259,42 +325,63 @@ const visibleProjects = computed<Project[]>(() => {
 type Group = { key: string; label: string; projects: Project[] };
 const grouped = computed<Group[]>(() => {
     const list = visibleProjects.value;
+
     if (props.filters.group === 'none') {
         return [{ key: 'all', label: '', projects: list }];
     }
+
     if (props.filters.group === 'status') {
         const buckets = new Map<string, Project[]>();
+
         for (const p of list) {
             const key = p.state ?? 'backlog';
-            if (!buckets.has(key)) buckets.set(key, []);
+
+            if (!buckets.has(key)) {
+                buckets.set(key, []);
+            }
+
             buckets.get(key)!.push(p);
         }
+
         const out: Group[] = [];
+
         for (const key of STATE_ORDER) {
             const arr = buckets.get(key);
+
             if (arr && arr.length) {
-                out.push({ key, label: STATE_LABELS[key] ?? key, projects: arr });
+                out.push({
+                    key,
+                    label: STATE_LABELS[key] ?? key,
+                    projects: arr,
+                });
                 buckets.delete(key);
             }
         }
+
         for (const [key, arr] of buckets.entries()) {
             out.push({ key, label: STATE_LABELS[key] ?? key, projects: arr });
         }
+
         return out;
     }
+
     // group by lead
     const buckets = new Map<string, Project[]>();
+
     for (const p of list) {
         const key = p.lead ? `u-${p.lead.id}` : 'no-lead';
-        if (!buckets.has(key)) buckets.set(key, []);
+
+        if (!buckets.has(key)) {
+            buckets.set(key, []);
+        }
+
         buckets.get(key)!.push(p);
     }
+
     return Array.from(buckets.entries()).map(([key, arr]) => ({
         key,
         label:
-            key === 'no-lead'
-                ? 'No lead'
-                : (arr[0]?.lead?.name ?? 'Unknown'),
+            key === 'no-lead' ? 'No lead' : (arr[0]?.lead?.name ?? 'Unknown'),
         projects: arr,
     }));
 });
@@ -302,8 +389,13 @@ const grouped = computed<Group[]>(() => {
 const collapsedGroups = ref<Set<string>>(new Set());
 function toggleGroup(key: string) {
     const n = new Set(collapsedGroups.value);
-    if (n.has(key)) n.delete(key);
-    else n.add(key);
+
+    if (n.has(key)) {
+        n.delete(key);
+    } else {
+        n.add(key);
+    }
+
     collapsedGroups.value = n;
 }
 
@@ -345,45 +437,59 @@ function openNew() {
 
 function toggleNewTeam(key: string) {
     const i = newForm.value.team_keys.indexOf(key);
-    if (i === -1) newForm.value.team_keys.push(key);
-    else newForm.value.team_keys.splice(i, 1);
+
+    if (i === -1) {
+        newForm.value.team_keys.push(key);
+    } else {
+        newForm.value.team_keys.splice(i, 1);
+    }
 }
 
 function submitNew() {
     if (!newForm.value.name.trim()) {
         newError.value = 'Name is required.';
+
         return;
     }
+
     newSubmitting.value = true;
     newError.value = null;
     const payload: Record<string, FormDataConvertible> = {
         name: newForm.value.name.trim(),
         state: newForm.value.state,
     };
+
     if (newForm.value.description.trim() !== '') {
         payload.description = newForm.value.description.trim();
     }
+
     if (newForm.value.team_keys.length > 0) {
         payload.team_keys = newForm.value.team_keys;
     }
+
     if (newForm.value.lead_user_id !== null) {
         payload.lead_user_id = newForm.value.lead_user_id;
     }
+
     if (newForm.value.start_date !== '') {
         payload.start_date = newForm.value.start_date;
     }
+
     if (newForm.value.target_date !== '') {
         payload.target_date = newForm.value.target_date;
     }
+
     router.post('/projects', payload, {
         onSuccess: () => {
             newDialogOpen.value = false;
             newSubmitting.value = false;
+            toast.success('Project created');
         },
         onError: (errors) => {
             newSubmitting.value = false;
             const first = Object.values(errors)[0];
-            newError.value = (first as string | undefined) ?? 'Could not create project.';
+            newError.value =
+                (first as string | undefined) ?? 'Could not create project.';
         },
         onFinish: () => {
             newSubmitting.value = false;
@@ -393,8 +499,15 @@ function submitNew() {
 
 const activeFilterCount = computed<number>(() => {
     let c = 0;
-    if (props.filters.status) c++;
-    if (props.filters.lead) c++;
+
+    if (props.filters.status) {
+        c++;
+    }
+
+    if (props.filters.lead) {
+        c++;
+    }
+
     return c;
 });
 </script>
@@ -481,33 +594,68 @@ const activeFilterCount = computed<number>(() => {
                         <DropdownMenuLabel>Filter by</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>Status</DropdownMenuSubTrigger>
+                            <DropdownMenuSubTrigger
+                                >Status</DropdownMenuSubTrigger
+                            >
                             <DropdownMenuSubContent class="w-48">
                                 <DropdownMenuCheckboxItem
                                     v-for="key in STATE_ORDER"
                                     :key="key"
                                     :model-value="props.filters.status === key"
-                                    @select="(e) => { e.preventDefault(); setStatus(props.filters.status === key ? null : key); }"
+                                    @select="
+                                        (e) => {
+                                            e.preventDefault();
+                                            setStatus(
+                                                props.filters.status === key
+                                                    ? null
+                                                    : key,
+                                            );
+                                        }
+                                    "
                                 >
                                     <span class="flex items-center gap-2">
-                                        <StatusIcon :type="projectStatusType(key)" :size="12" />
+                                        <StatusIcon
+                                            :type="projectStatusType(key)"
+                                            :size="12"
+                                        />
                                         {{ STATE_LABELS[key] }}
                                     </span>
                                 </DropdownMenuCheckboxItem>
                             </DropdownMenuSubContent>
                         </DropdownMenuSub>
                         <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>Lead</DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent class="max-h-72 w-56 overflow-y-auto">
+                            <DropdownMenuSubTrigger
+                                >Lead</DropdownMenuSubTrigger
+                            >
+                            <DropdownMenuSubContent
+                                class="max-h-72 w-56 overflow-y-auto"
+                            >
                                 <DropdownMenuCheckboxItem
                                     v-for="m in members"
                                     :key="m.id"
                                     :model-value="props.filters.lead === m.id"
-                                    @select="(e) => { e.preventDefault(); setLead(props.filters.lead === m.id ? null : m.id); }"
+                                    @select="
+                                        (e) => {
+                                            e.preventDefault();
+                                            setLead(
+                                                props.filters.lead === m.id
+                                                    ? null
+                                                    : m.id,
+                                            );
+                                        }
+                                    "
                                 >
-                                    <span class="flex min-w-0 items-center gap-2">
-                                        <Avatar :name="m.name" :email="m.email" :size="14" />
-                                        <span class="truncate">{{ m.name }}</span>
+                                    <span
+                                        class="flex min-w-0 items-center gap-2"
+                                    >
+                                        <Avatar
+                                            :name="m.name"
+                                            :email="m.email"
+                                            :size="14"
+                                        />
+                                        <span class="truncate">{{
+                                            m.name
+                                        }}</span>
                                     </span>
                                 </DropdownMenuCheckboxItem>
                                 <DropdownMenuItem
@@ -542,22 +690,40 @@ const activeFilterCount = computed<number>(() => {
                         <DropdownMenuLabel>Group by</DropdownMenuLabel>
                         <DropdownMenuRadioGroup
                             :model-value="props.filters.group"
-                            @update:model-value="(v) => setGroup(v as Filters['group'])"
+                            @update:model-value="
+                                (v) => setGroup(v as Filters['group'])
+                            "
                         >
-                            <DropdownMenuRadioItem value="none">None</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="lead">Lead</DropdownMenuRadioItem>
+                            <DropdownMenuRadioItem value="none"
+                                >None</DropdownMenuRadioItem
+                            >
+                            <DropdownMenuRadioItem value="status"
+                                >Status</DropdownMenuRadioItem
+                            >
+                            <DropdownMenuRadioItem value="lead"
+                                >Lead</DropdownMenuRadioItem
+                            >
                         </DropdownMenuRadioGroup>
                         <DropdownMenuSeparator />
                         <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                         <DropdownMenuRadioGroup
                             :model-value="props.filters.sort"
-                            @update:model-value="(v) => setSort(v as Filters['sort'])"
+                            @update:model-value="
+                                (v) => setSort(v as Filters['sort'])
+                            "
                         >
-                            <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="target">Target date</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="issues">Issues count</DropdownMenuRadioItem>
+                            <DropdownMenuRadioItem value="status"
+                                >Status</DropdownMenuRadioItem
+                            >
+                            <DropdownMenuRadioItem value="name"
+                                >Name</DropdownMenuRadioItem
+                            >
+                            <DropdownMenuRadioItem value="target"
+                                >Target date</DropdownMenuRadioItem
+                            >
+                            <DropdownMenuRadioItem value="issues"
+                                >Issues count</DropdownMenuRadioItem
+                            >
                         </DropdownMenuRadioGroup>
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -568,15 +734,40 @@ const activeFilterCount = computed<number>(() => {
             v-if="!visibleProjects.length"
             class="flex flex-1 items-center justify-center px-6 py-12 text-center"
         >
-            <p class="text-sm text-muted-foreground">
-                {{ favouritesView ? 'No favourite projects yet.' : 'No projects.' }}
-            </p>
+            <div class="max-w-sm">
+                <div
+                    class="mx-auto flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground"
+                >
+                    <LayoutGrid class="size-5" />
+                </div>
+                <h2 class="mt-4 text-base font-medium text-foreground">
+                    {{
+                        favouritesView ? 'No favourites yet' : 'No projects yet'
+                    }}
+                </h2>
+                <p class="mt-2 text-sm text-muted-foreground">
+                    {{
+                        favouritesView
+                            ? 'Star projects to find them quickly here.'
+                            : 'Group related issues into a project to plan and ship work together.'
+                    }}
+                </p>
+                <button
+                    v-if="!favouritesView"
+                    type="button"
+                    class="mt-5 inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90"
+                    @click="openNew"
+                >
+                    <Plus class="size-3.5" />
+                    New project
+                </button>
+            </div>
         </div>
 
         <div v-else class="flex-1 overflow-y-auto">
             <!-- Column header row -->
             <div
-                class="sticky top-0 z-10 grid grid-cols-[1fr_120px_64px_180px_110px_70px_80px] items-center gap-4 border-b border-border bg-background px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                class="sticky top-0 z-10 grid grid-cols-[1fr_120px_64px_180px_110px_70px_80px] items-center gap-4 border-b border-border bg-background px-4 py-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
             >
                 <span>Name</span>
                 <span>Health</span>
@@ -595,11 +786,20 @@ const activeFilterCount = computed<number>(() => {
                     @click="toggleGroup(group.key)"
                 >
                     <component
-                        :is="collapsedGroups.has(group.key) ? ChevronRight : ChevronDown"
+                        :is="
+                            collapsedGroups.has(group.key)
+                                ? ChevronRight
+                                : ChevronDown
+                        "
                         class="size-3 text-muted-foreground"
                     />
-                    <span class="text-[12.5px] font-medium text-foreground">{{ group.label }}</span>
-                    <span class="text-[12px] text-muted-foreground tabular-nums">{{ group.projects.length }}</span>
+                    <span class="text-[12.5px] font-medium text-foreground">{{
+                        group.label
+                    }}</span>
+                    <span
+                        class="text-[12px] text-muted-foreground tabular-nums"
+                        >{{ group.projects.length }}</span
+                    >
                 </button>
 
                 <ul
@@ -621,36 +821,70 @@ const activeFilterCount = computed<number>(() => {
                                     :color="project.color"
                                     :size="18"
                                 />
-                                <span class="truncate text-[13px] text-foreground">{{ project.name }}</span>
+                                <span
+                                    class="truncate text-[13px] text-foreground"
+                                    >{{ project.name }}</span
+                                >
                             </div>
 
-                            <span class="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                                <span class="size-1.5 rounded-full bg-zinc-500"></span>
+                            <span
+                                class="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground"
+                            >
+                                <span
+                                    class="size-1.5 rounded-full bg-zinc-500"
+                                ></span>
                                 No updates
                             </span>
 
                             <span></span>
 
-                            <div v-if="project.lead" class="flex min-w-0 items-center gap-2 text-[12.5px]">
-                                <Avatar :name="project.lead.name" :email="project.lead.email" :size="18" />
-                                <span class="truncate text-foreground">{{ project.lead.name }}</span>
+                            <div
+                                v-if="project.lead"
+                                class="flex min-w-0 items-center gap-2 text-[12.5px]"
+                            >
+                                <Avatar
+                                    :name="project.lead.name"
+                                    :email="project.lead.email"
+                                    :size="18"
+                                />
+                                <span class="truncate text-foreground">{{
+                                    project.lead.name
+                                }}</span>
                             </div>
-                            <div v-else class="flex items-center gap-2 text-[12px] text-muted-foreground">
-                                <span class="flex size-[18px] items-center justify-center rounded-full border border-dashed border-border"></span>
+                            <div
+                                v-else
+                                class="flex items-center gap-2 text-[12px] text-muted-foreground"
+                            >
+                                <span
+                                    class="flex size-[18px] items-center justify-center rounded-full border border-dashed border-border"
+                                ></span>
                                 <span>No lead</span>
                             </div>
 
                             <span
                                 v-if="project.target_date"
                                 class="inline-flex items-center gap-1 text-[12px]"
-                                :class="isOverdue(project.target_date, project.completed_at) ? 'text-rose-400' : 'text-muted-foreground'"
+                                :class="
+                                    isOverdue(
+                                        project.target_date,
+                                        project.completed_at,
+                                    )
+                                        ? 'text-rose-400'
+                                        : 'text-muted-foreground'
+                                "
                             >
                                 <Calendar class="size-3.5" />
                                 {{ fmtDate(project.target_date) }}
                             </span>
-                            <span v-else class="text-[12px] text-muted-foreground">—</span>
+                            <span
+                                v-else
+                                class="text-[12px] text-muted-foreground"
+                                >—</span
+                            >
 
-                            <span class="text-right text-[12.5px] text-muted-foreground tabular-nums">
+                            <span
+                                class="text-right text-[12.5px] text-muted-foreground tabular-nums"
+                            >
                                 {{ project.total_issues }}
                             </span>
 
@@ -663,38 +897,67 @@ const activeFilterCount = computed<number>(() => {
                                     class="shrink-0"
                                     aria-hidden="true"
                                 >
-                                    <circle cx="7" cy="7" r="5" stroke="#3f3f46" stroke-width="1.5" fill="none" />
+                                    <circle
+                                        cx="7"
+                                        cy="7"
+                                        r="5"
+                                        stroke="#3f3f46"
+                                        stroke-width="1.5"
+                                        fill="none"
+                                    />
                                     <circle
                                         cx="7"
                                         cy="7"
                                         r="5"
                                         fill="none"
                                         stroke-width="2"
-                                        :stroke="ringStroke(project.progress, project.state)"
+                                        :stroke="
+                                            ringStroke(
+                                                project.progress,
+                                                project.state,
+                                            )
+                                        "
                                         :stroke-dasharray="`${ringC} ${ringC}`"
-                                        :stroke-dashoffset="ringDashOffset(project.progress)"
+                                        :stroke-dashoffset="
+                                            ringDashOffset(project.progress)
+                                        "
                                         transform="rotate(-90 7 7)"
                                         stroke-linecap="butt"
                                     />
                                 </svg>
-                                <span class="text-[12px] text-foreground tabular-nums">{{ project.progress }}%</span>
+                                <span
+                                    class="text-[12px] text-foreground tabular-nums"
+                                    >{{ project.progress }}%</span
+                                >
                             </div>
                         </Link>
                         <button
                             type="button"
-                            class="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 transition-opacity"
+                            class="absolute top-1/2 right-1 -translate-y-1/2 rounded p-1 transition-opacity"
                             :class="[
                                 isFav(project.slug)
                                     ? 'text-amber-400 opacity-100 hover:bg-accent'
-                                    : 'text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/row:opacity-100',
+                                    : 'text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:bg-accent hover:text-foreground',
                             ]"
-                            :aria-label="isFav(project.slug) ? 'Unfavourite' : 'Favourite'"
-                            :title="isFav(project.slug) ? 'Unfavourite' : 'Favourite'"
+                            :aria-label="
+                                isFav(project.slug)
+                                    ? 'Unfavourite'
+                                    : 'Favourite'
+                            "
+                            :title="
+                                isFav(project.slug)
+                                    ? 'Unfavourite'
+                                    : 'Favourite'
+                            "
                             @click.stop="toggleFav(project.slug, $event)"
                         >
                             <Star
                                 class="size-3.5"
-                                :fill="isFav(project.slug) ? 'currentColor' : 'none'"
+                                :fill="
+                                    isFav(project.slug)
+                                        ? 'currentColor'
+                                        : 'none'
+                                "
                             />
                         </button>
                     </li>
@@ -711,10 +974,7 @@ const activeFilterCount = computed<number>(() => {
                         Create a project to organise issues across teams.
                     </DialogDescription>
                 </DialogHeader>
-                <form
-                    class="space-y-4"
-                    @submit.prevent="submitNew"
-                >
+                <form class="space-y-4" @submit.prevent="submitNew">
                     <div class="space-y-1">
                         <label
                             class="text-[12px] font-medium text-foreground"
@@ -756,7 +1016,11 @@ const activeFilterCount = computed<number>(() => {
                                 v-model="newForm.state"
                                 class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px] capitalize"
                             >
-                                <option v-for="key in STATE_ORDER" :key="key" :value="key">
+                                <option
+                                    v-for="key in STATE_ORDER"
+                                    :key="key"
+                                    :value="key"
+                                >
                                     {{ STATE_LABELS[key] }}
                                 </option>
                             </select>
@@ -806,7 +1070,9 @@ const activeFilterCount = computed<number>(() => {
                                 />
                                 <span
                                     class="flex size-3.5 items-center justify-center rounded-sm text-[9px] font-semibold text-white"
-                                    :style="{ backgroundColor: t.color || '#6366f1' }"
+                                    :style="{
+                                        backgroundColor: t.color || '#6366f1',
+                                    }"
                                 >
                                     {{ t.key.charAt(0) }}
                                 </span>
@@ -848,10 +1114,7 @@ const activeFilterCount = computed<number>(() => {
                             />
                         </div>
                     </div>
-                    <p
-                        v-if="newError"
-                        class="text-[12px] text-rose-400"
-                    >
+                    <p v-if="newError" class="text-[12px] text-rose-400">
                         {{ newError }}
                     </p>
                     <DialogFooter>
@@ -863,8 +1126,13 @@ const activeFilterCount = computed<number>(() => {
                         <button
                             type="submit"
                             :disabled="newSubmitting"
-                            class="rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                            class="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
+                            <Loader2
+                                v-if="newSubmitting"
+                                class="size-3.5 animate-spin"
+                                aria-hidden="true"
+                            />
                             {{ newSubmitting ? 'Creating…' : 'Create project' }}
                         </button>
                     </DialogFooter>

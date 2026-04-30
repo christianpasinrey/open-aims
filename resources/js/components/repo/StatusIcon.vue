@@ -22,6 +22,7 @@ const props = withDefaults(
 
 const t = computed<Type>(() => {
     const v = (props.type ?? 'unstarted') as Type;
+
     return [
         'triage',
         'backlog',
@@ -138,7 +139,7 @@ const startedDashOffset = computed<number>(
                 cy="7"
                 r="5"
                 :stroke="stroke"
-                stroke-width="4"
+                stroke-width="3"
                 fill="none"
                 :stroke-dasharray="`${startedDashArray} ${startedDashArray}`"
                 :stroke-dashoffset="startedDashOffset"

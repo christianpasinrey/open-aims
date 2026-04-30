@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { Box } from 'lucide-vue-next';
+import { computed } from 'vue';
 import { resolveEmoji } from '@/lib/emoji';
 
 const props = withDefaults(
@@ -17,8 +17,14 @@ const emoji = computed<string | null>(() => resolveEmoji(props.icon ?? null));
 const tint = computed<string>(() => props.color ?? '#6366f1');
 
 const radiusClass = computed<string>(() => {
-    if (props.rounded === 'sm') return 'rounded';
-    if (props.rounded === 'lg') return 'rounded-lg';
+    if (props.rounded === 'sm') {
+        return 'rounded';
+    }
+
+    if (props.rounded === 'lg') {
+        return 'rounded-lg';
+    }
+
     return 'rounded-md';
 });
 
@@ -42,7 +48,8 @@ const fontSize = computed<number>(() => Math.round(props.size * 0.62));
             v-if="emoji"
             class="relative leading-none"
             :style="{ fontSize: `${fontSize}px` }"
-        >{{ emoji }}</span>
+            >{{ emoji }}</span
+        >
         <Box
             v-else
             class="relative"

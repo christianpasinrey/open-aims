@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useAppearance, type Appearance } from '@/composables/useAppearance';
+import { useAppearance } from '@/composables/useAppearance';
+import type { Appearance } from '@/composables/useAppearance';
 
 const { appearance, updateAppearance } = useAppearance();
 

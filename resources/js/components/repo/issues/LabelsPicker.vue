@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { Check, Plus } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import LabelBadge from '@/components/repo/LabelBadge.vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import LabelBadge from '@/components/repo/LabelBadge.vue';
 
 type Label = { id: number; name: string; color?: string | null };
 
@@ -20,7 +20,9 @@ const props = defineProps<{
 
 const open = ref(false);
 const query = ref('');
-const localSelection = ref<Set<number>>(new Set(props.current.map((l) => l.id)));
+const localSelection = ref<Set<number>>(
+    new Set(props.current.map((l) => l.id)),
+);
 
 watch(
     () => props.current,
@@ -31,19 +33,30 @@ watch(
 );
 
 watch(open, (isOpen) => {
-    if (!isOpen) query.value = '';
+    if (!isOpen) {
+        query.value = '';
+    }
 });
 
 const filtered = computed(() => {
     const q = query.value.trim().toLowerCase();
-    if (!q) return props.labels;
+
+    if (!q) {
+        return props.labels;
+    }
+
     return props.labels.filter((l) => l.name.toLowerCase().includes(q));
 });
 
 function toggle(id: number): void {
     const next = new Set(localSelection.value);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+
+    if (next.has(id)) {
+        next.delete(id);
+    } else {
+        next.add(id);
+    }
+
     localSelection.value = next;
     router.patch(
         `/issues/${props.identifier}`,

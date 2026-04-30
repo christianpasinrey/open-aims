@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     Bell,
@@ -7,10 +6,14 @@ import {
     CheckCircle2,
     ChevronRight,
     LayoutGrid,
+    Loader2,
     Plus,
     SlidersHorizontal,
     Star,
 } from 'lucide-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogClose,
@@ -30,7 +33,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -64,14 +66,28 @@ const view = computed<ViewKey>(() => props.filters?.view ?? 'all');
 const sort = computed<SortKey>(() => props.filters?.sort ?? 'date_desc');
 const teamKey = computed<string | null>(() => props.team?.key ?? null);
 
-function buildHref(overrides: Partial<{ view: ViewKey; sort: SortKey }>): string {
+function buildHref(
+    overrides: Partial<{ view: ViewKey; sort: SortKey }>,
+): string {
     const params = new URLSearchParams();
-    if (teamKey.value) params.set('team', teamKey.value);
+
+    if (teamKey.value) {
+        params.set('team', teamKey.value);
+    }
+
     const v = overrides.view ?? view.value;
     const s = overrides.sort ?? sort.value;
-    if (v !== 'all') params.set('view', v);
-    if (s !== 'date_desc') params.set('sort', s);
+
+    if (v !== 'all') {
+        params.set('view', v);
+    }
+
+    if (s !== 'date_desc') {
+        params.set('sort', s);
+    }
+
     const q = params.toString();
+
     return q ? `/cycles?${q}` : '/cycles';
 }
 
@@ -89,8 +105,14 @@ const tabs = computed(() =>
 const showCompleted = ref(true);
 
 const visibleCycles = computed<Cycle[]>(() => {
-    if (showCompleted.value) return props.cycles;
-    if (view.value === 'completed') return props.cycles;
+    if (showCompleted.value) {
+        return props.cycles;
+    }
+
+    if (view.value === 'completed') {
+        return props.cycles;
+    }
+
     return props.cycles.filter((c) => !c.completed_at);
 });
 
@@ -110,7 +132,10 @@ const teamViewFavorited = ref(false);
 const favoritedCycleIds = ref<Set<number>>(new Set());
 
 function readFavView(): boolean {
-    if (!teamKey.value) return false;
+    if (!teamKey.value) {
+        return false;
+    }
+
     try {
         return localStorage.getItem(FAV_VIEW_PREFIX + teamKey.value) === '1';
     } catch {
@@ -118,12 +143,23 @@ function readFavView(): boolean {
     }
 }
 function readFavCycles(): Set<number> {
-    if (!teamKey.value) return new Set();
+    if (!teamKey.value) {
+        return new Set();
+    }
+
     try {
         const raw = localStorage.getItem(FAV_CYCLE_PREFIX + teamKey.value);
-        if (!raw) return new Set();
+
+        if (!raw) {
+            return new Set();
+        }
+
         const arr = JSON.parse(raw) as unknown;
-        if (!Array.isArray(arr)) return new Set();
+
+        if (!Array.isArray(arr)) {
+            return new Set();
+        }
+
         return new Set(arr.filter((v): v is number => typeof v === 'number'));
     } catch {
         return new Set();
@@ -131,19 +167,29 @@ function readFavCycles(): Set<number> {
 }
 
 function writeFavView(v: boolean) {
-    if (!teamKey.value) return;
+    if (!teamKey.value) {
+        return;
+    }
+
     try {
         localStorage.setItem(FAV_VIEW_PREFIX + teamKey.value, v ? '1' : '0');
-    } catch { /* ignore */ }
+    } catch {
+        /* ignore */
+    }
 }
 function writeFavCycles(set: Set<number>) {
-    if (!teamKey.value) return;
+    if (!teamKey.value) {
+        return;
+    }
+
     try {
         localStorage.setItem(
             FAV_CYCLE_PREFIX + teamKey.value,
             JSON.stringify([...set]),
         );
-    } catch { /* ignore */ }
+    } catch {
+        /* ignore */
+    }
 }
 
 onMounted(() => {
@@ -165,8 +211,13 @@ function toggleTeamViewFavorite() {
 }
 function toggleCycleFavorite(id: number) {
     const next = new Set(favoritedCycleIds.value);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+
+    if (next.has(id)) {
+        next.delete(id);
+    } else {
+        next.add(id);
+    }
+
     favoritedCycleIds.value = next;
     writeFavCycles(next);
 }
@@ -177,7 +228,10 @@ const submitting = ref(false);
 const formError = ref<string | null>(null);
 
 const nextNumberSuggestion = computed<number>(() => {
-    if (!props.cycles.length) return 1;
+    if (!props.cycles.length) {
+        return 1;
+    }
+
     return Math.max(...props.cycles.map((c) => c.number)) + 1;
 });
 
@@ -206,27 +260,35 @@ function closeDialog() {
 
 function todayIso(): string {
     const d = new Date();
+
     return d.toISOString().slice(0, 10);
 }
 function addDaysIso(iso: string, days: number): string {
     const d = new Date(iso);
     d.setDate(d.getDate() + days);
+
     return d.toISOString().slice(0, 10);
 }
 
 function submitNewCycle() {
     if (!teamKey.value) {
         formError.value = 'Pick a team first.';
+
         return;
     }
+
     if (!form.value.starts_at || !form.value.ends_at) {
         formError.value = 'Both start and end dates are required.';
+
         return;
     }
+
     if (new Date(form.value.starts_at) > new Date(form.value.ends_at)) {
         formError.value = 'End date cannot be before start date.';
+
         return;
     }
+
     submitting.value = true;
     router.post(
         `/cycles?team=${encodeURIComponent(teamKey.value)}`,
@@ -248,13 +310,17 @@ function submitNewCycle() {
             },
             onSuccess: () => {
                 dialogOpen.value = false;
+                toast.success('Cycle created');
             },
         },
     );
 }
 
 function fmtDate(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) {
+        return '—';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
@@ -263,7 +329,10 @@ function fmtDate(iso: string | null): string {
 }
 
 function cycleHref(c: Cycle): string {
-    if (!teamKey.value) return `/cycles/${c.number}`;
+    if (!teamKey.value) {
+        return `/cycles/${c.number}`;
+    }
+
     return `/cycles/${c.number}?team=${encodeURIComponent(teamKey.value)}`;
 }
 </script>
@@ -296,7 +365,9 @@ function cycleHref(c: Cycle): string {
                             ? 'text-amber-400 hover:text-amber-500'
                             : 'text-muted-foreground hover:text-foreground',
                     ]"
-                    :aria-label="teamViewFavorited ? 'Unfavourite' : 'Favourite'"
+                    :aria-label="
+                        teamViewFavorited ? 'Unfavourite' : 'Favourite'
+                    "
                     @click="toggleTeamViewFavorite"
                 >
                     <Star
@@ -403,15 +474,44 @@ function cycleHref(c: Cycle): string {
             v-if="!visibleCycles.length"
             class="flex flex-1 items-center justify-center px-6 py-12 text-center"
         >
-            <p class="text-sm text-muted-foreground">
-                {{
-                    !team
-                        ? 'Pick a team to view cycles.'
-                        : view === 'all'
-                            ? 'No cycles for this team.'
-                            : `No ${view} cycles.`
-                }}
-            </p>
+            <div class="max-w-sm">
+                <div
+                    class="mx-auto flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground"
+                >
+                    <CalendarRange class="size-5" />
+                </div>
+                <h2 class="mt-4 text-base font-medium text-foreground">
+                    {{
+                        !team
+                            ? 'No team selected'
+                            : view === 'all'
+                              ? 'No cycles yet'
+                              : `No ${view} cycles`
+                    }}
+                </h2>
+                <p class="mt-2 text-sm text-muted-foreground">
+                    {{
+                        !team
+                            ? 'Pick a team from the sidebar to view its cycles.'
+                            : view === 'all'
+                              ? 'Cycles are time-boxed iterations. Create your first one to start planning work.'
+                              : view === 'current'
+                                ? 'No cycle is running for this team right now.'
+                                : view === 'upcoming'
+                                  ? 'Plan ahead by scheduling an upcoming cycle.'
+                                  : 'Completed cycles will appear here once they wrap up.'
+                    }}
+                </p>
+                <button
+                    v-if="team && view !== 'completed'"
+                    type="button"
+                    class="mt-5 inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90"
+                    @click="openDialog"
+                >
+                    <Plus class="size-3.5" />
+                    Create your first cycle
+                </button>
+            </div>
         </div>
 
         <!-- Rows -->
@@ -429,10 +529,10 @@ function cycleHref(c: Cycle): string {
                         :class="[
                             'flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold tabular-nums',
                             cycle.is_current
-                                ? 'bg-indigo-500/15 text-indigo-500 ring-1 ring-inset ring-indigo-500/30'
+                                ? 'bg-indigo-500/15 text-indigo-500 ring-1 ring-indigo-500/30 ring-inset'
                                 : cycle.completed_at
-                                    ? 'bg-muted text-muted-foreground'
-                                    : 'bg-muted text-foreground',
+                                  ? 'bg-muted text-muted-foreground'
+                                  : 'bg-muted text-foreground',
                         ]"
                     >
                         {{ cycle.number }}
@@ -444,7 +544,8 @@ function cycleHref(c: Cycle): string {
                         <span
                             v-if="cycle.is_current"
                             class="rounded-full border border-indigo-500/40 bg-indigo-500/10 px-1.5 py-px text-[10px] font-medium text-indigo-500"
-                        >Current</span>
+                            >Current</span
+                        >
                         <CheckCircle2
                             v-if="cycle.completed_at"
                             class="size-3 text-emerald-500"
@@ -452,8 +553,11 @@ function cycleHref(c: Cycle): string {
                         />
                     </div>
                 </Link>
-                <span class="hidden text-[11.5px] text-muted-foreground tabular-nums sm:inline">
-                    {{ fmtDate(cycle.starts_at) }} → {{ fmtDate(cycle.ends_at) }}
+                <span
+                    class="hidden text-[11.5px] text-muted-foreground tabular-nums sm:inline"
+                >
+                    {{ fmtDate(cycle.starts_at) }} →
+                    {{ fmtDate(cycle.ends_at) }}
                 </span>
                 <button
                     type="button"
@@ -461,14 +565,22 @@ function cycleHref(c: Cycle): string {
                         'rounded p-0.5 transition-colors',
                         favoritedCycleIds.has(cycle.id)
                             ? 'text-amber-400 hover:text-amber-500'
-                            : 'text-muted-foreground opacity-0 hover:bg-accent group-hover:opacity-100',
+                            : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent',
                     ]"
-                    :aria-label="favoritedCycleIds.has(cycle.id) ? 'Unfavourite cycle' : 'Favourite cycle'"
+                    :aria-label="
+                        favoritedCycleIds.has(cycle.id)
+                            ? 'Unfavourite cycle'
+                            : 'Favourite cycle'
+                    "
                     @click.stop.prevent="toggleCycleFavorite(cycle.id)"
                 >
                     <Star
                         class="size-3.5"
-                        :fill="favoritedCycleIds.has(cycle.id) ? 'currentColor' : 'none'"
+                        :fill="
+                            favoritedCycleIds.has(cycle.id)
+                                ? 'currentColor'
+                                : 'none'
+                        "
                     />
                 </button>
                 <Link
@@ -534,22 +646,25 @@ function cycleHref(c: Cycle): string {
                             />
                         </div>
                     </div>
-                    <p
-                        v-if="formError"
-                        class="text-[12px] text-red-500"
-                    >
+                    <p v-if="formError" class="text-[12px] text-red-500">
                         {{ formError }}
                     </p>
                     <DialogFooter>
                         <DialogClose as-child>
-                            <Button type="button" variant="secondary" @click="closeDialog">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                @click="closeDialog"
+                            >
                                 Cancel
                             </Button>
                         </DialogClose>
-                        <Button
-                            type="submit"
-                            :disabled="submitting"
-                        >
+                        <Button type="submit" :disabled="submitting">
+                            <Loader2
+                                v-if="submitting"
+                                class="size-3.5 animate-spin"
+                                aria-hidden="true"
+                            />
                             {{ submitting ? 'Creating…' : 'Create cycle' }}
                         </Button>
                     </DialogFooter>

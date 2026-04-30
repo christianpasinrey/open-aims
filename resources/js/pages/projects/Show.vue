@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import type { FormDataConvertible } from '@inertiajs/core';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     Bell,
     Calendar,
@@ -10,27 +9,20 @@ import {
     Diamond,
     Flag,
     Link as LinkIcon,
+    Loader2,
     MoreHorizontal,
     Package,
     Plus,
     Star,
     UserPlus,
 } from 'lucide-vue-next';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
-import PriorityIcon from '@/components/repo/PriorityIcon.vue';
-import ProjectIcon from '@/components/repo/ProjectIcon.vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
-import { renderMarkdown } from '@/lib/markdown';
-import { startedProgressByState } from '@/lib/states';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import PriorityIcon from '@/components/repo/PriorityIcon.vue';
+import ProjectIcon from '@/components/repo/ProjectIcon.vue';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
     Dialog,
     DialogClose,
@@ -40,7 +32,17 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { renderMarkdown } from '@/lib/markdown';
+import { startedProgressByState } from '@/lib/states';
 
 type Project = {
     id: number;
@@ -54,7 +56,12 @@ type Project = {
     target_date: string | null;
     completed_at: string | null;
     lead: { id: number; name: string; email: string } | null;
-    members: Array<{ id: number; name: string; email: string; role: string | null }>;
+    members: Array<{
+        id: number;
+        name: string;
+        email: string;
+        role: string | null;
+    }>;
     milestones: Array<{
         id: number;
         name: string;
@@ -63,7 +70,12 @@ type Project = {
         issue_count: number;
         percent: number;
     }>;
-    teams: Array<{ id: number; name: string; key: string; color: string | null }>;
+    teams: Array<{
+        id: number;
+        name: string;
+        key: string;
+        color: string | null;
+    }>;
 };
 type IssueState = { name: string; type: string; color: string };
 type Label = { id: number; name: string; color?: string | null };
@@ -97,15 +109,25 @@ const props = defineProps<{
     project: Project;
     issues: Issue[];
     states: State[];
-    progress: { total: number; completed: number; started: number; percent: number };
+    progress: {
+        total: number;
+        completed: number;
+        started: number;
+        percent: number;
+    };
     assignees: AssigneeStat[];
     labels: Array<{ id: number; name: string; color?: string | null }>;
     tab: 'overview' | 'activity' | 'issues';
 }>();
 
-const page = usePage<{ workspace: { teams: Array<{ id: number; name: string; key: string; color: string | null }> } | null }>();
-
-const PROJECT_STATES = ['backlog', 'planned', 'started', 'paused', 'completed', 'canceled'] as const;
+const PROJECT_STATES = [
+    'backlog',
+    'planned',
+    'started',
+    'paused',
+    'completed',
+    'canceled',
+] as const;
 const STATE_LABELS: Record<string, string> = {
     backlog: 'Backlog',
     planned: 'Planned',
@@ -131,31 +153,62 @@ const stateOrder = computed(() =>
     [...props.states].sort((a, b) => {
         const ta = TYPE_RANK[a.type] ?? 99;
         const tb = TYPE_RANK[b.type] ?? 99;
-        if (ta !== tb) return ta - tb;
+
+        if (ta !== tb) {
+            return ta - tb;
+        }
+
         return a.position - b.position;
     }),
 );
 const grouped = computed(() => {
     const buckets = new Map<string, Issue[]>();
+
     for (const i of props.issues) {
         const key = i.state_name ?? '—';
-        if (!buckets.has(key)) buckets.set(key, []);
+
+        if (!buckets.has(key)) {
+            buckets.set(key, []);
+        }
+
         buckets.get(key)!.push(i);
     }
-    const ordered: Array<{ state: State | { id: number | null; name: string; type: string; color: string; position: number }; issues: Issue[] }> = [];
+
+    const ordered: Array<{
+        state:
+            | State
+            | {
+                  id: number | null;
+                  name: string;
+                  type: string;
+                  color: string;
+                  position: number;
+              };
+        issues: Issue[];
+    }> = [];
+
     for (const s of stateOrder.value) {
         const bucket = buckets.get(s.name);
+
         if (bucket && bucket.length) {
             ordered.push({ state: s, issues: bucket });
             buckets.delete(s.name);
         }
     }
+
     for (const [name, list] of buckets.entries()) {
         ordered.push({
-            state: { id: null, name, type: 'unstarted', color: '#94a3b8', position: 999 },
+            state: {
+                id: null,
+                name,
+                type: 'unstarted',
+                color: '#94a3b8',
+                position: 999,
+            },
             issues: list,
         });
     }
+
     return ordered;
 });
 
@@ -164,7 +217,10 @@ const startedProgress = computed(() => startedProgressByState(props.states));
 const teamForBreadcrumb = computed(() => props.project.teams[0] ?? null);
 
 function fmtDate(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) {
+        return '—';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -172,7 +228,10 @@ function fmtDate(iso: string | null): string {
     });
 }
 function fmtShort(iso: string | null): string {
-    if (!iso) return '';
+    if (!iso) {
+        return '';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
@@ -191,14 +250,24 @@ const ringDashOffset = computed(
     () => ringC * (1 - props.progress.percent / 100),
 );
 const ringStroke = computed(() => {
-    if (props.project.state === 'canceled') return '#a1a1aa';
-    if (props.progress.percent >= 100 || props.project.state === 'completed')
+    if (props.project.state === 'canceled') {
+        return '#a1a1aa';
+    }
+
+    if (props.progress.percent >= 100 || props.project.state === 'completed') {
         return '#10b981';
-    if (props.progress.percent > 0) return '#f59e0b';
+    }
+
+    if (props.progress.percent > 0) {
+        return '#f59e0b';
+    }
+
     return '#a1a1aa';
 });
 
-const projectStatusType = computed<'backlog' | 'started' | 'unstarted' | 'completed' | 'canceled'>(() => {
+const projectStatusType = computed<
+    'backlog' | 'started' | 'unstarted' | 'completed' | 'canceled'
+>(() => {
     switch (props.project.state) {
         case 'started':
             return 'started';
@@ -214,7 +283,9 @@ const projectStatusType = computed<'backlog' | 'started' | 'unstarted' | 'comple
             return 'backlog';
     }
 });
-function statusTypeFor(state: string): 'backlog' | 'started' | 'unstarted' | 'completed' | 'canceled' {
+function statusTypeFor(
+    state: string,
+): 'backlog' | 'started' | 'unstarted' | 'completed' | 'canceled' {
     switch (state) {
         case 'started':
             return 'started';
@@ -244,18 +315,22 @@ const burndownActualPoints = computed<string>(() => {
     const bottomY = 122;
     const total = props.progress.total;
     const completed = props.progress.completed;
+
     if (total <= 0) {
         return `${startX},${topY} ${endX},${topY}`;
     }
+
     const t = Math.max(0, Math.min(1, completed / total));
     const segs = 6;
     const pts: string[] = [];
+
     for (let i = 0; i <= segs; i++) {
         const x = startX + (i / segs) * (endX - startX);
         const eased = Math.pow(i / segs, 1.4) * t;
         const y = topY + eased * (bottomY - topY);
         pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
     }
+
     return pts.join(' ');
 });
 
@@ -265,8 +340,14 @@ function donutOffset(percent: number): number {
     return donutC * (1 - Math.max(0, Math.min(100, percent)) / 100);
 }
 function donutStroke(percent: number): string {
-    if (percent >= 100) return '#10b981';
-    if (percent > 0) return '#6366f1';
+    if (percent >= 100) {
+        return '#10b981';
+    }
+
+    if (percent > 0) {
+        return '#6366f1';
+    }
+
     return '#a1a1aa';
 }
 
@@ -281,11 +362,17 @@ function patchProject(payload: Record<string, FormDataConvertible>) {
 }
 
 function setState(state: string) {
-    if (state === props.project.state) return;
+    if (state === props.project.state) {
+        return;
+    }
+
     patchProject({ state });
 }
 function setLead(userId: number | null) {
-    if ((props.project.lead?.id ?? null) === userId) return;
+    if ((props.project.lead?.id ?? null) === userId) {
+        return;
+    }
+
     patchProject({ lead_user_id: userId });
 }
 function setStartDate(date: string) {
@@ -299,12 +386,16 @@ function setTargetDate(date: string) {
 const workspaceMembers = ref<WorkspaceMember[]>([]);
 const membersLoaded = ref<boolean>(false);
 async function loadMembers() {
-    if (membersLoaded.value) return;
+    if (membersLoaded.value) {
+        return;
+    }
+
     try {
         const res = await fetch('/workspace/members', {
             credentials: 'same-origin',
             headers: { Accept: 'application/json' },
         });
+
         if (res.ok) {
             const json = (await res.json()) as { data: WorkspaceMember[] };
             workspaceMembers.value = json.data;
@@ -334,7 +425,11 @@ function startEditName() {
 function commitName() {
     const v = nameDraft.value.trim();
     editingName.value = false;
-    if (v === '' || v === props.project.name) return;
+
+    if (v === '' || v === props.project.name) {
+        return;
+    }
+
     patchProject({ name: v });
 }
 function cancelName() {
@@ -354,8 +449,14 @@ function startEditDesc() {
 }
 function commitDesc() {
     editingDesc.value = false;
-    if ((descDraft.value ?? '') === (props.project.description ?? '')) return;
-    patchProject({ description: descDraft.value === '' ? null : descDraft.value });
+
+    if ((descDraft.value ?? '') === (props.project.description ?? '')) {
+        return;
+    }
+
+    patchProject({
+        description: descDraft.value === '' ? null : descDraft.value,
+    });
 }
 function cancelDesc() {
     editingDesc.value = false;
@@ -364,10 +465,15 @@ function cancelDesc() {
 // =================================================================
 // Favourites
 // =================================================================
-const FAV_KEY = computed(() => `aims:favourites:project:${props.project.slug}`);
+const FAV_KEY = computed(
+    () => `aims:favourites:project:${props.project.slug}`,
+);
 const isFavourite = ref<boolean>(false);
 function toggleFavourite() {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+        return;
+    }
+
     try {
         if (isFavourite.value) {
             window.localStorage.removeItem(FAV_KEY.value);
@@ -382,22 +488,36 @@ function toggleFavourite() {
 }
 
 function copyLink() {
-    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+        return;
+    }
+
     void navigator.clipboard.writeText(window.location.href);
 }
 
 // =================================================================
 // Issues tab: collapse persistence + inline composer
 // =================================================================
-const COLLAPSE_KEY = computed(() => `aims:project-issue-collapse:${props.project.slug}`);
+const COLLAPSE_KEY = computed(
+    () => `aims:project-issue-collapse:${props.project.slug}`,
+);
 const collapsed = ref<Set<string>>(new Set());
 function toggleGroup(name: string) {
     const n = new Set(collapsed.value);
-    if (n.has(name)) n.delete(name);
-    else n.add(name);
+
+    if (n.has(name)) {
+        n.delete(name);
+    } else {
+        n.add(name);
+    }
+
     collapsed.value = n;
+
     try {
-        window.localStorage.setItem(COLLAPSE_KEY.value, JSON.stringify(Array.from(n)));
+        window.localStorage.setItem(
+            COLLAPSE_KEY.value,
+            JSON.stringify(Array.from(n)),
+        );
     } catch {
         // ignore
     }
@@ -420,11 +540,16 @@ function cancelComposer() {
 function submitComposer() {
     const title = composerTitle.value.trim();
     const teamKey = props.project.teams[0]?.key;
+
     if (!title || !teamKey) {
         cancelComposer();
+
         return;
     }
-    const stateId = props.states.find((s) => s.name === composerStateName.value)?.id;
+
+    const stateId = props.states.find(
+        (s) => s.name === composerStateName.value,
+    )?.id;
     composerSubmitting.value = true;
     router.post(
         '/issues',
@@ -448,7 +573,11 @@ function submitComposer() {
 // Milestone dialog
 // =================================================================
 const milestoneDialogOpen = ref<boolean>(false);
-const milestoneForm = ref<{ name: string; description: string; target_date: string }>({
+const milestoneForm = ref<{
+    name: string;
+    description: string;
+    target_date: string;
+}>({
     name: '',
     description: '',
     target_date: '',
@@ -464,27 +593,34 @@ function openMilestoneDialog() {
 function submitMilestone() {
     if (!milestoneForm.value.name.trim()) {
         milestoneError.value = 'Name is required.';
+
         return;
     }
+
     milestoneSubmitting.value = true;
     milestoneError.value = null;
     const payload: Record<string, FormDataConvertible> = {
         name: milestoneForm.value.name.trim(),
     };
+
     if (milestoneForm.value.description.trim() !== '') {
         payload.description = milestoneForm.value.description.trim();
     }
+
     if (milestoneForm.value.target_date !== '') {
         payload.target_date = milestoneForm.value.target_date;
     }
+
     router.post(`/projects/${props.project.slug}/milestones`, payload, {
         preserveScroll: true,
         onSuccess: () => {
             milestoneDialogOpen.value = false;
+            toast.success('Milestone created');
         },
         onError: (errors) => {
             const first = Object.values(errors)[0];
-            milestoneError.value = (first as string | undefined) ?? 'Could not create milestone.';
+            milestoneError.value =
+                (first as string | undefined) ?? 'Could not create milestone.';
         },
         onFinish: () => {
             milestoneSubmitting.value = false;
@@ -496,14 +632,19 @@ function submitMilestone() {
 // Mounted: load favourite + collapse state
 // =================================================================
 onMounted(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+        return;
+    }
+
     try {
         isFavourite.value = window.localStorage.getItem(FAV_KEY.value) === '1';
         const raw = window.localStorage.getItem(COLLAPSE_KEY.value);
+
         if (raw) {
             const arr = JSON.parse(raw) as string[];
             collapsed.value = new Set(Array.isArray(arr) ? arr : []);
         }
+
         loadMembers();
     } catch {
         // ignore
@@ -514,7 +655,8 @@ watch(
     () => props.project.slug,
     () => {
         try {
-            isFavourite.value = window.localStorage.getItem(FAV_KEY.value) === '1';
+            isFavourite.value =
+                window.localStorage.getItem(FAV_KEY.value) === '1';
             const raw = window.localStorage.getItem(COLLAPSE_KEY.value);
             collapsed.value = new Set(raw ? JSON.parse(raw) : []);
         } catch {
@@ -541,7 +683,8 @@ watch(
                     <span
                         class="flex size-4 items-center justify-center rounded-md text-[9px] font-semibold text-white"
                         :style="{
-                            backgroundColor: teamForBreadcrumb.color || '#6366f1',
+                            backgroundColor:
+                                teamForBreadcrumb.color || '#6366f1',
                         }"
                     >
                         {{ teamForBreadcrumb.key.charAt(0) }}
@@ -605,7 +748,9 @@ watch(
                         <DropdownMenuItem disabled>Duplicate</DropdownMenuItem>
                         <DropdownMenuItem disabled>Archive</DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem disabled class="text-rose-400">Delete project</DropdownMenuItem>
+                        <DropdownMenuItem disabled class="text-rose-400"
+                            >Delete project</DropdownMenuItem
+                        >
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -653,7 +798,10 @@ watch(
         <div class="flex min-h-0 flex-1">
             <div class="flex min-w-0 flex-1 flex-col overflow-y-auto">
                 <!-- OVERVIEW -->
-                <div v-if="tab === 'overview'" class="mx-auto w-full max-w-3xl px-8 py-8">
+                <div
+                    v-if="tab === 'overview'"
+                    class="mx-auto w-full max-w-3xl px-8 py-8"
+                >
                     <ProjectIcon
                         :icon="project.icon"
                         :color="project.color"
@@ -663,15 +811,17 @@ watch(
                     />
                     <h2
                         v-if="!editingName"
-                        class="cursor-text rounded-md px-1 -mx-1 py-0.5 text-[22px] font-semibold tracking-tight transition-colors hover:bg-accent/40"
+                        class="-mx-1 cursor-text rounded-md px-1 py-0.5 text-[22px] font-semibold tracking-tight transition-colors hover:bg-accent/40"
                         @click="startEditName"
-                    >{{ project.name }}</h2>
+                    >
+                        {{ project.name }}
+                    </h2>
                     <input
                         v-else
                         ref="nameInput"
                         v-model="nameDraft"
                         type="text"
-                        class="w-full rounded-md border border-input bg-transparent px-1 -mx-1 py-0.5 text-[22px] font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        class="-mx-1 w-full rounded-md border border-input bg-transparent px-1 py-0.5 text-[22px] font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                         @blur="commitName"
                         @keydown.enter.prevent="commitName"
                         @keydown.escape="cancelName"
@@ -680,11 +830,17 @@ watch(
                         v-if="project.description"
                         class="mt-2 text-[14px] text-muted-foreground"
                     >
-                        {{ (project.description.split('\n').find(l => l.trim().length > 0) ?? '') }}
+                        {{
+                            project.description
+                                .split('\n')
+                                .find((l) => l.trim().length > 0) ?? ''
+                        }}
                     </p>
 
                     <!-- Properties row -->
-                    <div class="mt-6 flex flex-wrap items-center gap-2 text-[12.5px]">
+                    <div
+                        class="mt-6 flex flex-wrap items-center gap-2 text-[12.5px]"
+                    >
                         <span class="text-muted-foreground">Properties</span>
 
                         <!-- Status chip -->
@@ -695,11 +851,15 @@ watch(
                                     class="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 text-foreground transition-colors hover:bg-accent/40"
                                 >
                                     <StatusIcon :type="projectStatusType" />
-                                    <span class="capitalize">{{ projectStateLabel() }}</span>
+                                    <span class="capitalize">{{
+                                        projectStateLabel()
+                                    }}</span>
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent class="w-44">
-                                <DropdownMenuLabel>Set status</DropdownMenuLabel>
+                                <DropdownMenuLabel
+                                    >Set status</DropdownMenuLabel
+                                >
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     v-for="key in PROJECT_STATES"
@@ -707,7 +867,10 @@ watch(
                                     @select="setState(key)"
                                 >
                                     <span class="flex items-center gap-2">
-                                        <StatusIcon :type="statusTypeFor(key)" :size="12" />
+                                        <StatusIcon
+                                            :type="statusTypeFor(key)"
+                                            :size="12"
+                                        />
                                         {{ STATE_LABELS[key] }}
                                     </span>
                                 </DropdownMenuItem>
@@ -721,7 +884,9 @@ watch(
                                     type="button"
                                     :class="[
                                         'inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 transition-colors hover:bg-accent/40',
-                                        project.lead ? 'text-foreground' : 'text-muted-foreground',
+                                        project.lead
+                                            ? 'text-foreground'
+                                            : 'text-muted-foreground',
                                     ]"
                                     @click="loadMembers"
                                 >
@@ -735,15 +900,23 @@ watch(
                                         v-else
                                         class="size-3.5 rounded-full border border-dashed border-border"
                                     ></span>
-                                    <span>{{ project.lead?.name ?? 'No lead' }}</span>
+                                    <span>{{
+                                        project.lead?.name ?? 'No lead'
+                                    }}</span>
                                 </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent class="max-h-72 w-56 overflow-y-auto">
+                            <DropdownMenuContent
+                                class="max-h-72 w-56 overflow-y-auto"
+                            >
                                 <DropdownMenuLabel>Set lead</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem @select="setLead(null)">
-                                    <span class="flex items-center gap-2 text-muted-foreground">
-                                        <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                                    <span
+                                        class="flex items-center gap-2 text-muted-foreground"
+                                    >
+                                        <span
+                                            class="size-3.5 rounded-full border border-dashed border-border"
+                                        ></span>
                                         No lead
                                     </span>
                                 </DropdownMenuItem>
@@ -752,12 +925,26 @@ watch(
                                     :key="m.id"
                                     @select="setLead(m.id)"
                                 >
-                                    <span class="flex min-w-0 items-center gap-2">
-                                        <Avatar :name="m.name" :email="m.email" :size="14" />
-                                        <span class="truncate">{{ m.name }}</span>
+                                    <span
+                                        class="flex min-w-0 items-center gap-2"
+                                    >
+                                        <Avatar
+                                            :name="m.name"
+                                            :email="m.email"
+                                            :size="14"
+                                        />
+                                        <span class="truncate">{{
+                                            m.name
+                                        }}</span>
                                     </span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem v-if="!workspaceMembers.length && membersLoaded" disabled>
+                                <DropdownMenuItem
+                                    v-if="
+                                        !workspaceMembers.length &&
+                                        membersLoaded
+                                    "
+                                    disabled
+                                >
                                     No workspace members
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -770,32 +957,60 @@ watch(
                                     type="button"
                                     :class="[
                                         'inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-0.5 transition-colors hover:bg-accent/40',
-                                        project.target_date || project.start_date ? 'text-foreground' : 'text-muted-foreground',
+                                        project.target_date ||
+                                        project.start_date
+                                            ? 'text-foreground'
+                                            : 'text-muted-foreground',
                                     ]"
                                 >
                                     <Calendar class="size-3" />
-                                    <span v-if="project.target_date">{{ fmtDate(project.target_date) }}</span>
+                                    <span v-if="project.target_date">{{
+                                        fmtDate(project.target_date)
+                                    }}</span>
                                     <span v-else>Set dates</span>
                                 </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent class="w-64 p-3" :side-offset="4">
+                            <DropdownMenuContent
+                                class="w-64 p-3"
+                                :side-offset="4"
+                            >
                                 <div class="space-y-2">
                                     <div class="space-y-1">
-                                        <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Start</label>
+                                        <label
+                                            class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                            >Start</label
+                                        >
                                         <input
                                             type="date"
                                             :value="project.start_date ?? ''"
                                             class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
-                                            @change="(e) => setStartDate((e.target as HTMLInputElement).value)"
+                                            @change="
+                                                (e) =>
+                                                    setStartDate(
+                                                        (
+                                                            e.target as HTMLInputElement
+                                                        ).value,
+                                                    )
+                                            "
                                         />
                                     </div>
                                     <div class="space-y-1">
-                                        <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Target</label>
+                                        <label
+                                            class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                            >Target</label
+                                        >
                                         <input
                                             type="date"
                                             :value="project.target_date ?? ''"
                                             class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
-                                            @change="(e) => setTargetDate((e.target as HTMLInputElement).value)"
+                                            @change="
+                                                (e) =>
+                                                    setTargetDate(
+                                                        (
+                                                            e.target as HTMLInputElement
+                                                        ).value,
+                                                    )
+                                            "
                                         />
                                     </div>
                                 </div>
@@ -819,7 +1034,11 @@ watch(
 
                     <!-- Resources stub -->
                     <div class="mt-6">
-                        <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Resources</div>
+                        <div
+                            class="mb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            Resources
+                        </div>
                         <button
                             type="button"
                             class="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
@@ -837,12 +1056,14 @@ watch(
 
                     <!-- Description -->
                     <section class="mt-8">
-                        <div class="mb-3 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <div
+                            class="mb-3 flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                        >
                             Description <ChevronDown class="size-3" />
                         </div>
                         <div
                             v-if="!editingDesc && descriptionHtml"
-                            class="markdown-body cursor-text rounded-md p-2 -m-2 transition-colors hover:bg-accent/30"
+                            class="markdown-body -m-2 cursor-text rounded-md p-2 transition-colors hover:bg-accent/30"
                             @click="startEditDesc"
                             v-html="descriptionHtml"
                         ></div>
@@ -871,7 +1092,11 @@ watch(
                     <!-- Milestones -->
                     <section class="mt-10">
                         <div class="mb-3 flex items-center justify-between">
-                            <h3 class="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">Milestones</h3>
+                            <h3
+                                class="text-[12px] font-medium tracking-wide text-muted-foreground uppercase"
+                            >
+                                Milestones
+                            </h3>
                             <button
                                 type="button"
                                 class="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -886,25 +1111,48 @@ watch(
                             v-if="project.milestones.length"
                             class="divide-y divide-border rounded-md border border-border"
                         >
-                            <li v-for="ms in project.milestones" :key="ms.id" class="px-3 py-2">
-                                <div class="flex items-center justify-between gap-3">
-                                    <div class="flex min-w-0 items-center gap-2">
+                            <li
+                                v-for="ms in project.milestones"
+                                :key="ms.id"
+                                class="px-3 py-2"
+                            >
+                                <div
+                                    class="flex items-center justify-between gap-3"
+                                >
+                                    <div
+                                        class="flex min-w-0 items-center gap-2"
+                                    >
                                         <Diamond
                                             class="size-3 shrink-0"
                                             :style="{
-                                                color: project.color || '#6366f1',
-                                                fill: project.color || '#6366f1',
+                                                color:
+                                                    project.color || '#6366f1',
+                                                fill:
+                                                    project.color || '#6366f1',
                                             }"
                                         />
-                                        <span class="truncate text-[13px] font-medium">{{ ms.name }}</span>
+                                        <span
+                                            class="truncate text-[13px] font-medium"
+                                            >{{ ms.name }}</span
+                                        >
                                     </div>
-                                    <span v-if="ms.target_date" class="text-[12px] text-muted-foreground">{{ fmtShort(ms.target_date) }}</span>
+                                    <span
+                                        v-if="ms.target_date"
+                                        class="text-[12px] text-muted-foreground"
+                                        >{{ fmtShort(ms.target_date) }}</span
+                                    >
                                 </div>
-                                <p v-if="ms.description" class="mt-1 text-[12.5px] text-muted-foreground">{{ ms.description }}</p>
+                                <p
+                                    v-if="ms.description"
+                                    class="mt-1 text-[12.5px] text-muted-foreground"
+                                >
+                                    {{ ms.description }}
+                                </p>
                             </li>
                         </ul>
                         <p v-else class="text-[12.5px] text-muted-foreground">
-                            Break the project into milestones to track progress in stages.
+                            Break the project into milestones to track progress
+                            in stages.
                         </p>
                     </section>
                 </div>
@@ -915,7 +1163,9 @@ watch(
                     class="flex flex-1 items-center justify-center px-6 py-12 text-center"
                 >
                     <div class="max-w-sm">
-                        <h2 class="text-base font-medium text-foreground">No activity yet</h2>
+                        <h2 class="text-base font-medium text-foreground">
+                            No activity yet
+                        </h2>
                         <p class="mt-2 text-sm text-muted-foreground">
                             Project updates and changes will appear here.
                         </p>
@@ -928,28 +1178,40 @@ watch(
                         v-if="!issues.length"
                         class="flex h-full items-center justify-center px-6 py-12 text-center"
                     >
-                        <p class="text-sm text-muted-foreground">No issues in this project.</p>
+                        <p class="text-sm text-muted-foreground">
+                            No issues in this project.
+                        </p>
                     </div>
-                    <section
-                        v-for="group in grouped"
-                        :key="group.state.name"
-                    >
+                    <section v-for="group in grouped" :key="group.state.name">
                         <button
                             type="button"
                             class="sticky top-0 z-10 flex w-full items-center gap-2 bg-muted/40 px-4 py-1.5 text-left backdrop-blur transition-colors hover:bg-muted/60"
                             @click="toggleGroup(group.state.name)"
                         >
                             <component
-                                :is="collapsed.has(group.state.name) ? ChevronRight : ChevronDown"
+                                :is="
+                                    collapsed.has(group.state.name)
+                                        ? ChevronRight
+                                        : ChevronDown
+                                "
                                 class="size-3 text-muted-foreground"
                             />
                             <StatusIcon
                                 :type="group.state.type"
                                 :color="group.state.color"
-                                :progress="group.state.id != null ? startedProgress[group.state.id] : undefined"
+                                :progress="
+                                    group.state.id != null
+                                        ? startedProgress[group.state.id]
+                                        : undefined
+                                "
                             />
-                            <span class="text-[12.5px] font-medium text-foreground">{{ group.state.name }}</span>
-                            <span class="text-[12px] text-muted-foreground">{{ group.issues.length }}</span>
+                            <span
+                                class="text-[12.5px] font-medium text-foreground"
+                                >{{ group.state.name }}</span
+                            >
+                            <span class="text-[12px] text-muted-foreground">{{
+                                group.issues.length
+                            }}</span>
                             <span
                                 class="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                 aria-label="New issue"
@@ -972,7 +1234,11 @@ watch(
                                 <StatusIcon
                                     :type="group.state.type"
                                     :color="group.state.color"
-                                    :progress="group.state.id != null ? startedProgress[group.state.id] : undefined"
+                                    :progress="
+                                        group.state.id != null
+                                            ? startedProgress[group.state.id]
+                                            : undefined
+                                    "
                                 />
                                 <input
                                     ref="composerInput"
@@ -993,7 +1259,10 @@ watch(
                                 <button
                                     type="submit"
                                     class="rounded-md bg-foreground px-2 py-0.5 text-[11.5px] font-medium text-background hover:opacity-90 disabled:opacity-50"
-                                    :disabled="!composerTitle.trim() || composerSubmitting"
+                                    :disabled="
+                                        !composerTitle.trim() ||
+                                        composerSubmitting
+                                    "
                                 >
                                     Create
                                 </button>
@@ -1009,21 +1278,34 @@ watch(
                                     class="grid grid-cols-[auto_auto_64px_1fr_auto_42px_24px] items-center gap-2 px-4 py-1.5 hover:bg-accent/40"
                                 >
                                     <PriorityIcon :priority="issue.priority" />
-                                    <span class="font-mono text-[11px] text-muted-foreground tabular-nums">{{ issue.identifier }}</span>
+                                    <span
+                                        class="font-mono text-[11px] text-muted-foreground tabular-nums"
+                                        >{{ issue.identifier }}</span
+                                    >
                                     <StatusIcon
                                         :type="issue.state?.type ?? 'unstarted'"
                                         :color="issue.state?.color"
                                     />
-                                    <span class="min-w-0 truncate text-[13px]">{{ issue.title }}</span>
-                                    <div class="hidden items-center gap-1 lg:flex">
+                                    <span
+                                        class="min-w-0 truncate text-[13px]"
+                                        >{{ issue.title }}</span
+                                    >
+                                    <div
+                                        class="hidden items-center gap-1 lg:flex"
+                                    >
                                         <LabelBadge
-                                            v-for="label in issue.labels.slice(0, 2)"
+                                            v-for="label in issue.labels.slice(
+                                                0,
+                                                2,
+                                            )"
                                             :key="label.id"
                                             :name="label.name"
                                             :color="label.color"
                                         />
                                     </div>
-                                    <span class="text-right text-[11px] text-muted-foreground tabular-nums">
+                                    <span
+                                        class="text-right text-[11px] text-muted-foreground tabular-nums"
+                                    >
                                         {{ fmtShort(issue.updated_at) }}
                                     </span>
                                     <Avatar
@@ -1052,7 +1334,7 @@ watch(
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
-                                class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                                class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                             >
                                 Properties <ChevronDown class="size-3" />
                             </button>
@@ -1064,9 +1346,13 @@ watch(
                                 <Plus class="size-3" />
                             </button>
                         </header>
-                        <dl class="grid grid-cols-[80px_1fr] items-center gap-x-3 gap-y-2">
+                        <dl
+                            class="grid grid-cols-[80px_1fr] items-center gap-x-3 gap-y-2"
+                        >
                             <!-- Status -->
-                            <dt class="text-[12.5px] text-muted-foreground">Status</dt>
+                            <dt class="text-[12.5px] text-muted-foreground">
+                                Status
+                            </dt>
                             <dd>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger as-child>
@@ -1074,8 +1360,12 @@ watch(
                                             type="button"
                                             class="-mx-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] text-foreground transition-colors hover:bg-accent/40"
                                         >
-                                            <StatusIcon :type="projectStatusType" />
-                                            <span class="capitalize">{{ projectStateLabel() }}</span>
+                                            <StatusIcon
+                                                :type="projectStatusType"
+                                            />
+                                            <span class="capitalize">{{
+                                                projectStateLabel()
+                                            }}</span>
                                         </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent class="w-44">
@@ -1084,8 +1374,13 @@ watch(
                                             :key="key"
                                             @select="setState(key)"
                                         >
-                                            <span class="flex items-center gap-2">
-                                                <StatusIcon :type="statusTypeFor(key)" :size="12" />
+                                            <span
+                                                class="flex items-center gap-2"
+                                            >
+                                                <StatusIcon
+                                                    :type="statusTypeFor(key)"
+                                                    :size="12"
+                                                />
                                                 {{ STATE_LABELS[key] }}
                                             </span>
                                         </DropdownMenuItem>
@@ -1094,14 +1389,22 @@ watch(
                             </dd>
 
                             <!-- Priority -->
-                            <dt class="text-[12.5px] text-muted-foreground">Priority</dt>
-                            <dd class="flex items-center gap-1.5 text-[13px] text-foreground">
+                            <dt class="text-[12.5px] text-muted-foreground">
+                                Priority
+                            </dt>
+                            <dd
+                                class="flex items-center gap-1.5 text-[13px] text-foreground"
+                            >
                                 <PriorityIcon :priority="0" />
-                                <span class="text-muted-foreground">No priority</span>
+                                <span class="text-muted-foreground"
+                                    >No priority</span
+                                >
                             </dd>
 
                             <!-- Lead -->
-                            <dt class="text-[12.5px] text-muted-foreground">Lead</dt>
+                            <dt class="text-[12.5px] text-muted-foreground">
+                                Lead
+                            </dt>
                             <dd>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger as-child>
@@ -1120,15 +1423,32 @@ watch(
                                                 v-else
                                                 class="size-4 rounded-full border border-dashed border-border"
                                             ></span>
-                                            <span :class="project.lead ? 'truncate text-foreground' : 'text-muted-foreground'">
-                                                {{ project.lead?.name ?? 'No lead' }}
+                                            <span
+                                                :class="
+                                                    project.lead
+                                                        ? 'truncate text-foreground'
+                                                        : 'text-muted-foreground'
+                                                "
+                                            >
+                                                {{
+                                                    project.lead?.name ??
+                                                    'No lead'
+                                                }}
                                             </span>
                                         </button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent class="max-h-72 w-56 overflow-y-auto">
-                                        <DropdownMenuItem @select="setLead(null)">
-                                            <span class="flex items-center gap-2 text-muted-foreground">
-                                                <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                                    <DropdownMenuContent
+                                        class="max-h-72 w-56 overflow-y-auto"
+                                    >
+                                        <DropdownMenuItem
+                                            @select="setLead(null)"
+                                        >
+                                            <span
+                                                class="flex items-center gap-2 text-muted-foreground"
+                                            >
+                                                <span
+                                                    class="size-3.5 rounded-full border border-dashed border-border"
+                                                ></span>
                                                 No lead
                                             </span>
                                         </DropdownMenuItem>
@@ -1137,9 +1457,17 @@ watch(
                                             :key="m.id"
                                             @select="setLead(m.id)"
                                         >
-                                            <span class="flex min-w-0 items-center gap-2">
-                                                <Avatar :name="m.name" :email="m.email" :size="14" />
-                                                <span class="truncate">{{ m.name }}</span>
+                                            <span
+                                                class="flex min-w-0 items-center gap-2"
+                                            >
+                                                <Avatar
+                                                    :name="m.name"
+                                                    :email="m.email"
+                                                    :size="14"
+                                                />
+                                                <span class="truncate">{{
+                                                    m.name
+                                                }}</span>
                                             </span>
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -1147,20 +1475,30 @@ watch(
                             </dd>
 
                             <!-- Members -->
-                            <dt class="text-[12.5px] text-muted-foreground">Members</dt>
+                            <dt class="text-[12.5px] text-muted-foreground">
+                                Members
+                            </dt>
                             <dd>
-                                <div v-if="project.members.length" class="flex items-center -space-x-1">
+                                <div
+                                    v-if="project.members.length"
+                                    class="flex items-center -space-x-1"
+                                >
                                     <span
                                         v-for="m in project.members.slice(0, 5)"
                                         :key="m.id"
                                         class="ring-2 ring-[hsl(var(--background))]"
                                     >
-                                        <Avatar :name="m.name" :email="m.email" :size="18" />
+                                        <Avatar
+                                            :name="m.name"
+                                            :email="m.email"
+                                            :size="18"
+                                        />
                                     </span>
                                     <span
                                         v-if="project.members.length > 5"
                                         class="ml-1 text-[11px] text-muted-foreground tabular-nums"
-                                    >+{{ project.members.length - 5 }}</span>
+                                        >+{{ project.members.length - 5 }}</span
+                                    >
                                 </div>
                                 <button
                                     v-else
@@ -1175,7 +1513,9 @@ watch(
                             </dd>
 
                             <!-- Dates: 📅 start → 🚩 target -->
-                            <dt class="text-[12.5px] text-muted-foreground">Dates</dt>
+                            <dt class="text-[12.5px] text-muted-foreground">
+                                Dates
+                            </dt>
                             <dd>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger as-child>
@@ -1187,8 +1527,12 @@ watch(
                                                 v-if="project.start_date"
                                                 class="inline-flex items-center gap-1 text-foreground"
                                             >
-                                                <Calendar class="size-3 text-muted-foreground" />
-                                                {{ fmtShort(project.start_date) }}
+                                                <Calendar
+                                                    class="size-3 text-muted-foreground"
+                                                />
+                                                {{
+                                                    fmtShort(project.start_date)
+                                                }}
                                             </span>
                                             <span
                                                 v-else
@@ -1197,13 +1541,21 @@ watch(
                                                 <Calendar class="size-3" />
                                                 Start
                                             </span>
-                                            <span class="text-muted-foreground">→</span>
+                                            <span class="text-muted-foreground"
+                                                >→</span
+                                            >
                                             <span
                                                 v-if="project.target_date"
                                                 class="inline-flex items-center gap-1 text-foreground"
                                             >
-                                                <Flag class="size-3 text-muted-foreground" />
-                                                {{ fmtShort(project.target_date) }}
+                                                <Flag
+                                                    class="size-3 text-muted-foreground"
+                                                />
+                                                {{
+                                                    fmtShort(
+                                                        project.target_date,
+                                                    )
+                                                }}
                                             </span>
                                             <span
                                                 v-else
@@ -1217,21 +1569,46 @@ watch(
                                     <DropdownMenuContent class="w-64 p-3">
                                         <div class="space-y-2">
                                             <div class="space-y-1">
-                                                <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Start</label>
+                                                <label
+                                                    class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                                    >Start</label
+                                                >
                                                 <input
                                                     type="date"
-                                                    :value="project.start_date ?? ''"
+                                                    :value="
+                                                        project.start_date ?? ''
+                                                    "
                                                     class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
-                                                    @change="(e) => setStartDate((e.target as HTMLInputElement).value)"
+                                                    @change="
+                                                        (e) =>
+                                                            setStartDate(
+                                                                (
+                                                                    e.target as HTMLInputElement
+                                                                ).value,
+                                                            )
+                                                    "
                                                 />
                                             </div>
                                             <div class="space-y-1">
-                                                <label class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Target</label>
+                                                <label
+                                                    class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                                    >Target</label
+                                                >
                                                 <input
                                                     type="date"
-                                                    :value="project.target_date ?? ''"
+                                                    :value="
+                                                        project.target_date ??
+                                                        ''
+                                                    "
                                                     class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
-                                                    @change="(e) => setTargetDate((e.target as HTMLInputElement).value)"
+                                                    @change="
+                                                        (e) =>
+                                                            setTargetDate(
+                                                                (
+                                                                    e.target as HTMLInputElement
+                                                                ).value,
+                                                            )
+                                                    "
                                                 />
                                             </div>
                                         </div>
@@ -1240,7 +1617,9 @@ watch(
                             </dd>
 
                             <!-- Teams (read-only) -->
-                            <dt class="text-[12.5px] text-muted-foreground">Teams</dt>
+                            <dt class="text-[12.5px] text-muted-foreground">
+                                Teams
+                            </dt>
                             <dd
                                 class="flex flex-wrap gap-1"
                                 title="TODO: edit teams endpoint not implemented yet"
@@ -1254,14 +1633,21 @@ watch(
                                         class="size-3"
                                         :style="{ color: t.color || '#6366f1' }"
                                     />
-                                    <span class="text-foreground">{{ t.key }}</span>
+                                    <span class="text-foreground">{{
+                                        t.key
+                                    }}</span>
                                 </span>
                             </dd>
 
                             <!-- Labels -->
-                            <dt class="text-[12.5px] text-muted-foreground">Labels</dt>
+                            <dt class="text-[12.5px] text-muted-foreground">
+                                Labels
+                            </dt>
                             <dd>
-                                <div v-if="labels.length" class="flex flex-wrap gap-1">
+                                <div
+                                    v-if="labels.length"
+                                    class="flex flex-wrap gap-1"
+                                >
                                     <LabelBadge
                                         v-for="l in labels"
                                         :key="l.id"
@@ -1287,7 +1673,7 @@ watch(
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
-                                class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                                class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                             >
                                 Milestones <ChevronDown class="size-3" />
                             </button>
@@ -1302,7 +1688,10 @@ watch(
                             </button>
                         </header>
 
-                        <ul v-if="project.milestones.length" class="space-y-1.5">
+                        <ul
+                            v-if="project.milestones.length"
+                            class="space-y-1.5"
+                        >
                             <li
                                 v-for="ms in project.milestones"
                                 :key="ms.id"
@@ -1316,11 +1705,16 @@ watch(
                                     }"
                                 />
                                 <div class="min-w-0 flex-1">
-                                    <div class="truncate text-[12.5px] font-medium text-foreground">
+                                    <div
+                                        class="truncate text-[12.5px] font-medium text-foreground"
+                                    >
                                         {{ ms.name }}
                                     </div>
-                                    <div class="text-[11px] text-muted-foreground">
-                                        {{ ms.percent }}% of {{ ms.issue_count }}
+                                    <div
+                                        class="text-[11px] text-muted-foreground"
+                                    >
+                                        {{ ms.percent }}% of
+                                        {{ ms.issue_count }}
                                     </div>
                                 </div>
                                 <span
@@ -1332,8 +1726,12 @@ watch(
                             </li>
                         </ul>
 
-                        <p v-else class="text-[12.5px] leading-[18px] text-muted-foreground">
-                            Add milestones to organize work within your project and break it into more granular stages.
+                        <p
+                            v-else
+                            class="text-[12.5px] leading-[18px] text-muted-foreground"
+                        >
+                            Add milestones to organize work within your project
+                            and break it into more granular stages.
                         </p>
                     </section>
 
@@ -1342,7 +1740,7 @@ watch(
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
-                                class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                                class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                             >
                                 Progress <ChevronDown class="size-3" />
                             </button>
@@ -1350,40 +1748,97 @@ watch(
 
                         <!-- 3 stat cards -->
                         <div class="mb-3 grid grid-cols-3 gap-2">
-                            <div class="rounded-md border border-border bg-card p-2">
-                                <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                    <span class="size-1.5 rounded-sm bg-zinc-500"></span>
+                            <div
+                                class="rounded-md border border-border bg-card p-2"
+                            >
+                                <div
+                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                >
+                                    <span
+                                        class="size-1.5 rounded-sm bg-zinc-500"
+                                    ></span>
                                     Scope
                                 </div>
-                                <div class="mt-1 text-[16px] font-semibold tabular-nums">{{ progress.total }}</div>
+                                <div
+                                    class="mt-1 text-[16px] font-semibold tabular-nums"
+                                >
+                                    {{ progress.total }}
+                                </div>
                             </div>
-                            <div class="rounded-md border border-border bg-card p-2">
-                                <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                    <span class="size-1.5 rounded-sm bg-amber-400"></span>
+                            <div
+                                class="rounded-md border border-border bg-card p-2"
+                            >
+                                <div
+                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                >
+                                    <span
+                                        class="size-1.5 rounded-sm bg-amber-400"
+                                    ></span>
                                     Started
                                 </div>
-                                <div class="mt-1 text-[16px] font-semibold tabular-nums">{{ progress.started }}</div>
+                                <div
+                                    class="mt-1 text-[16px] font-semibold tabular-nums"
+                                >
+                                    {{ progress.started }}
+                                </div>
                             </div>
-                            <div class="rounded-md border border-border bg-card p-2">
-                                <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                    <span class="size-1.5 rounded-sm bg-indigo-500"></span>
+                            <div
+                                class="rounded-md border border-border bg-card p-2"
+                            >
+                                <div
+                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                >
+                                    <span
+                                        class="size-1.5 rounded-sm bg-indigo-500"
+                                    ></span>
                                     Done
                                 </div>
-                                <div class="mt-1 text-[16px] font-semibold tabular-nums">{{ progress.completed }}</div>
+                                <div
+                                    class="mt-1 text-[16px] font-semibold tabular-nums"
+                                >
+                                    {{ progress.completed }}
+                                </div>
                             </div>
                         </div>
 
                         <!-- Burndown chart -->
-                        <div class="relative h-[160px] rounded-md border border-border bg-card">
+                        <div
+                            class="relative h-[160px] rounded-md border border-border bg-card"
+                        >
                             <svg
                                 viewBox="0 0 256 140"
                                 preserveAspectRatio="none"
                                 class="absolute inset-0 h-full w-full"
                                 aria-hidden="true"
                             >
-                                <line x1="12" y1="18" x2="244" y2="18" stroke="currentColor" stroke-width="0.5" class="text-border" />
-                                <line x1="12" y1="70" x2="244" y2="70" stroke="currentColor" stroke-width="0.5" class="text-border" stroke-dasharray="2 3" />
-                                <line x1="12" y1="122" x2="244" y2="122" stroke="currentColor" stroke-width="0.5" class="text-border" />
+                                <line
+                                    x1="12"
+                                    y1="18"
+                                    x2="244"
+                                    y2="18"
+                                    stroke="currentColor"
+                                    stroke-width="0.5"
+                                    class="text-border"
+                                />
+                                <line
+                                    x1="12"
+                                    y1="70"
+                                    x2="244"
+                                    y2="70"
+                                    stroke="currentColor"
+                                    stroke-width="0.5"
+                                    class="text-border"
+                                    stroke-dasharray="2 3"
+                                />
+                                <line
+                                    x1="12"
+                                    y1="122"
+                                    x2="244"
+                                    y2="122"
+                                    stroke="currentColor"
+                                    stroke-width="0.5"
+                                    class="text-border"
+                                />
                                 <polyline
                                     :points="burndownIdealPoints"
                                     fill="none"
@@ -1400,16 +1855,30 @@ watch(
                                     stroke-linejoin="round"
                                 />
                             </svg>
-                            <div class="pointer-events-none absolute inset-x-2 bottom-1 flex items-center justify-between text-[10px] text-muted-foreground tabular-nums">
-                                <span>{{ project.start_date ? fmtShort(project.start_date) : '' }}</span>
-                                <span>{{ project.target_date ? fmtShort(project.target_date) : '' }}</span>
+                            <div
+                                class="pointer-events-none absolute inset-x-2 bottom-1 flex items-center justify-between text-[10px] text-muted-foreground tabular-nums"
+                            >
+                                <span>{{
+                                    project.start_date
+                                        ? fmtShort(project.start_date)
+                                        : ''
+                                }}</span>
+                                <span>{{
+                                    project.target_date
+                                        ? fmtShort(project.target_date)
+                                        : ''
+                                }}</span>
                             </div>
                         </div>
 
                         <!-- Pill tabs -->
                         <div class="mt-3 flex items-center gap-1">
                             <button
-                                v-for="t in (['assignees', 'labels', 'cycles'] as const)"
+                                v-for="t in [
+                                    'assignees',
+                                    'labels',
+                                    'cycles',
+                                ] as const"
                                 :key="t"
                                 type="button"
                                 @click="progressTab = t"
@@ -1425,8 +1894,14 @@ watch(
                         </div>
 
                         <div class="mt-2">
-                            <ul v-if="progressTab === 'assignees'" class="space-y-1.5">
-                                <li v-if="!assignees.length" class="text-[12.5px] text-muted-foreground">
+                            <ul
+                                v-if="progressTab === 'assignees'"
+                                class="space-y-1.5"
+                            >
+                                <li
+                                    v-if="!assignees.length"
+                                    class="text-[12.5px] text-muted-foreground"
+                                >
                                     No assignees yet.
                                 </li>
                                 <li
@@ -1434,7 +1909,9 @@ watch(
                                     :key="row.user?.id ?? `none-${i}`"
                                     class="flex items-center justify-between gap-2"
                                 >
-                                    <div class="flex min-w-0 items-center gap-1.5">
+                                    <div
+                                        class="flex min-w-0 items-center gap-1.5"
+                                    >
                                         <Avatar
                                             v-if="row.user"
                                             :name="row.user.name"
@@ -1445,38 +1922,86 @@ watch(
                                             v-else
                                             class="size-[18px] rounded-full border border-dashed border-border"
                                         ></span>
-                                        <span class="truncate text-[12.5px] text-foreground">
-                                            {{ row.user ? row.user.name : 'Unassigned' }}
+                                        <span
+                                            class="truncate text-[12.5px] text-foreground"
+                                        >
+                                            {{
+                                                row.user
+                                                    ? row.user.name
+                                                    : 'Unassigned'
+                                            }}
                                         </span>
                                     </div>
-                                    <div class="flex shrink-0 items-center gap-1.5">
-                                        <span class="text-[11px] text-muted-foreground tabular-nums">
-                                            {{ row.percent }}% of {{ row.total }}
+                                    <div
+                                        class="flex shrink-0 items-center gap-1.5"
+                                    >
+                                        <span
+                                            class="text-[11px] text-muted-foreground tabular-nums"
+                                        >
+                                            {{ row.percent }}% of
+                                            {{ row.total }}
                                         </span>
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                            <circle cx="7" cy="7" r="5" stroke="#3f3f46" stroke-width="1.5" fill="none" />
+                                        <svg
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 14 14"
+                                            fill="none"
+                                        >
+                                            <circle
+                                                cx="7"
+                                                cy="7"
+                                                r="5"
+                                                stroke="#3f3f46"
+                                                stroke-width="1.5"
+                                                fill="none"
+                                            />
                                             <circle
                                                 cx="7"
                                                 cy="7"
                                                 r="5"
                                                 fill="none"
                                                 stroke-width="2"
-                                                :stroke="donutStroke(row.percent)"
+                                                :stroke="
+                                                    donutStroke(row.percent)
+                                                "
                                                 :stroke-dasharray="`${donutC} ${donutC}`"
-                                                :stroke-dashoffset="donutOffset(row.percent)"
+                                                :stroke-dashoffset="
+                                                    donutOffset(row.percent)
+                                                "
                                                 transform="rotate(-90 7 7)"
                                             />
                                         </svg>
                                     </div>
                                 </li>
                             </ul>
-                            <p v-else class="text-[12.5px] text-muted-foreground">Coming soon</p>
+                            <p
+                                v-else
+                                class="text-[12.5px] text-muted-foreground"
+                            >
+                                Coming soon
+                            </p>
                         </div>
 
-                        <div class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2">
-                            <span class="text-[12px] text-muted-foreground">{{ progress.percent }}% complete</span>
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                <circle cx="7" cy="7" r="5" stroke="#3f3f46" stroke-width="1.5" fill="none" />
+                        <div
+                            class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2"
+                        >
+                            <span class="text-[12px] text-muted-foreground"
+                                >{{ progress.percent }}% complete</span
+                            >
+                            <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 14 14"
+                                fill="none"
+                            >
+                                <circle
+                                    cx="7"
+                                    cy="7"
+                                    r="5"
+                                    stroke="#3f3f46"
+                                    stroke-width="1.5"
+                                    fill="none"
+                                />
                                 <circle
                                     cx="7"
                                     cy="7"
@@ -1501,12 +2026,17 @@ watch(
                 <DialogHeader>
                     <DialogTitle>New milestone</DialogTitle>
                     <DialogDescription>
-                        Break the project into milestones to track progress in stages.
+                        Break the project into milestones to track progress in
+                        stages.
                     </DialogDescription>
                 </DialogHeader>
                 <form class="space-y-4" @submit.prevent="submitMilestone">
                     <div class="space-y-1">
-                        <label class="text-[12px] font-medium text-foreground" for="ms-name">Name</label>
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="ms-name"
+                            >Name</label
+                        >
                         <Input
                             id="ms-name"
                             v-model="milestoneForm.name"
@@ -1517,7 +2047,11 @@ watch(
                         />
                     </div>
                     <div class="space-y-1">
-                        <label class="text-[12px] font-medium text-foreground" for="ms-desc">Description</label>
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="ms-desc"
+                            >Description</label
+                        >
                         <textarea
                             id="ms-desc"
                             v-model="milestoneForm.description"
@@ -1527,7 +2061,11 @@ watch(
                         />
                     </div>
                     <div class="space-y-1">
-                        <label class="text-[12px] font-medium text-foreground" for="ms-target">Target date</label>
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="ms-target"
+                            >Target date</label
+                        >
                         <input
                             id="ms-target"
                             v-model="milestoneForm.target_date"
@@ -1535,10 +2073,7 @@ watch(
                             class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
                         />
                     </div>
-                    <p
-                        v-if="milestoneError"
-                        class="text-[12px] text-rose-400"
-                    >
+                    <p v-if="milestoneError" class="text-[12px] text-rose-400">
                         {{ milestoneError }}
                     </p>
                     <DialogFooter>
@@ -1550,9 +2085,18 @@ watch(
                         <button
                             type="submit"
                             :disabled="milestoneSubmitting"
-                            class="rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                            class="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
-                            {{ milestoneSubmitting ? 'Creating…' : 'Create milestone' }}
+                            <Loader2
+                                v-if="milestoneSubmitting"
+                                class="size-3.5 animate-spin"
+                                aria-hidden="true"
+                            />
+                            {{
+                                milestoneSubmitting
+                                    ? 'Creating…'
+                                    : 'Create milestone'
+                            }}
                         </button>
                     </DialogFooter>
                 </form>

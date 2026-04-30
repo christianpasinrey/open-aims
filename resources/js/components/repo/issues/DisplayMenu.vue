@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { LayoutGrid } from 'lucide-vue-next';
+import { computed } from 'vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -30,21 +30,38 @@ const sortValue = computed(() => props.filters.sort);
 
 function navigate(patch: Record<string, string | number | null>): void {
     const params: Record<string, string> = {};
-    if (props.filters.team) params.team = props.filters.team;
-    if (props.filters.assignee) params.assignee = props.filters.assignee;
-    if (props.filters.state) params.state = props.filters.state;
-    if (props.filters.priority !== null && props.filters.priority !== undefined) {
+
+    if (props.filters.team) {
+        params.team = props.filters.team;
+    }
+
+    if (props.filters.assignee) {
+        params.assignee = props.filters.assignee;
+    }
+
+    if (props.filters.state) {
+        params.state = props.filters.state;
+    }
+
+    if (
+        props.filters.priority !== null &&
+        props.filters.priority !== undefined
+    ) {
         params.priority = String(props.filters.priority);
     }
+
     if (props.filters.project !== null && props.filters.project !== undefined) {
         params.project = String(props.filters.project);
     }
+
     if (props.filters.labels.length) {
         params.labels = props.filters.labels.join(',');
     }
+
     if (props.filters.group && props.filters.group !== 'status') {
         params.group = props.filters.group;
     }
+
     if (props.filters.sort && props.filters.sort !== 'priority') {
         params.sort = props.filters.sort;
     }
@@ -89,10 +106,18 @@ function setSort(value: string): void {
                 :model-value="groupValue"
                 @update:model-value="(v) => setGroup(String(v))"
             >
-                <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="priority">Priority</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="assignee">Assignee</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="project">Project</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="status"
+                    >Status</DropdownMenuRadioItem
+                >
+                <DropdownMenuRadioItem value="priority"
+                    >Priority</DropdownMenuRadioItem
+                >
+                <DropdownMenuRadioItem value="assignee"
+                    >Assignee</DropdownMenuRadioItem
+                >
+                <DropdownMenuRadioItem value="project"
+                    >Project</DropdownMenuRadioItem
+                >
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Ordering</DropdownMenuLabel>
@@ -100,9 +125,15 @@ function setSort(value: string): void {
                 :model-value="sortValue"
                 @update:model-value="(v) => setSort(String(v))"
             >
-                <DropdownMenuRadioItem value="priority">Priority</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="updated">Last updated</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="created">Created</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="priority"
+                    >Priority</DropdownMenuRadioItem
+                >
+                <DropdownMenuRadioItem value="updated"
+                    >Last updated</DropdownMenuRadioItem
+                >
+                <DropdownMenuRadioItem value="created"
+                    >Created</DropdownMenuRadioItem
+                >
             </DropdownMenuRadioGroup>
         </DropdownMenuContent>
     </DropdownMenu>

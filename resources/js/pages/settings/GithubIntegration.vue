@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { Form, Head, usePage } from '@inertiajs/vue3';
-import { GitPullRequest, GitMerge, ExternalLink, Github, Plug, TriangleAlert } from 'lucide-vue-next';
+import {
+    GitPullRequest,
+    GitMerge,
+    ExternalLink,
+    Github,
+    Plug,
+    TriangleAlert,
+} from 'lucide-vue-next';
+import { computed } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { edit as editProfile } from '@/routes/profile';
@@ -63,15 +70,18 @@ defineOptions({
 const page = usePage();
 const flashStatus = computed<string | null>(() => {
     const url = new URL(window.location.href);
+
     return url.searchParams.get('status');
 });
 const linkedCount = computed<number | null>(() => {
     const url = new URL(window.location.href);
     const v = url.searchParams.get('linked');
+
     return v === null ? null : Number(v);
 });
 const errorMessage = computed<string | null>(() => {
     const errors = (page.props.errors as Record<string, string>) ?? {};
+
     return errors.github_app ?? null;
 });
 
@@ -86,20 +96,28 @@ function pillClass(state: string): string {
     }
 }
 function pillLabel(state: string): string {
-    if (state === 'merged') return 'Merged';
-    if (state === 'closed') return 'Closed';
+    if (state === 'merged') {
+        return 'Merged';
+    }
+
+    if (state === 'closed') {
+        return 'Closed';
+    }
+
     return 'Open';
 }
 
 function fmtDate(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) {
+        return '—';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
     });
 }
-
 </script>
 
 <template>
@@ -144,7 +162,7 @@ function fmtDate(iso: string | null): string {
                 </h2>
                 <span
                     v-if="!configured"
-                    class="inline-flex items-center gap-1 rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-400 ring-1 ring-amber-500/30"
+                    class="inline-flex items-center gap-1 rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium tracking-wide text-amber-400 uppercase ring-1 ring-amber-500/30"
                 >
                     <TriangleAlert class="size-3" />
                     App not configured
@@ -161,9 +179,7 @@ function fmtDate(iso: string | null): string {
                 and place the App's <code class="font-mono">.pem</code> at
                 <code class="font-mono">storage/keys/github-app.pem</code> to
                 enable installation. See the README in
-                <code class="font-mono"
-                    >app/Modules/Integrations/Github/</code
-                >.
+                <code class="font-mono">app/Modules/Integrations/Github/</code>.
             </div>
 
             <div
@@ -214,12 +230,12 @@ function fmtDate(iso: string | null): string {
                                 install.account_login
                             }}</span>
                             <span
-                                class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
                                 >{{ install.account_type }}</span
                             >
                             <span
                                 v-if="install.suspended_at"
-                                class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-400 ring-1 ring-amber-500/30"
+                                class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-amber-400 uppercase ring-1 ring-amber-500/30"
                                 >Suspended</span
                             >
                         </div>
@@ -232,11 +248,7 @@ function fmtDate(iso: string | null): string {
                         </div>
                     </div>
                 </div>
-                <Form
-                    action="/gh/sync"
-                    method="post"
-                    v-slot="{ processing }"
-                >
+                <Form action="/gh/sync" method="post" v-slot="{ processing }">
                     <Button
                         type="submit"
                         variant="outline"
@@ -255,17 +267,19 @@ function fmtDate(iso: string | null): string {
             <h2 class="text-[13px] font-semibold text-foreground">
                 Repository mapping
             </h2>
-            <div class="overflow-hidden rounded-md border border-border bg-card">
+            <div
+                class="overflow-hidden rounded-md border border-border bg-card"
+            >
                 <table class="w-full text-[13px]">
                     <thead>
                         <tr class="border-b border-border bg-muted/30">
                             <th
-                                class="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                             >
                                 Team
                             </th>
                             <th
-                                class="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                             >
                                 Repository
                             </th>
@@ -346,27 +360,27 @@ function fmtDate(iso: string | null): string {
                     <thead>
                         <tr class="border-b border-border bg-muted/30">
                             <th
-                                class="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                             >
                                 PR
                             </th>
                             <th
-                                class="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                             >
                                 State
                             </th>
                             <th
-                                class="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                             >
                                 Branch
                             </th>
                             <th
-                                class="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                             >
                                 Issue
                             </th>
                             <th
-                                class="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                                class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                             >
                                 Opened
                             </th>
@@ -405,7 +419,7 @@ function fmtDate(iso: string | null): string {
                             </td>
                             <td class="h-9 px-3 py-1.5">
                                 <span
-                                    class="inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                                    class="inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase"
                                     :class="pillClass(pr.state)"
                                 >
                                     {{ pillLabel(pr.state) }}

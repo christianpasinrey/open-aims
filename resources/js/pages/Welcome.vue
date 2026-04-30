@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowRight } from 'lucide-vue-next';
+import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 </script>
 
@@ -12,10 +13,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
     >
         <header class="flex items-center justify-between px-6 py-5 sm:px-10">
             <div class="flex items-center gap-2">
-                <span
-                    class="flex size-7 items-center justify-center rounded-md bg-brand text-xs font-semibold text-brand-foreground"
-                    >D</span
-                >
+                <ProjectIcon :size="22" rounded="md" color="#6366f1" />
                 <span class="text-[13px] font-medium">AIMS</span>
             </div>
             <div class="flex items-center gap-2">

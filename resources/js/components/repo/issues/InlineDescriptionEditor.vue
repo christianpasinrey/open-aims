@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { computed, nextTick, ref, watch } from 'vue';
 import { renderMarkdown } from '@/lib/markdown';
 
 const props = defineProps<{
@@ -17,7 +17,9 @@ const html = computed<string>(() => renderMarkdown(props.description));
 watch(
     () => props.description,
     (next) => {
-        if (!editing.value) local.value = next ?? '';
+        if (!editing.value) {
+            local.value = next ?? '';
+        }
     },
 );
 
@@ -36,10 +38,13 @@ function cancel(): void {
 
 function save(): void {
     const next = local.value;
+
     if (next === (props.description ?? '')) {
         editing.value = false;
+
         return;
     }
+
     router.patch(
         `/issues/${props.identifier}`,
         { description: next === '' ? null : next },
@@ -67,7 +72,11 @@ function onKeydown(e: KeyboardEvent): void {
 
 function autosize(): void {
     const el = textareaEl.value;
-    if (!el) return;
+
+    if (!el) {
+        return;
+    }
+
     el.style.height = 'auto';
     el.style.height = `${Math.max(el.scrollHeight, 120)}px`;
 }
@@ -80,21 +89,21 @@ function autosize(): void {
             ref="textareaEl"
             v-model="local"
             placeholder="Add a description…"
-            class="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-[14px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-[14px] text-foreground focus:ring-1 focus:ring-ring focus:outline-none"
             @blur="save"
             @keydown="onKeydown"
             @input="autosize"
         ></textarea>
         <div
             v-else-if="html"
-            class="markdown-body cursor-text rounded-md px-3 py-2 transition-colors hover:bg-accent/40 -mx-3"
+            class="markdown-body -mx-3 cursor-text rounded-md px-3 py-2 transition-colors hover:bg-accent/40"
             v-html="html"
             @click="startEditing"
         ></div>
         <button
             v-else
             type="button"
-            class="rounded-md px-3 py-2 text-[14px] italic text-muted-foreground transition-colors hover:bg-accent/40 -mx-3"
+            class="-mx-3 rounded-md px-3 py-2 text-[14px] text-muted-foreground italic transition-colors hover:bg-accent/40"
             @click="startEditing"
         >
             Add a description…
