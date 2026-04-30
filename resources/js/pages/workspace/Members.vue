@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { UserPlus, Search } from 'lucide-vue-next';
+import { Users, UserPlus, Search } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import { Button } from '@/components/ui/button';
@@ -17,14 +17,12 @@ import { Label } from '@/components/ui/label';
 
 type Member = {
     id: number;
-    role: string | null;
+    role: string;
+    joined_at: string | null;
     user: { id: number; name: string; email: string };
 };
 
-const props = defineProps<{
-    team: { id: number; name: string; key: string; color: string | null };
-    members: Member[];
-}>();
+const props = defineProps<{ members: Member[]; count: number }>();
 
 const query = ref('');
 const inviteOpen = ref(false);
@@ -42,31 +40,39 @@ const filtered = computed<Member[]>(() => {
             m.user.email.toLowerCase().includes(q),
     );
 });
+
+function formatDate(iso: string | null): string {
+    if (!iso) {
+        return '—';
+    }
+
+    const d = new Date(iso);
+
+    if (Number.isNaN(d.getTime())) {
+        return '—';
+    }
+
+    return d.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    });
+}
 </script>
 
 <template>
-    <Head :title="`${team.name} · Members`" />
+    <Head title="Workspace members" />
 
     <div class="flex h-full flex-1 flex-col overflow-hidden">
         <header
             class="flex shrink-0 items-center gap-3 border-b border-border px-5 py-3"
         >
-            <span
-                class="flex size-6 items-center justify-center rounded-md text-[10px] font-semibold text-white uppercase"
-                :style="{ backgroundColor: team.color || '#6366f1' }"
-            >
-                {{ team.key.charAt(0) }}
-            </span>
-            <h1 class="text-[13px] font-medium">{{ team.name }}</h1>
-            <span class="text-[12px] text-muted-foreground uppercase"
-                >Members</span
-            >
-            <span class="text-[12px] text-muted-foreground">{{
-                members.length
-            }}</span>
+            <Users class="size-4 text-muted-foreground" />
+            <h1 class="text-[13px] font-medium">Members</h1>
+            <span class="text-[12px] text-muted-foreground">{{ count }}</span>
             <div class="ml-auto flex items-center gap-2">
                 <Link
-                    :href="`/teams/${team.key}/settings`"
+                    :href="'/workspace/settings'"
                     class="rounded-md px-2.5 py-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                     Settings
@@ -90,31 +96,45 @@ const filtered = computed<Member[]>(() => {
             />
         </div>
 
-        <ul
-            v-if="filtered.length"
-            class="flex-1 divide-y divide-border overflow-y-auto"
-        >
-            <li
-                v-for="m in filtered"
-                :key="m.id"
-                class="flex items-center gap-3 px-5 py-2.5 hover:bg-accent/40"
+        <div v-if="filtered.length" class="flex-1 overflow-y-auto">
+            <div
+                class="sticky top-0 z-10 grid grid-cols-[1fr_2fr_120px_120px] gap-3 border-b border-border bg-muted/40 px-5 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase backdrop-blur"
             >
-                <Avatar :name="m.user.name" :email="m.user.email" :size="28" />
-                <div class="min-w-0 flex-1">
-                    <div class="text-[13px] font-medium text-foreground">
-                        {{ m.user.name }}
-                    </div>
-                    <div class="text-[12px] text-muted-foreground">
-                        {{ m.user.email }}
-                    </div>
-                </div>
-                <span
-                    v-if="m.role"
-                    class="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] text-muted-foreground capitalize"
-                    >{{ m.role }}</span
+                <span>Name</span>
+                <span>Email</span>
+                <span>Role</span>
+                <span>Joined</span>
+            </div>
+            <ul class="divide-y divide-border">
+                <li
+                    v-for="m in filtered"
+                    :key="m.id"
+                    class="grid grid-cols-[1fr_2fr_120px_120px] items-center gap-3 px-5 py-2.5 hover:bg-accent/40"
                 >
-            </li>
-        </ul>
+                    <div class="flex min-w-0 items-center gap-2.5">
+                        <Avatar
+                            :name="m.user.name"
+                            :email="m.user.email"
+                            :size="24"
+                        />
+                        <span class="truncate text-[13px] font-medium">{{
+                            m.user.name
+                        }}</span>
+                    </div>
+                    <span
+                        class="truncate text-[12.5px] text-muted-foreground"
+                        >{{ m.user.email }}</span
+                    >
+                    <span
+                        class="text-[12px] text-muted-foreground capitalize"
+                        >{{ m.role }}</span
+                    >
+                    <span class="text-[12px] text-muted-foreground">{{
+                        formatDate(m.joined_at)
+                    }}</span>
+                </li>
+            </ul>
+        </div>
         <div v-else class="flex flex-1 items-center justify-center px-6 py-12">
             <p class="text-sm text-muted-foreground">No matching members.</p>
         </div>
@@ -122,7 +142,7 @@ const filtered = computed<Member[]>(() => {
         <Dialog v-model:open="inviteOpen">
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Invite to {{ team.name }}</DialogTitle>
+                    <DialogTitle>Invite a teammate</DialogTitle>
                     <DialogDescription>
                         Invitations aren&rsquo;t wired up yet. Coming soon.
                     </DialogDescription>

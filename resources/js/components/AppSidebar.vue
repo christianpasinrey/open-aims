@@ -1,20 +1,47 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     Inbox,
     LayoutGrid,
     CheckCircle2,
     CalendarRange,
     FolderKanban,
-    Settings,
     Users,
     ChevronDown,
+    ChevronRight,
     Search,
     PenSquare,
+    Settings,
+    Sparkles,
+    UserPlus,
+    LogOut,
+    Check,
+    Plus,
+    MoreHorizontal,
+    Target,
+    Layers,
 } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
-import NavUser from '@/components/NavUser.vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Sidebar,
     SidebarContent,
@@ -39,28 +66,55 @@ type WorkspaceTeam = {
     current_cycle_number?: number | null;
     upcoming_cycle_number?: number | null;
 };
-type WorkspaceProp = { id: number; name: string; slug: string; teams: WorkspaceTeam[] };
+type WorkspaceProp = {
+    id: number;
+    name: string;
+    slug: string;
+    color?: string | null;
+    logo_url?: string | null;
+    teams: WorkspaceTeam[];
+};
+type UserWorkspace = {
+    id: number;
+    name: string;
+    slug: string;
+    color?: string | null;
+    logo_url?: string | null;
+    role?: string | null;
+};
 
 const page = usePage();
 
 const workspace = computed<WorkspaceProp | null>(() => {
     const ws = (page.props as { workspace?: WorkspaceProp }).workspace;
+
     return ws ?? null;
+});
+const userWorkspaces = computed<UserWorkspace[]>(() => {
+    const list = (page.props as { user_workspaces?: UserWorkspace[] })
+        .user_workspaces;
+
+    return Array.isArray(list) ? list : [];
 });
 const teams = computed<WorkspaceTeam[]>(() => workspace.value?.teams ?? []);
 
 const currentUrl = computed<string>(() => {
     const url = (page as unknown as { url?: string }).url;
+
     return typeof url === 'string' ? url : '/';
 });
-const currentPath = computed<string>(() => currentUrl.value.split('?')[0] ?? '/');
+const currentPath = computed<string>(
+    () => currentUrl.value.split('?')[0] ?? '/',
+);
 const currentParams = computed<URLSearchParams>(() => {
     const url = currentUrl.value;
     const qIdx = url.indexOf('?');
+
     return new URLSearchParams(qIdx === -1 ? '' : url.slice(qIdx + 1));
 });
 const currentTeamParam = computed<string | null>(() => {
     const t = currentParams.value.get('team');
+
     return t ? t.toUpperCase() : null;
 });
 const currentAssigneeParam = computed<string | null>(() =>
@@ -74,6 +128,9 @@ const isInboxActive = computed(() => currentPath.value === '/inbox');
 const isMyIssuesActive = computed(
     () => onIssuesIndex.value && currentAssigneeParam.value === 'me',
 );
+const isProjectsActive = computed(
+    () => onProjectsIndex.value && currentTeamParam.value === null,
+);
 const isTeamIssuesActive = (key: string) =>
     onIssuesIndex.value && currentTeamParam.value === key.toUpperCase();
 const isTeamProjectsActive = (key: string) =>
@@ -82,6 +139,139 @@ const isTeamCyclesActive = (key: string) =>
     onCyclesIndex.value && currentTeamParam.value === key.toUpperCase();
 const isTeamMembersActive = (key: string) =>
     currentPath.value.toUpperCase() === `/TEAMS/${key.toUpperCase()}/MEMBERS`;
+
+// ----- Workspace section toggle (Initiatives / Projects / Views) -----
+const workspaceOpen = ref(true);
+
+// ----- Search dialog (Cmd+K / Ctrl+K) -----
+const searchOpen = ref(false);
+const searchQuery = ref('');
+type SearchItem = {
+    label: string;
+    href: string;
+    kind: string;
+    color?: string | null;
+};
+const staticPages: SearchItem[] = [
+    { label: 'Inbox', href: '/inbox', kind: 'Page' },
+    { label: 'My issues', href: '/issues?assignee=me', kind: 'Page' },
+    { label: 'Projects', href: '/projects', kind: 'Page' },
+    { label: 'Cycles', href: '/cycles', kind: 'Page' },
+    { label: 'Workspace settings', href: '/workspace/settings', kind: 'Page' },
+    { label: 'Workspace members', href: '/workspace/members', kind: 'Page' },
+];
+const searchResults = computed<SearchItem[]>(() => {
+    const q = searchQuery.value.trim().toLowerCase();
+    const teamItems: SearchItem[] = teams.value.map((t) => ({
+        label: t.name,
+        href: `/issues?team=${t.key}`,
+        kind: 'Team',
+        color: t.color ?? null,
+    }));
+    const pool = [...staticPages, ...teamItems];
+
+    if (!q) {
+        return pool.slice(0, 8);
+    }
+
+    return pool.filter((it) => it.label.toLowerCase().includes(q)).slice(0, 12);
+});
+function openSearch() {
+    searchQuery.value = '';
+    searchOpen.value = true;
+}
+function gotoSearchItem(item: SearchItem) {
+    searchOpen.value = false;
+    router.get(item.href);
+}
+function onKeydown(e: KeyboardEvent) {
+    const meta = e.metaKey || e.ctrlKey;
+
+    if (meta && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+
+        if (searchOpen.value) {
+            searchOpen.value = false;
+        } else {
+            openSearch();
+        }
+    } else if (e.key === 'Escape' && searchOpen.value) {
+        searchOpen.value = false;
+    }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown));
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
+
+// ----- New issue dialog -----
+const newIssueOpen = ref(false);
+const newIssueTitle = ref('');
+const newIssueTeam = ref<string>('');
+const newIssueSubmitting = ref(false);
+const newIssueError = ref<string | null>(null);
+
+watch(newIssueOpen, (open) => {
+    if (open) {
+        newIssueTitle.value = '';
+        newIssueError.value = null;
+        // Default to currently selected team in URL, or first team.
+        const fromUrl = currentTeamParam.value;
+        const fallback = teams.value[0]?.key ?? '';
+        newIssueTeam.value = fromUrl ?? fallback;
+    }
+});
+
+function submitNewIssue() {
+    if (newIssueSubmitting.value) {
+        return;
+    }
+
+    const title = newIssueTitle.value.trim();
+
+    if (!title || !newIssueTeam.value) {
+        newIssueError.value = 'Title and team are required.';
+
+        return;
+    }
+
+    newIssueSubmitting.value = true;
+    router.post(
+        '/issues',
+        { title, team_key: newIssueTeam.value },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                newIssueSubmitting.value = false;
+            },
+            onSuccess: () => {
+                newIssueOpen.value = false;
+            },
+            onError: (errors) => {
+                newIssueError.value =
+                    Object.values(errors)[0] ?? 'Could not create issue.';
+            },
+        },
+    );
+}
+
+// ----- Workspace switcher actions -----
+function switchTo(slug: string) {
+    if (workspace.value?.slug === slug) {
+        return;
+    }
+
+    router.post(
+        `/workspace/switch?workspace=${encodeURIComponent(slug)}`,
+        {},
+        { preserveScroll: false },
+    );
+}
+function logout() {
+    router.post('/logout');
+}
+
+// ----- Footer dialogs -----
+const inviteOpen = ref(false);
+const tryOpen = ref(false);
 </script>
 
 <template>
@@ -89,29 +279,114 @@ const isTeamMembersActive = (key: string) =>
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child>
-                        <Link :href="'/issues'" class="!h-auto">
-                            <AppLogo />
-                            <ChevronDown class="ml-auto size-3.5 text-muted-foreground" />
-                        </Link>
-                    </SidebarMenuButton>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <SidebarMenuButton
+                                size="lg"
+                                class="!h-auto data-[state=open]:bg-sidebar-accent"
+                            >
+                                <AppLogo />
+                                <ChevronDown
+                                    class="ml-auto size-3.5 text-muted-foreground"
+                                />
+                            </SidebarMenuButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            class="w-(--reka-dropdown-menu-trigger-width) min-w-64 rounded-lg"
+                            align="start"
+                            :side-offset="6"
+                        >
+                            <DropdownMenuLabel
+                                class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                            >
+                                Workspaces
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem
+                                v-for="ws in userWorkspaces"
+                                :key="ws.id"
+                                class="flex cursor-pointer items-center gap-2"
+                                @click="switchTo(ws.slug)"
+                            >
+                                <span
+                                    v-if="!ws.logo_url"
+                                    aria-hidden="true"
+                                    class="flex size-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white uppercase"
+                                    :style="{
+                                        backgroundColor: ws.color || '#6366f1',
+                                    }"
+                                >
+                                    {{ ws.name.charAt(0) }}
+                                </span>
+                                <img
+                                    v-else
+                                    :src="ws.logo_url"
+                                    :alt="ws.name"
+                                    class="size-5 shrink-0 rounded-[5px] object-cover"
+                                />
+                                <span
+                                    class="min-w-0 flex-1 truncate text-[13px]"
+                                    >{{ ws.name }}</span
+                                >
+                                <Check
+                                    v-if="workspace && ws.id === workspace.id"
+                                    class="size-3.5 text-foreground"
+                                />
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                v-if="!userWorkspaces.length"
+                                disabled
+                                class="text-[12px] text-muted-foreground"
+                            >
+                                No workspaces.
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem as-child>
+                                <Link
+                                    :href="'/workspace/settings'"
+                                    class="flex w-full cursor-pointer items-center"
+                                >
+                                    <Settings class="mr-2 size-3.5" />
+                                    Workspace settings
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem as-child>
+                                <Link
+                                    :href="'/workspace/members'"
+                                    class="flex w-full cursor-pointer items-center"
+                                >
+                                    <Users class="mr-2 size-3.5" />
+                                    Members
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                class="flex cursor-pointer items-center text-destructive focus:bg-destructive/10 focus:text-destructive"
+                                @click="logout"
+                            >
+                                <LogOut class="mr-2 size-3.5" />
+                                Sign out
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </SidebarMenuItem>
             </SidebarMenu>
 
             <div class="flex items-center gap-1 px-2">
                 <button
                     type="button"
-                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
                     aria-label="Search"
-                    title="Search"
+                    title="Search (Ctrl+K)"
+                    @click="openSearch"
                 >
                     <Search class="size-3.5" />
                 </button>
                 <button
                     type="button"
-                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
                     aria-label="New issue"
                     title="New issue"
+                    @click="newIssueOpen = true"
                 >
                     <PenSquare class="size-3.5" />
                 </button>
@@ -148,10 +423,62 @@ const isTeamMembersActive = (key: string) =>
                 </SidebarMenu>
             </SidebarGroup>
 
+            <SidebarGroup class="px-2 py-0">
+                <button
+                    type="button"
+                    class="flex w-full items-center gap-1 px-2 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
+                    @click="workspaceOpen = !workspaceOpen"
+                >
+                    <ChevronRight
+                        class="size-3 transition-transform"
+                        :class="{ 'rotate-90': workspaceOpen }"
+                    />
+                    Workspace
+                </button>
+                <SidebarMenu v-show="workspaceOpen">
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            disabled
+                            tooltip="Initiatives (coming soon)"
+                            class="text-muted-foreground/70"
+                        >
+                            <Target />
+                            <span>Initiatives</span>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            as-child
+                            :is-active="isProjectsActive"
+                            tooltip="Projects"
+                        >
+                            <Link :href="'/projects'">
+                                <FolderKanban />
+                                <span>Projects</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            disabled
+                            tooltip="Views (coming soon)"
+                            class="text-muted-foreground/70"
+                        >
+                            <Layers />
+                            <span>Views</span>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarGroup>
+
             <SidebarGroup v-if="teams.length" class="px-2 py-0">
                 <SidebarGroupLabel>Your teams</SidebarGroupLabel>
                 <SidebarMenu>
-                    <SidebarMenuItem v-for="team in teams" :key="team.id">
+                    <SidebarMenuItem
+                        v-for="team in teams"
+                        :key="team.id"
+                        class="group/team"
+                    >
                         <SidebarMenuButton
                             as-child
                             :tooltip="team.name"
@@ -165,7 +492,7 @@ const isTeamMembersActive = (key: string) =>
                             <Link :href="`/issues?team=${team.key}`">
                                 <span
                                     aria-hidden="true"
-                                    class="flex size-5 items-center justify-center rounded-[5px] text-[10px] font-semibold uppercase tracking-tight text-white"
+                                    class="flex size-5 items-center justify-center rounded-[5px] text-[10px] font-semibold tracking-tight text-white uppercase"
                                     :style="{
                                         backgroundColor:
                                             team.color || '#6366f1',
@@ -176,6 +503,42 @@ const isTeamMembersActive = (key: string) =>
                                 <span class="truncate">{{ team.name }}</span>
                             </Link>
                         </SidebarMenuButton>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button
+                                    type="button"
+                                    class="absolute top-1.5 right-1.5 hidden rounded p-0.5 text-muted-foreground group-hover/team:flex hover:bg-sidebar-accent hover:text-foreground"
+                                    aria-label="Team menu"
+                                    title="Team menu"
+                                >
+                                    <MoreHorizontal class="size-3.5" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="start"
+                                :side-offset="4"
+                                class="w-48"
+                            >
+                                <DropdownMenuItem as-child>
+                                    <Link
+                                        :href="`/teams/${team.key}/settings`"
+                                        class="flex w-full cursor-pointer items-center"
+                                    >
+                                        <Settings class="mr-2 size-3.5" />
+                                        Team settings
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem as-child>
+                                    <Link
+                                        :href="`/teams/${team.key}/members`"
+                                        class="flex w-full cursor-pointer items-center"
+                                    >
+                                        <Users class="mr-2 size-3.5" />
+                                        Members
+                                    </Link>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <SidebarMenuSub>
                             <SidebarMenuSubItem>
                                 <SidebarMenuSubButton
@@ -239,9 +602,7 @@ const isTeamMembersActive = (key: string) =>
                                     as-child
                                     :is-active="isTeamMembersActive(team.key)"
                                 >
-                                    <Link
-                                        :href="`/teams/${team.key}/members`"
-                                    >
+                                    <Link :href="`/teams/${team.key}/members`">
                                         <Users class="size-3.5" />
                                         <span>Members</span>
                                     </Link>
@@ -256,20 +617,211 @@ const isTeamMembersActive = (key: string) =>
         <SidebarFooter>
             <SidebarMenu>
                 <SidebarMenuItem>
+                    <SidebarMenuButton tooltip="Try" @click="tryOpen = true">
+                        <Sparkles />
+                        <span>Try</span>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                     <SidebarMenuButton
-                        as-child
-                        :is-active="currentPath.startsWith('/settings')"
-                        tooltip="Settings"
+                        tooltip="Invite people"
+                        @click="inviteOpen = true"
                     >
-                        <Link :href="'/settings/profile'">
-                            <Settings />
-                            <span>Settings</span>
-                        </Link>
+                        <UserPlus />
+                        <span>Invite people</span>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
             </SidebarMenu>
-            <NavUser />
+            <a
+                href="https://the app/changelog"
+                target="_blank"
+                rel="noreferrer"
+                class="mx-2 mt-2 block rounded-md border border-sidebar-border bg-card/50 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground transition-colors group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-foreground"
+            >
+                <span class="block font-medium text-foreground"
+                    >What&rsquo;s new</span
+                >
+                repo Agent MCP support
+            </a>
         </SidebarFooter>
+
+        <!-- Search dialog -->
+        <Dialog v-model:open="searchOpen">
+            <DialogContent class="overflow-hidden p-0 sm:max-w-xl">
+                <DialogHeader class="sr-only">
+                    <DialogTitle>Search</DialogTitle>
+                    <DialogDescription>
+                        Find a team or jump to a page.
+                    </DialogDescription>
+                </DialogHeader>
+                <div
+                    class="flex items-center gap-2 border-b border-border px-3 py-2.5"
+                >
+                    <Search class="size-4 text-muted-foreground" />
+                    <input
+                        v-model="searchQuery"
+                        autofocus
+                        type="text"
+                        placeholder="Search pages, teams…"
+                        class="flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-muted-foreground"
+                        @keydown.enter.prevent="
+                            searchResults[0] && gotoSearchItem(searchResults[0])
+                        "
+                    />
+                    <kbd
+                        class="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                    >
+                        Esc
+                    </kbd>
+                </div>
+                <ul
+                    v-if="searchResults.length"
+                    class="max-h-80 overflow-y-auto py-1"
+                >
+                    <li
+                        v-for="(item, idx) in searchResults"
+                        :key="`${item.kind}-${idx}-${item.label}`"
+                    >
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-accent/60"
+                            @click="gotoSearchItem(item)"
+                        >
+                            <span
+                                v-if="item.kind === 'Team'"
+                                class="flex size-4 shrink-0 items-center justify-center rounded text-[9px] font-semibold text-white uppercase"
+                                :style="{
+                                    backgroundColor: item.color || '#6366f1',
+                                }"
+                                >{{ item.label.charAt(0) }}</span
+                            >
+                            <Search
+                                v-else
+                                class="size-3.5 shrink-0 text-muted-foreground"
+                            />
+                            <span class="flex-1 truncate">{{
+                                item.label
+                            }}</span>
+                            <span
+                                class="text-[11px] tracking-wide text-muted-foreground uppercase"
+                                >{{ item.kind }}</span
+                            >
+                        </button>
+                    </li>
+                </ul>
+                <div
+                    v-else
+                    class="px-4 py-6 text-center text-[12.5px] text-muted-foreground"
+                >
+                    No matches.
+                </div>
+            </DialogContent>
+        </Dialog>
+
+        <!-- New issue dialog -->
+        <Dialog v-model:open="newIssueOpen">
+            <DialogContent class="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>New issue</DialogTitle>
+                    <DialogDescription>
+                        Quickly create an issue. You can flesh it out from the
+                        issue page.
+                    </DialogDescription>
+                </DialogHeader>
+                <form class="space-y-4" @submit.prevent="submitNewIssue">
+                    <div class="grid gap-2">
+                        <Label for="ni-title">Title</Label>
+                        <Input
+                            id="ni-title"
+                            v-model="newIssueTitle"
+                            placeholder="What needs to be done?"
+                            autofocus
+                            required
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="ni-team">Team</Label>
+                        <select
+                            id="ni-team"
+                            v-model="newIssueTeam"
+                            required
+                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-[13px] outline-none focus-visible:border-ring"
+                        >
+                            <option
+                                v-for="t in teams"
+                                :key="t.id"
+                                :value="t.key"
+                            >
+                                {{ t.name }} ({{ t.key }})
+                            </option>
+                        </select>
+                    </div>
+                    <p
+                        v-if="newIssueError"
+                        class="text-[12.5px] text-destructive"
+                    >
+                        {{ newIssueError }}
+                    </p>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            @click="newIssueOpen = false"
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" :disabled="newIssueSubmitting">
+                            <Plus class="mr-1 size-3.5" />
+                            Create issue
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Invite dialog (placeholder) -->
+        <Dialog v-model:open="inviteOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Invite people</DialogTitle>
+                    <DialogDescription>
+                        Invitations aren&rsquo;t wired up yet. Coming soon.
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="grid gap-2">
+                    <Label for="invite-email">Email address</Label>
+                    <Input
+                        id="invite-email"
+                        type="email"
+                        placeholder="teammate@company.com"
+                        disabled
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" @click="inviteOpen = false"
+                        >Close</Button
+                    >
+                    <Button disabled>Send invite</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Try dialog (placeholder) -->
+        <Dialog v-model:open="tryOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Try AIMS</DialogTitle>
+                    <DialogDescription>
+                        Premium features will land here. Stay tuned.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button variant="ghost" @click="tryOpen = false"
+                        >Close</Button
+                    >
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </Sidebar>
     <slot />
 </template>
