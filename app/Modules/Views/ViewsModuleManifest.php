@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Views;
 
 use App\Core\Contracts\ModuleManifest;
+use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Views\Mcp\Tools\ViewsList;
 
-final class ViewsModuleManifest implements ModuleManifest
+final class ViewsModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
     public function slug(): string
     {
@@ -48,5 +50,12 @@ final class ViewsModuleManifest implements ModuleManifest
     public function dependencies(): array
     {
         return ['workspaces', 'issues'];
+    }
+
+    public function mcpTools(): array
+    {
+        return [
+            ViewsList::class,
+        ];
     }
 }

@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Projects;
 
 use App\Core\Contracts\ModuleManifest;
+use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Projects\Mcp\Tools\ProjectsAddMilestone;
+use App\Modules\Projects\Mcp\Tools\ProjectsCreate;
+use App\Modules\Projects\Mcp\Tools\ProjectsGet;
+use App\Modules\Projects\Mcp\Tools\ProjectsList;
+use App\Modules\Projects\Mcp\Tools\ProjectsUpdate;
 
-final class ProjectsModuleManifest implements ModuleManifest
+final class ProjectsModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
     public function slug(): string
     {
@@ -48,5 +54,16 @@ final class ProjectsModuleManifest implements ModuleManifest
     public function dependencies(): array
     {
         return ['workspaces', 'teams'];
+    }
+
+    public function mcpTools(): array
+    {
+        return [
+            ProjectsList::class,
+            ProjectsGet::class,
+            ProjectsCreate::class,
+            ProjectsUpdate::class,
+            ProjectsAddMilestone::class,
+        ];
     }
 }

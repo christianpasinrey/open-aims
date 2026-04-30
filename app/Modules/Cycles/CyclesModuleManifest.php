@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Cycles;
 
 use App\Core\Contracts\ModuleManifest;
+use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Cycles\Mcp\Tools\CyclesCreate;
+use App\Modules\Cycles\Mcp\Tools\CyclesGet;
+use App\Modules\Cycles\Mcp\Tools\CyclesList;
 
-final class CyclesModuleManifest implements ModuleManifest
+final class CyclesModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
     public function slug(): string
     {
@@ -48,5 +52,14 @@ final class CyclesModuleManifest implements ModuleManifest
     public function dependencies(): array
     {
         return ['workspaces', 'teams', 'issues'];
+    }
+
+    public function mcpTools(): array
+    {
+        return [
+            CyclesList::class,
+            CyclesGet::class,
+            CyclesCreate::class,
+        ];
     }
 }

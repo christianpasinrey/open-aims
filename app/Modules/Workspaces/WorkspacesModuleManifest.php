@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Workspaces;
 
 use App\Core\Contracts\ModuleManifest;
+use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Workspaces\Mcp\Tools\Current;
+use App\Modules\Workspaces\Mcp\Tools\Search;
 
-final class WorkspacesModuleManifest implements ModuleManifest
+final class WorkspacesModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
     public function slug(): string
     {
@@ -52,5 +55,13 @@ final class WorkspacesModuleManifest implements ModuleManifest
     public function dependencies(): array
     {
         return [];
+    }
+
+    public function mcpTools(): array
+    {
+        return [
+            Current::class,
+            Search::class,
+        ];
     }
 }

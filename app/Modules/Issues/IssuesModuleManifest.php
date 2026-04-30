@@ -5,8 +5,18 @@ declare(strict_types=1);
 namespace App\Modules\Issues;
 
 use App\Core\Contracts\ModuleManifest;
+use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Issues\Mcp\Tools\InboxList;
+use App\Modules\Issues\Mcp\Tools\IssuesArchive;
+use App\Modules\Issues\Mcp\Tools\IssuesComment;
+use App\Modules\Issues\Mcp\Tools\IssuesCreate;
+use App\Modules\Issues\Mcp\Tools\IssuesDelete;
+use App\Modules\Issues\Mcp\Tools\IssuesGet;
+use App\Modules\Issues\Mcp\Tools\IssuesList;
+use App\Modules\Issues\Mcp\Tools\IssuesTransition;
+use App\Modules\Issues\Mcp\Tools\IssuesUpdate;
 
-final class IssuesModuleManifest implements ModuleManifest
+final class IssuesModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
     public function slug(): string
     {
@@ -48,5 +58,20 @@ final class IssuesModuleManifest implements ModuleManifest
     public function dependencies(): array
     {
         return ['workspaces', 'teams'];
+    }
+
+    public function mcpTools(): array
+    {
+        return [
+            InboxList::class,
+            IssuesList::class,
+            IssuesGet::class,
+            IssuesCreate::class,
+            IssuesUpdate::class,
+            IssuesTransition::class,
+            IssuesArchive::class,
+            IssuesDelete::class,
+            IssuesComment::class,
+        ];
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passport\Passport;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,6 +25,22 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configurePassportScopes();
+    }
+
+    /**
+     * Define OAuth scopes Passport will issue. The `mcp` scope (and the
+     * `mcp:use` alias the laravel/mcp package advertises) is the single
+     * permission an MCP client (Claude Desktop, Claude Code) needs to
+     * operate this workspace via the /mcp endpoint.
+     */
+    protected function configurePassportScopes(): void
+    {
+        Passport::tokensCan([
+            'mcp' => 'Operate aims via Model Context Protocol',
+            'mcp:use' => 'Operate aims via Model Context Protocol',
+        ]);
+        Passport::setDefaultScope(['mcp']);
     }
 
     /**

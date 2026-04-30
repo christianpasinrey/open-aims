@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Initiatives;
 
 use App\Core\Contracts\ModuleManifest;
+use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Initiatives\Mcp\Tools\InitiativesCreate;
+use App\Modules\Initiatives\Mcp\Tools\InitiativesList;
 
-final class InitiativesModuleManifest implements ModuleManifest
+final class InitiativesModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
     public function slug(): string
     {
@@ -48,5 +51,13 @@ final class InitiativesModuleManifest implements ModuleManifest
     public function dependencies(): array
     {
         return ['workspaces', 'projects'];
+    }
+
+    public function mcpTools(): array
+    {
+        return [
+            InitiativesList::class,
+            InitiativesCreate::class,
+        ];
     }
 }
