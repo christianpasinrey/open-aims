@@ -36,6 +36,8 @@ type WorkspaceTeam = {
     key: string;
     icon?: string | null;
     color?: string | null;
+    current_cycle_number?: number | null;
+    upcoming_cycle_number?: number | null;
 };
 type WorkspaceProp = { id: number; name: string; slug: string; teams: WorkspaceTeam[] };
 
@@ -196,6 +198,30 @@ const isTeamMembersActive = (key: string) =>
                                         <span>Cycles</span>
                                     </Link>
                                 </SidebarMenuSubButton>
+                                <SidebarMenuSub>
+                                    <SidebarMenuSubItem
+                                        v-if="team.current_cycle_number"
+                                    >
+                                        <SidebarMenuSubButton as-child>
+                                            <Link
+                                                :href="`/cycles/${team.current_cycle_number}?team=${team.key}`"
+                                            >
+                                                <span>Current</span>
+                                            </Link>
+                                        </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                    <SidebarMenuSubItem
+                                        v-if="team.upcoming_cycle_number"
+                                    >
+                                        <SidebarMenuSubButton as-child>
+                                            <Link
+                                                :href="`/cycles/${team.upcoming_cycle_number}?team=${team.key}`"
+                                            >
+                                                <span>Upcoming</span>
+                                            </Link>
+                                        </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                </SidebarMenuSub>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                                 <SidebarMenuSubButton
