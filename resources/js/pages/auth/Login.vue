@@ -1,20 +1,13 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import InputError from '@/components/InputError.vue';
-import PasswordInput from '@/components/PasswordInput.vue';
-import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { Loader2 } from 'lucide-vue-next';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 
 defineOptions({
     layout: {
-        title: 'Log in to your account',
-        description: 'Enter your email and password below to log in',
+        title: 'Sign in to AIMS',
+        description: 'Enter your email and password to continue.',
     },
 });
 
@@ -25,77 +18,99 @@ defineProps<{
 </script>
 
 <template>
-    <Head title="Log in" />
+    <Head title="Sign in" />
 
-    <div
+    <p
         v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
+        class="mb-4 rounded-md border border-border bg-card px-3 py-2 text-center text-[13px] text-foreground"
     >
         {{ status }}
-    </div>
+    </p>
 
     <Form
         v-bind="store.form()"
         :reset-on-success="['password']"
         v-slot="{ errors, processing }"
-        class="flex flex-col gap-6"
+        class="flex flex-col gap-4"
     >
-        <div class="grid gap-6">
-            <div class="grid gap-2">
-                <Label for="email">Email address</Label>
-                <Input
-                    id="email"
-                    type="email"
-                    name="email"
-                    required
-                    autofocus
-                    :tabindex="1"
-                    autocomplete="email"
-                    placeholder="email@example.com"
-                />
-                <InputError :message="errors.email" />
-            </div>
-
-            <div class="grid gap-2">
-                <div class="flex items-center justify-between">
-                    <Label for="password">Password</Label>
-                    <TextLink
-                        v-if="canResetPassword"
-                        :href="request()"
-                        class="text-sm"
-                        :tabindex="5"
-                    >
-                        Forgot password?
-                    </TextLink>
-                </div>
-                <PasswordInput
-                    id="password"
-                    name="password"
-                    required
-                    :tabindex="2"
-                    autocomplete="current-password"
-                    placeholder="Password"
-                />
-                <InputError :message="errors.password" />
-            </div>
-
-            <div class="flex items-center justify-between">
-                <Label for="remember" class="flex items-center space-x-3">
-                    <Checkbox id="remember" name="remember" :tabindex="3" />
-                    <span>Remember me</span>
-                </Label>
-            </div>
-
-            <Button
-                type="submit"
-                class="mt-4 w-full"
-                :tabindex="4"
-                :disabled="processing"
-                data-test="login-button"
+        <div class="flex flex-col gap-1.5">
+            <label
+                for="email"
+                class="text-[12px] font-medium text-foreground"
             >
-                <Spinner v-if="processing" />
-                Log in
-            </Button>
+                Email
+            </label>
+            <input
+                id="email"
+                type="email"
+                name="email"
+                required
+                autofocus
+                autocomplete="email"
+                placeholder="you@workspace.com"
+                class="h-10 w-full rounded-md border border-border bg-card px-3 text-[14px] text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <p
+                v-if="errors.email"
+                class="text-[12px] text-destructive"
+            >
+                {{ errors.email }}
+            </p>
         </div>
+
+        <div class="flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+                <label
+                    for="password"
+                    class="text-[12px] font-medium text-foreground"
+                >
+                    Password
+                </label>
+                <Link
+                    v-if="canResetPassword"
+                    :href="request()"
+                    class="text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                    Forgot password?
+                </Link>
+            </div>
+            <input
+                id="password"
+                type="password"
+                name="password"
+                required
+                autocomplete="current-password"
+                placeholder="••••••••"
+                class="h-10 w-full rounded-md border border-border bg-card px-3 text-[14px] text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <p
+                v-if="errors.password"
+                class="text-[12px] text-destructive"
+            >
+                {{ errors.password }}
+            </p>
+        </div>
+
+        <label
+            class="flex select-none items-center gap-2 text-[13px] text-muted-foreground"
+        >
+            <input
+                type="checkbox"
+                name="remember"
+                class="size-3.5 rounded border-border accent-brand"
+                data-test="remember-checkbox"
+            />
+            Keep me signed in
+        </label>
+
+        <button
+            type="submit"
+            :disabled="processing"
+            data-test="login-button"
+            class="mt-1 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand text-[13px] font-medium text-brand-foreground transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+        >
+            <Loader2 v-if="processing" class="size-4 animate-spin" />
+            <span>{{ processing ? 'Signing in…' : 'Sign in' }}</span>
+        </button>
     </Form>
 </template>

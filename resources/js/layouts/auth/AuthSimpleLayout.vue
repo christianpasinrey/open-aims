@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { home } from '@/routes';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 
 defineProps<{
     title?: string;
@@ -10,34 +10,46 @@ defineProps<{
 </script>
 
 <template>
-    <div
-        class="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10"
+    <main
+        class="relative flex min-h-svh w-full flex-col bg-background text-foreground antialiased"
     >
-        <div class="w-full max-w-sm">
-            <div class="flex flex-col gap-8">
-                <div class="flex flex-col items-center gap-4">
-                    <Link
-                        :href="home()"
-                        class="flex flex-col items-center gap-2 font-medium"
+        <header
+            class="flex items-center justify-between px-6 py-5 sm:px-10"
+        >
+            <Link
+                :href="home()"
+                class="flex items-center gap-2 transition-opacity hover:opacity-80"
+            >
+                <span
+                    class="flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground text-xs font-semibold"
+                    >D</span
+                >
+                <span class="text-sm font-medium">AIMS</span>
+            </Link>
+            <ThemeToggle />
+        </header>
+
+        <section
+            class="flex flex-1 items-center justify-center px-6 pb-16"
+        >
+            <div class="w-full max-w-[380px]">
+                <div class="mb-8 text-center">
+                    <h1
+                        v-if="title"
+                        class="text-2xl font-semibold tracking-tight"
                     >
-                        <div
-                            class="mb-1 flex h-9 w-9 items-center justify-center rounded-md"
-                        >
-                            <AppLogoIcon
-                                class="size-9 fill-current text-[var(--foreground)] dark:text-white"
-                            />
-                        </div>
-                        <span class="sr-only">{{ title }}</span>
-                    </Link>
-                    <div class="space-y-2 text-center">
-                        <h1 class="text-xl font-medium">{{ title }}</h1>
-                        <p class="text-center text-sm text-muted-foreground">
-                            {{ description }}
-                        </p>
-                    </div>
+                        {{ title }}
+                    </h1>
+                    <p
+                        v-if="description"
+                        class="mt-2 text-[14px] text-muted-foreground"
+                    >
+                        {{ description }}
+                    </p>
                 </div>
+
                 <slot />
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 </template>

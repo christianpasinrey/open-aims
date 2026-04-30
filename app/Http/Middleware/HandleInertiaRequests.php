@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Teams\Models\Team;
+use App\Modules\Workspaces\Models\Workspace;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,7 +43,44 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'workspace' => fn () => $this->workspacePayload(),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function workspacePayload(): ?array
+    {
+        if (! app()->bound('current.workspace')) {
+            return null;
+        }
+
+        /** @var Workspace|null $workspace */
+        $workspace = app('current.workspace');
+        if ($workspace === null) {
+            return null;
+        }
+
+        $teams = Team::query()
+            ->where('workspace_id', $workspace->getKey())
+            ->orderBy('name')
+            ->get(['id', 'name', 'key', 'icon', 'color'])
+            ->map(fn (Team $t): array => [
+                'id' => $t->id,
+                'name' => $t->name,
+                'key' => $t->key,
+                'icon' => $t->icon,
+                'color' => $t->color,
+            ])
+            ->all();
+
+        return [
+            'id' => $workspace->id,
+            'name' => $workspace->name,
+            'slug' => $workspace->slug,
+            'teams' => $teams,
         ];
     }
 }
