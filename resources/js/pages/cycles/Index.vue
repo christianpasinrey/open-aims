@@ -1,6 +1,38 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
-import { CalendarRange, CheckCircle2 } from 'lucide-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import {
+    Bell,
+    CalendarRange,
+    CheckCircle2,
+    ChevronRight,
+    LayoutGrid,
+    Plus,
+    SlidersHorizontal,
+    Star,
+} from 'lucide-vue-next';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type Cycle = {
     id: number;
@@ -13,10 +45,213 @@ type Cycle = {
     is_current: boolean;
 };
 
-defineProps<{
-    team: { id: number; name: string; key: string; color: string | null } | null;
+type Team = { id: number; name: string; key: string; color: string | null };
+
+type ViewKey = 'all' | 'current' | 'upcoming' | 'completed';
+type SortKey = 'date_desc' | 'number_desc';
+
+const props = defineProps<{
+    team: Team | null;
     cycles: Cycle[];
+    filters?: {
+        team: string | null;
+        view: ViewKey;
+        sort: SortKey;
+    };
 }>();
+
+const view = computed<ViewKey>(() => props.filters?.view ?? 'all');
+const sort = computed<SortKey>(() => props.filters?.sort ?? 'date_desc');
+const teamKey = computed<string | null>(() => props.team?.key ?? null);
+
+function buildHref(overrides: Partial<{ view: ViewKey; sort: SortKey }>): string {
+    const params = new URLSearchParams();
+    if (teamKey.value) params.set('team', teamKey.value);
+    const v = overrides.view ?? view.value;
+    const s = overrides.sort ?? sort.value;
+    if (v !== 'all') params.set('view', v);
+    if (s !== 'date_desc') params.set('sort', s);
+    const q = params.toString();
+    return q ? `/cycles?${q}` : '/cycles';
+}
+
+const tabs = computed(() =>
+    [
+        { key: 'all' as const, label: 'All cycles' },
+        { key: 'current' as const, label: 'Current' },
+        { key: 'upcoming' as const, label: 'Upcoming' },
+        { key: 'completed' as const, label: 'Completed' },
+    ].map((t) => ({ ...t, href: buildHref({ view: t.key }) })),
+);
+
+// "Show completed" filter is just sugar over the All view; when off and the
+// view is 'all', we hide completed cycles client-side.
+const showCompleted = ref(true);
+
+const visibleCycles = computed<Cycle[]>(() => {
+    if (showCompleted.value) return props.cycles;
+    if (view.value === 'completed') return props.cycles;
+    return props.cycles.filter((c) => !c.completed_at);
+});
+
+function applySort(s: SortKey) {
+    router.visit(buildHref({ sort: s }), {
+        preserveScroll: true,
+        preserveState: true,
+        replace: true,
+    });
+}
+
+// ─── localStorage favourites ─────────────────────────────────────────────
+const FAV_VIEW_PREFIX = 'aims:fav-cycle-view:';
+const FAV_CYCLE_PREFIX = 'aims:fav-cycle:';
+
+const teamViewFavorited = ref(false);
+const favoritedCycleIds = ref<Set<number>>(new Set());
+
+function readFavView(): boolean {
+    if (!teamKey.value) return false;
+    try {
+        return localStorage.getItem(FAV_VIEW_PREFIX + teamKey.value) === '1';
+    } catch {
+        return false;
+    }
+}
+function readFavCycles(): Set<number> {
+    if (!teamKey.value) return new Set();
+    try {
+        const raw = localStorage.getItem(FAV_CYCLE_PREFIX + teamKey.value);
+        if (!raw) return new Set();
+        const arr = JSON.parse(raw) as unknown;
+        if (!Array.isArray(arr)) return new Set();
+        return new Set(arr.filter((v): v is number => typeof v === 'number'));
+    } catch {
+        return new Set();
+    }
+}
+
+function writeFavView(v: boolean) {
+    if (!teamKey.value) return;
+    try {
+        localStorage.setItem(FAV_VIEW_PREFIX + teamKey.value, v ? '1' : '0');
+    } catch { /* ignore */ }
+}
+function writeFavCycles(set: Set<number>) {
+    if (!teamKey.value) return;
+    try {
+        localStorage.setItem(
+            FAV_CYCLE_PREFIX + teamKey.value,
+            JSON.stringify([...set]),
+        );
+    } catch { /* ignore */ }
+}
+
+onMounted(() => {
+    teamViewFavorited.value = readFavView();
+    favoritedCycleIds.value = readFavCycles();
+});
+
+watch(
+    () => teamKey.value,
+    () => {
+        teamViewFavorited.value = readFavView();
+        favoritedCycleIds.value = readFavCycles();
+    },
+);
+
+function toggleTeamViewFavorite() {
+    teamViewFavorited.value = !teamViewFavorited.value;
+    writeFavView(teamViewFavorited.value);
+}
+function toggleCycleFavorite(id: number) {
+    const next = new Set(favoritedCycleIds.value);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    favoritedCycleIds.value = next;
+    writeFavCycles(next);
+}
+
+// ─── New Cycle dialog ────────────────────────────────────────────────────
+const dialogOpen = ref(false);
+const submitting = ref(false);
+const formError = ref<string | null>(null);
+
+const nextNumberSuggestion = computed<number>(() => {
+    if (!props.cycles.length) return 1;
+    return Math.max(...props.cycles.map((c) => c.number)) + 1;
+});
+
+const form = ref({
+    name: '',
+    number: 0,
+    starts_at: '',
+    ends_at: '',
+    description: '',
+});
+
+function openDialog() {
+    formError.value = null;
+    form.value = {
+        name: '',
+        number: nextNumberSuggestion.value,
+        starts_at: todayIso(),
+        ends_at: addDaysIso(todayIso(), 14),
+        description: '',
+    };
+    dialogOpen.value = true;
+}
+function closeDialog() {
+    dialogOpen.value = false;
+}
+
+function todayIso(): string {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+}
+function addDaysIso(iso: string, days: number): string {
+    const d = new Date(iso);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+}
+
+function submitNewCycle() {
+    if (!teamKey.value) {
+        formError.value = 'Pick a team first.';
+        return;
+    }
+    if (!form.value.starts_at || !form.value.ends_at) {
+        formError.value = 'Both start and end dates are required.';
+        return;
+    }
+    if (new Date(form.value.starts_at) > new Date(form.value.ends_at)) {
+        formError.value = 'End date cannot be before start date.';
+        return;
+    }
+    submitting.value = true;
+    router.post(
+        `/cycles?team=${encodeURIComponent(teamKey.value)}`,
+        {
+            name: form.value.name || null,
+            number: form.value.number || null,
+            starts_at: form.value.starts_at,
+            ends_at: form.value.ends_at,
+            description: form.value.description || null,
+        },
+        {
+            preserveScroll: true,
+            onError: (errors) => {
+                formError.value =
+                    Object.values(errors)[0] ?? 'Could not create cycle.';
+            },
+            onFinish: () => {
+                submitting.value = false;
+            },
+            onSuccess: () => {
+                dialogOpen.value = false;
+            },
+        },
+    );
+}
 
 function fmtDate(iso: string | null): string {
     if (!iso) return '—';
@@ -26,56 +261,300 @@ function fmtDate(iso: string | null): string {
         year: 'numeric',
     });
 }
+
+function cycleHref(c: Cycle): string {
+    if (!teamKey.value) return `/cycles/${c.number}`;
+    return `/cycles/${c.number}?team=${encodeURIComponent(teamKey.value)}`;
+}
 </script>
 
 <template>
-    <Head title="Cycles" />
+    <Head :title="team ? `${team.name} · Cycles` : 'Cycles'" />
 
     <div class="flex h-full flex-1 flex-col overflow-hidden">
-        <header class="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3">
-            <CalendarRange class="size-4 text-muted-foreground" />
-            <h1 class="text-[13px] font-medium">{{ team ? `${team.name} · Cycles` : 'Cycles' }}</h1>
-            <span class="text-[12px] text-muted-foreground">{{ cycles.length }}</span>
+        <!-- Top bar -->
+        <header
+            class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5"
+        >
+            <div class="flex min-w-0 items-center gap-2">
+                <span
+                    v-if="team"
+                    class="flex size-5 items-center justify-center rounded-md text-[10px] font-semibold text-white"
+                    :style="{ backgroundColor: team.color || '#6366f1' }"
+                >
+                    {{ team.key.charAt(0) }}
+                </span>
+                <CalendarRange v-else class="size-4 text-muted-foreground" />
+                <h1 class="text-[13px] font-medium text-foreground">
+                    {{ team ? `${team.name} · Cycles` : 'Cycles' }}
+                </h1>
+                <button
+                    type="button"
+                    :class="[
+                        'transition-colors',
+                        teamViewFavorited
+                            ? 'text-amber-400 hover:text-amber-500'
+                            : 'text-muted-foreground hover:text-foreground',
+                    ]"
+                    :aria-label="teamViewFavorited ? 'Unfavourite' : 'Favourite'"
+                    @click="toggleTeamViewFavorite"
+                >
+                    <Star
+                        class="size-3.5"
+                        :fill="teamViewFavorited ? 'currentColor' : 'none'"
+                    />
+                </button>
+            </div>
+            <div class="flex items-center gap-1 text-muted-foreground">
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="New cycle"
+                    title="New cycle"
+                    :disabled="!team"
+                    @click="openDialog"
+                >
+                    <Plus class="size-3.5" />
+                </button>
+                <Link
+                    href="/inbox"
+                    class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Inbox"
+                    title="Inbox"
+                >
+                    <Bell class="size-3.5" />
+                </Link>
+            </div>
         </header>
 
-        <div v-if="!cycles.length" class="flex flex-1 items-center justify-center px-6 py-12">
-            <p class="text-sm text-muted-foreground">No cycles for this team.</p>
-        </div>
-
-        <ul v-else class="flex-1 divide-y divide-border overflow-y-auto">
-            <li
-                v-for="cycle in cycles"
-                :key="cycle.id"
-                class="flex items-center gap-4 px-5 py-3"
-            >
-                <span
+        <!-- Sub-tabs + display dropdowns -->
+        <div
+            class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4"
+        >
+            <nav class="flex items-center gap-1 py-2 text-[12.5px]">
+                <Link
+                    v-for="tab in tabs"
+                    :key="tab.key"
+                    :href="tab.href"
                     :class="[
-                        'flex size-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold',
-                        cycle.is_current
-                            ? 'bg-brand text-brand-foreground'
-                            : 'bg-muted text-foreground',
+                        'rounded-md px-2 py-1 transition-colors',
+                        view === tab.key
+                            ? 'bg-accent text-foreground'
+                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
                     ]"
                 >
-                    {{ cycle.number }}
-                </span>
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[13.5px] font-medium">{{ cycle.name }}</span>
+                    {{ tab.label }}
+                </Link>
+            </nav>
+            <div class="flex items-center gap-1 text-muted-foreground">
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            type="button"
+                            class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
+                            aria-label="Filter"
+                            title="Filter"
+                        >
+                            <SlidersHorizontal class="size-3.5" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-56">
+                        <DropdownMenuLabel>Filter</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem
+                            :model-value="showCompleted"
+                            @update:model-value="showCompleted = !!$event"
+                        >
+                            Show completed
+                        </DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            type="button"
+                            class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
+                            aria-label="Display options"
+                            title="Display"
+                        >
+                            <LayoutGrid class="size-3.5" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-56">
+                        <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                            :model-value="sort"
+                            @update:model-value="(v) => applySort(v as SortKey)"
+                        >
+                            <DropdownMenuRadioItem value="date_desc">
+                                Date (newest first)
+                            </DropdownMenuRadioItem>
+                            <DropdownMenuRadioItem value="number_desc">
+                                Number (highest first)
+                            </DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div
+            v-if="!visibleCycles.length"
+            class="flex flex-1 items-center justify-center px-6 py-12 text-center"
+        >
+            <p class="text-sm text-muted-foreground">
+                {{
+                    !team
+                        ? 'Pick a team to view cycles.'
+                        : view === 'all'
+                            ? 'No cycles for this team.'
+                            : `No ${view} cycles.`
+                }}
+            </p>
+        </div>
+
+        <!-- Rows -->
+        <ul v-else class="flex-1 divide-y divide-border overflow-y-auto">
+            <li
+                v-for="cycle in visibleCycles"
+                :key="cycle.id"
+                class="group flex h-9 items-center gap-3 px-4 hover:bg-accent/40"
+            >
+                <Link
+                    :href="cycleHref(cycle)"
+                    class="flex min-w-0 flex-1 items-center gap-3"
+                >
+                    <span
+                        :class="[
+                            'flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold tabular-nums',
+                            cycle.is_current
+                                ? 'bg-indigo-500/15 text-indigo-500 ring-1 ring-inset ring-indigo-500/30'
+                                : cycle.completed_at
+                                    ? 'bg-muted text-muted-foreground'
+                                    : 'bg-muted text-foreground',
+                        ]"
+                    >
+                        {{ cycle.number }}
+                    </span>
+                    <div class="flex min-w-0 items-center gap-2">
+                        <span class="truncate text-[13px] text-foreground">
+                            {{ cycle.name }}
+                        </span>
                         <span
                             v-if="cycle.is_current"
-                            class="rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand"
+                            class="rounded-full border border-indigo-500/40 bg-indigo-500/10 px-1.5 py-px text-[10px] font-medium text-indigo-500"
                         >Current</span>
                         <CheckCircle2
                             v-if="cycle.completed_at"
-                            class="size-3.5 text-emerald-500"
-                            title="Completed"
+                            class="size-3 text-emerald-500"
+                            aria-label="Completed"
                         />
                     </div>
-                    <div class="mt-0.5 text-[12px] text-muted-foreground">
-                        {{ fmtDate(cycle.starts_at) }} → {{ fmtDate(cycle.ends_at) }}
-                    </div>
-                </div>
+                </Link>
+                <span class="hidden text-[11.5px] text-muted-foreground tabular-nums sm:inline">
+                    {{ fmtDate(cycle.starts_at) }} → {{ fmtDate(cycle.ends_at) }}
+                </span>
+                <button
+                    type="button"
+                    :class="[
+                        'rounded p-0.5 transition-colors',
+                        favoritedCycleIds.has(cycle.id)
+                            ? 'text-amber-400 hover:text-amber-500'
+                            : 'text-muted-foreground opacity-0 hover:bg-accent group-hover:opacity-100',
+                    ]"
+                    :aria-label="favoritedCycleIds.has(cycle.id) ? 'Unfavourite cycle' : 'Favourite cycle'"
+                    @click.stop.prevent="toggleCycleFavorite(cycle.id)"
+                >
+                    <Star
+                        class="size-3.5"
+                        :fill="favoritedCycleIds.has(cycle.id) ? 'currentColor' : 'none'"
+                    />
+                </button>
+                <Link
+                    :href="cycleHref(cycle)"
+                    class="text-muted-foreground"
+                    aria-label="Open cycle"
+                >
+                    <ChevronRight class="size-3.5" />
+                </Link>
             </li>
         </ul>
+
+        <!-- New Cycle dialog -->
+        <Dialog v-model:open="dialogOpen">
+            <DialogContent class="sm:max-w-[440px]">
+                <DialogHeader>
+                    <DialogTitle>New cycle</DialogTitle>
+                    <DialogDescription>
+                        Cycles bracket a span of work for the team.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form class="space-y-4" @submit.prevent="submitNewCycle">
+                    <div class="grid grid-cols-[1fr_88px] gap-3">
+                        <div class="grid gap-1.5">
+                            <Label for="cycle-name">Name</Label>
+                            <Input
+                                id="cycle-name"
+                                v-model="form.name"
+                                :placeholder="`Cycle ${form.number || nextNumberSuggestion}`"
+                                autocomplete="off"
+                            />
+                        </div>
+                        <div class="grid gap-1.5">
+                            <Label for="cycle-number">Number</Label>
+                            <Input
+                                id="cycle-number"
+                                v-model.number="form.number"
+                                type="number"
+                                min="1"
+                                step="1"
+                                class="tabular-nums"
+                            />
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="grid gap-1.5">
+                            <Label for="cycle-starts">Starts</Label>
+                            <Input
+                                id="cycle-starts"
+                                v-model="form.starts_at"
+                                type="date"
+                                required
+                            />
+                        </div>
+                        <div class="grid gap-1.5">
+                            <Label for="cycle-ends">Ends</Label>
+                            <Input
+                                id="cycle-ends"
+                                v-model="form.ends_at"
+                                type="date"
+                                required
+                            />
+                        </div>
+                    </div>
+                    <p
+                        v-if="formError"
+                        class="text-[12px] text-red-500"
+                    >
+                        {{ formError }}
+                    </p>
+                    <DialogFooter>
+                        <DialogClose as-child>
+                            <Button type="button" variant="secondary" @click="closeDialog">
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            type="submit"
+                            :disabled="submitting"
+                        >
+                            {{ submitting ? 'Creating…' : 'Create cycle' }}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>
