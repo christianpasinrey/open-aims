@@ -19,30 +19,43 @@ const workspace = computed<WorkspaceProp>(() => {
 const workspaceName = computed<string>(
     () => workspace.value.name ?? 'AIMS',
 );
-const initial = computed<string>(() =>
-    workspaceName.value.charAt(0).toUpperCase(),
-);
-const color = computed<string>(() => workspace.value.color ?? '#6366f1');
+
+// Two-letter initials. Single-word names → first two chars uppercased.
+// Multi-word names → first letter of first two words. repo's convention.
+const initials = computed<string>(() => {
+    const name = workspaceName.value.trim();
+    if (!name) return 'D';
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return (parts[0]!.charAt(0) + parts[1]!.charAt(0)).toUpperCase();
+    }
+
+    return name.slice(0, 2).toUpperCase();
+});
+
+const color = computed<string>(() => workspace.value.color ?? '#a855f7');
 const logoUrl = computed<string | null>(() => workspace.value.logo_url ?? null);
+
+const displayName = computed<string>(() => workspaceName.value.toLowerCase());
 </script>
 
 <template>
     <span
         v-if="!logoUrl"
-        class="flex aspect-square size-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold text-white uppercase"
+        class="flex aspect-square size-7 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold text-white tracking-tight"
         :style="{ backgroundColor: color }"
     >
-        {{ initial }}
+        {{ initials }}
     </span>
     <img
         v-else
         :src="logoUrl"
         :alt="workspaceName"
-        class="size-7 shrink-0 rounded-md object-cover"
+        class="size-7 shrink-0 rounded-full object-cover"
     />
     <div class="ml-1 grid flex-1 text-left">
         <span class="truncate text-[13px] leading-tight font-medium">{{
-            workspaceName
+            displayName
         }}</span>
     </div>
 </template>

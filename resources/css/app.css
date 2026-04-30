@@ -171,6 +171,45 @@
             'rlig' 1,
             'calt' 1;
     }
+
+    /* Ask the browser to render native widgets (select dropdowns, date
+       pickers, scrollbars, autofill) using the dark colour scheme so they
+       don't pop out as bright white in our dark UI. */
+    :root {
+        color-scheme: light;
+    }
+    :root.dark,
+    .dark {
+        color-scheme: dark;
+    }
+
+    /* Native <select> and <option> styled to match our shadcn theme.
+       Most browsers honour background-color and color on <option>. */
+    select {
+        background-color: var(--card);
+        color: var(--foreground);
+        border-color: var(--border);
+    }
+    select option {
+        background-color: var(--card);
+        color: var(--foreground);
+    }
+    select option:checked,
+    select option:hover {
+        background-color: var(--accent);
+        color: var(--accent-foreground);
+    }
+    select option:disabled {
+        color: var(--muted-foreground);
+    }
+
+    /* Native date inputs honour color-scheme; nudge the calendar icon
+       into the right contrast when forced. */
+    input[type='date'],
+    input[type='datetime-local'],
+    input[type='time'] {
+        color-scheme: inherit;
+    }
 }
 
 /* Markdown rendering for issue / project descriptions.
