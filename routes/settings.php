@@ -25,4 +25,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('settings/developer', [DeveloperController::class, 'show'])
         ->name('settings.developer');
+    Route::post('settings/developer/clients/dedupe', [DeveloperController::class, 'keepLatestPerClient'])
+        ->name('settings.developer.dedupe');
+    Route::post('settings/developer/clients/{clientId}/keep-latest', [DeveloperController::class, 'keepLatestForClient'])
+        ->name('settings.developer.client.keep-latest');
+    Route::delete('settings/developer/clients/{clientId}', [DeveloperController::class, 'revokeClient'])
+        ->name('settings.developer.client.revoke');
 });

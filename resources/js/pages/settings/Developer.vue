@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
-import { Terminal, Copy, ExternalLink, AlertTriangle } from 'lucide-vue-next';
+import { Head, router } from '@inertiajs/vue3';
+import { Terminal, Copy, ExternalLink, AlertTriangle, Trash2, Layers } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
@@ -15,11 +15,14 @@ defineOptions({
     },
 });
 
-type Token = {
-    id: number;
+type ConnectedClient = {
+    client_id: string;
     name: string;
-    last_used_at: string | null;
+    kind: string;
+    redirect_uri: string | null;
+    token_count: number;
     scopes: string[];
+    last_authorised_at: string | null;
 };
 
 const props = defineProps<{
@@ -27,11 +30,44 @@ const props = defineProps<{
         endpoint: string;
         oauth_authorize: string;
         oauth_token: string;
-        tokens: Token[];
+        clients: ConnectedClient[];
         connected: boolean;
-        status: 'not_configured' | 'configured' | 'connected';
+        status: 'not_connected' | 'connected';
     };
 }>();
+
+function fmtDate(iso: string | null): string {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function revokeClient(clientId: string, kind: string) {
+    if (!confirm(`Revoke every active token for ${kind}? This signs Claude out of aims from that client.`)) {
+        return;
+    }
+    router.delete(`/settings/developer/clients/${encodeURIComponent(clientId)}`, {
+        preserveScroll: true,
+    });
+}
+
+function keepLatestForClient(clientId: string) {
+    router.post(
+        `/settings/developer/clients/${encodeURIComponent(clientId)}/keep-latest`,
+        {},
+        { preserveScroll: true },
+    );
+}
+
+function dedupeAll() {
+    if (!confirm('Keep only the latest token per client and revoke the rest?')) return;
+    router.post('/settings/developer/clients/dedupe', {}, { preserveScroll: true });
+}
 
 const copied = ref<string | null>(null);
 function copy(value: string, label: string) {
@@ -98,31 +134,86 @@ const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint
                 <Terminal class="mt-0.5 size-4 shrink-0 text-emerald-500" />
                 <div class="space-y-1">
                     <div class="font-medium text-foreground">
-                        Connected · {{ mcp.tokens.length }}
-                        active token{{ mcp.tokens.length === 1 ? '' : 's' }}
+                        Connected · {{ mcp.clients.length }}
+                        device{{ mcp.clients.length === 1 ? '' : 's' }}
                     </div>
                     <p class="text-muted-foreground">
-                        Claude is authorised to operate this workspace via
-                        the MCP server.
+                        Claude is authorised to operate this workspace from
+                        the device(s) below.
                     </p>
                 </div>
             </div>
-            <ul
-                v-if="mcp.tokens.length"
-                class="ml-7 space-y-1 text-[12.5px] text-muted-foreground"
-            >
-                <li
-                    v-for="t in mcp.tokens"
-                    :key="t.id"
-                    class="flex items-center gap-2"
+        </div>
+
+        <!-- Connected devices table -->
+        <section v-if="mcp.clients.length" class="space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-[13px] font-medium text-foreground">
+                    Connected devices
+                </h3>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="h-8 gap-1 text-[12px]"
+                    @click="dedupeAll"
                 >
-                    <span class="size-1.5 shrink-0 rounded-full bg-emerald-500"></span>
-                    <span class="font-medium text-foreground">{{ t.name }}</span>
-                    <span class="text-muted-foreground">·</span>
-                    <span>{{ (t.scopes ?? []).join(', ') || 'mcp' }}</span>
+                    <Layers class="size-3.5" />
+                    Keep latest per device
+                </Button>
+            </div>
+            <ul class="divide-y divide-border rounded-md border border-border">
+                <li
+                    v-for="c in mcp.clients"
+                    :key="c.client_id"
+                    class="flex items-center gap-3 px-3 py-2.5 text-[12.5px]"
+                >
+                    <span class="size-2 shrink-0 rounded-full bg-emerald-500"></span>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 text-foreground">
+                            <span class="font-medium">{{ c.kind }}</span>
+                            <span
+                                v-if="c.platform"
+                                class="rounded-full border border-border bg-muted px-2 py-0.5 text-[10.5px] uppercase tracking-wide text-muted-foreground"
+                            >
+                                {{ c.platform }}<span v-if="c.browser && c.browser !== 'Other'"> · {{ c.browser }}</span>
+                            </span>
+                            <span
+                                v-if="c.token_count > 1"
+                                class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10.5px] uppercase tracking-wide text-amber-500"
+                            >
+                                {{ c.token_count }} tokens
+                            </span>
+                        </div>
+                        <div class="mt-0.5 text-[11.5px] text-muted-foreground">
+                            <span v-if="c.ip" class="font-mono">{{ c.ip }}</span>
+                            <span v-if="c.ip"> · </span>
+                            <span>last auth {{ fmtDate(c.last_authorised_at) }}</span>
+                        </div>
+                    </div>
+                    <Button
+                        v-if="c.token_count > 1"
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        class="h-7 text-[12px] text-muted-foreground hover:text-foreground"
+                        @click="keepLatestForClient(c.client_id)"
+                    >
+                        Dedupe
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        class="h-7 gap-1 text-[12px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        @click="revokeClient(c.client_id, c.kind)"
+                    >
+                        <Trash2 class="size-3.5" />
+                        Revoke
+                    </Button>
                 </li>
             </ul>
-        </div>
+        </section>
 
         <!-- Connector URL -->
         <section class="space-y-2">

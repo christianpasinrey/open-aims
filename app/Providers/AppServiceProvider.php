@@ -2,11 +2,14 @@
 
 namespace App\Providers;
 
+use App\Listeners\CaptureMcpClientMetadata;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
 
 class AppServiceProvider extends ServiceProvider
@@ -26,6 +29,11 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configurePassportScopes();
+
+        // Tag every issued OAuth access token with the originating
+        // device's User-Agent + IP so /settings/developer can render
+        // 'Claude Desktop · macOS' vs '… · Windows' separately.
+        Event::listen(AccessTokenCreated::class, CaptureMcpClientMetadata::class);
     }
 
     /**
