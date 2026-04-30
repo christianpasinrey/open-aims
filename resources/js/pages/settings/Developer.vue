@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { Terminal, Copy, ExternalLink, AlertTriangle, Trash2, Layers } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
@@ -30,11 +30,18 @@ const props = defineProps<{
         endpoint: string;
         oauth_authorize: string;
         oauth_token: string;
-        clients: ConnectedClient[];
+        clients?: ConnectedClient[] | null;
+        // Legacy field — older deploys still send `tokens` instead of
+        // `clients`. Treated as read-only for backwards compatibility.
+        tokens?: Array<{ id: number; name: string; scopes: string[] }> | null;
         connected: boolean;
-        status: 'not_connected' | 'connected';
+        status: 'not_connected' | 'connected' | 'not_configured' | 'configured';
     };
 }>();
+
+const clients = computed<ConnectedClient[]>(() =>
+    Array.isArray(props.mcp.clients) ? props.mcp.clients : [],
+);
 
 function fmtDate(iso: string | null): string {
     if (!iso) return '—';
@@ -134,8 +141,8 @@ const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint
                 <Terminal class="mt-0.5 size-4 shrink-0 text-emerald-500" />
                 <div class="space-y-1">
                     <div class="font-medium text-foreground">
-                        Connected · {{ mcp.clients.length }}
-                        device{{ mcp.clients.length === 1 ? '' : 's' }}
+                        Connected · {{ clients.length }}
+                        device{{ clients.length === 1 ? '' : 's' }}
                     </div>
                     <p class="text-muted-foreground">
                         Claude is authorised to operate this workspace from
@@ -146,7 +153,7 @@ const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint
         </div>
 
         <!-- Connected devices table -->
-        <section v-if="mcp.clients.length" class="space-y-3">
+        <section v-if="clients.length" class="space-y-3">
             <div class="flex items-center justify-between">
                 <h3 class="text-[13px] font-medium text-foreground">
                     Connected devices
@@ -164,7 +171,7 @@ const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint
             </div>
             <ul class="divide-y divide-border rounded-md border border-border">
                 <li
-                    v-for="c in mcp.clients"
+                    v-for="c in clients"
                     :key="c.client_id"
                     class="flex items-center gap-3 px-3 py-2.5 text-[12.5px]"
                 >
