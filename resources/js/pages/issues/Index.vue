@@ -261,6 +261,7 @@ function relativeTime(iso: string | null): string {
                                 v-if="issue.project"
                                 :name="issue.project.name"
                                 :color="issue.project.color"
+                                :icon="issue.project.icon"
                                 :slug="issue.project.slug"
                                 class="hidden md:inline-flex"
                             />

@@ -2,7 +2,6 @@
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import {
-    Box,
     Calendar,
     Layers,
     Plus,
@@ -10,6 +9,7 @@ import {
     LayoutGrid,
 } from 'lucide-vue-next';
 import Avatar from '@/components/repo/Avatar.vue';
+import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 
 type Member = { id: number; name: string };
 type Project = {
@@ -151,9 +151,10 @@ function ringStroke(percent: number, state: string | null) {
                         class="grid grid-cols-[1fr_120px_64px_180px_110px_70px_80px] items-center gap-4 px-4 py-2 hover:bg-accent/40"
                     >
                         <div class="flex min-w-0 items-center gap-2.5">
-                            <Box
-                                class="size-4 shrink-0"
-                                :style="{ color: project.color || '#a1a1aa' }"
+                            <ProjectIcon
+                                :icon="project.icon"
+                                :color="project.color"
+                                :size="18"
                             />
                             <span class="truncate text-[13px] text-foreground">{{ project.name }}</span>
                         </div>
