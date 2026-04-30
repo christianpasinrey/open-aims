@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { Bell, ChevronDown, ChevronRight, Plus, Star } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -7,6 +7,7 @@ import Avatar from '@/components/repo/Avatar.vue';
 import DisplayMenu from '@/components/repo/issues/DisplayMenu.vue';
 import FilterMenu from '@/components/repo/issues/FilterMenu.vue';
 import InlineComposer from '@/components/repo/issues/InlineComposer.vue';
+import SaveViewButton from '@/components/repo/views/SaveViewButton.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectChip from '@/components/repo/ProjectChip.vue';
@@ -76,6 +77,11 @@ const safeFilters = computed(() => ({
     group: (props.filters?.group ?? 'status') as GroupKey,
     sort: props.filters?.sort ?? 'priority',
 }));
+
+const workspacePage = usePage<{
+    workspace: { teams: Array<{ id: number; name: string; key: string; color: string | null }> } | null;
+}>();
+const workspaceTeams = computed(() => workspacePage.props.workspace?.teams ?? []);
 
 const TYPE_RANK: Record<string, number> = {
     triage: 0,
@@ -493,6 +499,7 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                         :fill="favourited ? 'currentColor' : 'none'"
                     />
                 </button>
+                <SaveViewButton :filters="safeFilters" :teams="workspaceTeams" />
             </div>
             <Link
                 href="/inbox"

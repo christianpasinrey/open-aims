@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Teams\Models\Team;
+use App\Modules\Views\Models\IssueView;
 use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\Request;
@@ -100,6 +101,32 @@ class HandleInertiaRequests extends Middleware
             })
             ->all();
 
+        $userId = (int) (auth()->id() ?? 0);
+        $favouriteViews = [];
+        if ($userId > 0) {
+            $favouriteViews = IssueView::query()
+                ->where('workspace_id', $workspace->getKey())
+                ->where('is_favorite', true)
+                ->where(function ($q) use ($userId): void {
+                    $q->where(function ($qq) use ($userId): void {
+                        $qq->where('scope', 'personal')->where('owner_user_id', $userId);
+                    })
+                        ->orWhere('scope', 'team')
+                        ->orWhere('scope', 'workspace');
+                })
+                ->with('team:id,key,name')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'scope', 'team_id', 'owner_user_id', 'sort_order'])
+                ->map(fn (IssueView $v): array => [
+                    'id' => $v->id,
+                    'name' => $v->name,
+                    'scope' => $v->scope?->value,
+                    'team_key' => $v->team?->key,
+                ])
+                ->all();
+        }
+
         return [
             'id' => $workspace->id,
             'name' => $workspace->name,
@@ -107,6 +134,7 @@ class HandleInertiaRequests extends Middleware
             'color' => self::workspaceColor($workspace),
             'logo_url' => $workspace->logo_url,
             'teams' => $teams,
+            'favourite_views' => $favouriteViews,
         ];
     }
 

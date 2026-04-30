@@ -20,6 +20,7 @@ import {
     MoreHorizontal,
     Target,
     Layers,
+    Star,
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
@@ -66,6 +67,12 @@ type WorkspaceTeam = {
     current_cycle_number?: number | null;
     upcoming_cycle_number?: number | null;
 };
+type FavouriteView = {
+    id: number;
+    name: string;
+    scope: 'personal' | 'team' | 'workspace' | null;
+    team_key: string | null;
+};
 type WorkspaceProp = {
     id: number;
     name: string;
@@ -73,6 +80,7 @@ type WorkspaceProp = {
     color?: string | null;
     logo_url?: string | null;
     teams: WorkspaceTeam[];
+    favourite_views?: FavouriteView[];
 };
 type UserWorkspace = {
     id: number;
@@ -97,6 +105,9 @@ const userWorkspaces = computed<UserWorkspace[]>(() => {
     return Array.isArray(list) ? list : [];
 });
 const teams = computed<WorkspaceTeam[]>(() => workspace.value?.teams ?? []);
+const favouriteViews = computed<FavouriteView[]>(
+    () => workspace.value?.favourite_views ?? [],
+);
 
 const currentUrl = computed<string>(() => {
     const url = (page as unknown as { url?: string }).url;
@@ -124,6 +135,12 @@ const currentAssigneeParam = computed<string | null>(() =>
 const onIssuesIndex = computed(() => currentPath.value === '/issues');
 const onProjectsIndex = computed(() => currentPath.value === '/projects');
 const onCyclesIndex = computed(() => currentPath.value === '/cycles');
+const onInitiativesIndex = computed(
+    () => currentPath.value === '/initiatives' || currentPath.value.startsWith('/initiatives/'),
+);
+const onViewsIndex = computed(
+    () => currentPath.value === '/views' || currentPath.value.startsWith('/views/'),
+);
 const isInboxActive = computed(() => currentPath.value === '/inbox');
 const isMyIssuesActive = computed(
     () => onIssuesIndex.value && currentAssigneeParam.value === 'me',
@@ -131,6 +148,12 @@ const isMyIssuesActive = computed(
 const isProjectsActive = computed(
     () => onProjectsIndex.value && currentTeamParam.value === null,
 );
+const isInitiativesActive = computed(() => onInitiativesIndex.value);
+const isViewsActive = computed(
+    () => onViewsIndex.value && currentTeamParam.value === null,
+);
+const isTeamViewsActive = (key: string) =>
+    onViewsIndex.value && currentTeamParam.value === key.toUpperCase();
 const isTeamIssuesActive = (key: string) =>
     onIssuesIndex.value && currentTeamParam.value === key.toUpperCase();
 const isTeamProjectsActive = (key: string) =>
@@ -142,6 +165,8 @@ const isTeamMembersActive = (key: string) =>
 
 // ----- Workspace section toggle (Initiatives / Projects / Views) -----
 const workspaceOpen = ref(true);
+// ----- Favourites section toggle -----
+const favouritesOpen = ref(true);
 
 // ----- Search dialog (Cmd+K / Ctrl+K) -----
 const searchOpen = ref(false);
@@ -438,12 +463,14 @@ const tryOpen = ref(false);
                 <SidebarMenu v-show="workspaceOpen">
                     <SidebarMenuItem>
                         <SidebarMenuButton
-                            disabled
-                            tooltip="Initiatives (coming soon)"
-                            class="text-muted-foreground/70"
+                            as-child
+                            :is-active="isInitiativesActive"
+                            tooltip="Initiatives"
                         >
-                            <Target />
-                            <span>Initiatives</span>
+                            <Link :href="'/initiatives'">
+                                <Target />
+                                <span>Initiatives</span>
+                            </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
@@ -460,12 +487,41 @@ const tryOpen = ref(false);
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                         <SidebarMenuButton
-                            disabled
-                            tooltip="Views (coming soon)"
-                            class="text-muted-foreground/70"
+                            as-child
+                            :is-active="isViewsActive"
+                            tooltip="Views"
                         >
-                            <Layers />
-                            <span>Views</span>
+                            <Link :href="'/views'">
+                                <Layers />
+                                <span>Views</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarGroup v-if="favouriteViews.length" class="px-2 py-0">
+                <button
+                    type="button"
+                    class="flex w-full items-center gap-1 px-2 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
+                    @click="favouritesOpen = !favouritesOpen"
+                >
+                    <ChevronRight
+                        class="size-3 transition-transform"
+                        :class="{ 'rotate-90': favouritesOpen }"
+                    />
+                    Favourites
+                </button>
+                <SidebarMenu v-show="favouritesOpen">
+                    <SidebarMenuItem
+                        v-for="fv in favouriteViews"
+                        :key="fv.id"
+                    >
+                        <SidebarMenuButton as-child :tooltip="fv.name">
+                            <Link :href="`/views/${fv.id}`">
+                                <Star class="text-amber-400" />
+                                <span class="truncate">{{ fv.name }}</span>
+                            </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
@@ -594,6 +650,17 @@ const tryOpen = ref(false);
                                     <Link :href="`/projects?team=${team.key}`">
                                         <FolderKanban class="size-3.5" />
                                         <span>Projects</span>
+                                    </Link>
+                                </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                                <SidebarMenuSubButton
+                                    as-child
+                                    :is-active="isTeamViewsActive(team.key)"
+                                >
+                                    <Link :href="`/views?scope=team&team=${team.key}`">
+                                        <Layers class="size-3.5" />
+                                        <span>Views</span>
                                     </Link>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
