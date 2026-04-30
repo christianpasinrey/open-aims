@@ -128,6 +128,33 @@ final class IssueWriteController
         return back();
     }
 
+    public function archive(Request $request, string $identifier): RedirectResponse
+    {
+        $issue = $this->resolveIssue($identifier);
+        $issue->forceFill(['archived_at' => now()])->save();
+
+        return redirect()->route('issues.index', [
+            'team' => $issue->team()->value('key'),
+        ]);
+    }
+
+    public function unarchive(Request $request, string $identifier): RedirectResponse
+    {
+        $issue = $this->resolveIssue($identifier);
+        $issue->forceFill(['archived_at' => null])->save();
+
+        return back();
+    }
+
+    public function destroy(Request $request, string $identifier): RedirectResponse
+    {
+        $issue = $this->resolveIssue($identifier);
+        $teamKey = $issue->team()->value('key');
+        $issue->delete();
+
+        return redirect()->route('issues.index', ['team' => $teamKey]);
+    }
+
     private function resolveIssue(string $identifier): Issue
     {
         if (preg_match('/^([A-Za-z]+)-(\d+)$/', $identifier, $m) !== 1) {

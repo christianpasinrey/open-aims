@@ -8,7 +8,8 @@ import {
     Network,
     Trash2,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { router } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
@@ -19,6 +20,15 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 type RelatedIssue = {
     identifier: string;
@@ -70,6 +80,41 @@ function copyId(): void {
 }
 function copyBranch(): void {
     copy(branchName.value, 'Branch name copied');
+}
+
+const archiving = ref(false);
+const confirmDeleteOpen = ref(false);
+const deleting = ref(false);
+
+function archiveIssue(): void {
+    if (archiving.value) return;
+    archiving.value = true;
+    router.post(
+        `/issues/${props.identifier}/archive`,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: () => toast.success(`${props.identifier} archived`),
+            onError: () => toast.error('Could not archive'),
+            onFinish: () => {
+                archiving.value = false;
+            },
+        },
+    );
+}
+
+function deleteIssue(): void {
+    if (deleting.value) return;
+    deleting.value = true;
+    router.delete(`/issues/${props.identifier}`, {
+        preserveScroll: false,
+        onSuccess: () => toast.success(`${props.identifier} deleted`),
+        onError: () => toast.error('Could not delete'),
+        onFinish: () => {
+            deleting.value = false;
+            confirmDeleteOpen.value = false;
+        },
+    });
 }
 </script>
 
@@ -155,15 +200,46 @@ function copyBranch(): void {
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-44">
-                <DropdownMenuItem disabled>
+                <DropdownMenuItem :disabled="archiving" @select="archiveIssue">
                     <Archive class="size-3.5" />
-                    <span>Archive issue</span>
+                    <span>{{ archiving ? 'Archiving…' : 'Archive issue' }}</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled variant="destructive">
+                <DropdownMenuItem
+                    variant="destructive"
+                    @select="confirmDeleteOpen = true"
+                >
                     <Trash2 class="size-3.5" />
                     <span>Delete issue</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
+
+        <Dialog v-model:open="confirmDeleteOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Delete {{ identifier }}?</DialogTitle>
+                    <DialogDescription>
+                        This permanently removes the issue, its comments and
+                        any linked PRs. This action cannot be undone.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="ghost"
+                        :disabled="deleting"
+                        @click="confirmDeleteOpen = false"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        :disabled="deleting"
+                        @click="deleteIssue"
+                    >
+                        {{ deleting ? 'Deleting…' : 'Delete issue' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

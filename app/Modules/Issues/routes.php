@@ -16,4 +16,13 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::patch('issues/{identifier}', [IssueWriteController::class, 'update'])
         ->where('identifier', '[A-Za-z]+-\d+')
         ->name('issues.update');
+    Route::post('issues/{identifier}/archive', [IssueWriteController::class, 'archive'])
+        ->where('identifier', '[A-Za-z]+-\d+')
+        ->name('issues.archive');
+    Route::post('issues/{identifier}/unarchive', [IssueWriteController::class, 'unarchive'])
+        ->where('identifier', '[A-Za-z]+-\d+')
+        ->name('issues.unarchive');
+    Route::delete('issues/{identifier}', [IssueWriteController::class, 'destroy'])
+        ->where('identifier', '[A-Za-z]+-\d+')
+        ->name('issues.destroy');
 });
