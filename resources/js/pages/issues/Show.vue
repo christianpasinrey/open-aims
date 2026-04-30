@@ -1,25 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import {
-    ArrowLeft,
-    Calendar,
-    ChevronDown,
-    Copy,
-    GitBranch,
-    Link as LinkIcon,
-    Network,
-    Play,
-    Plus,
-} from 'lucide-vue-next';
+import { ArrowLeft, ChevronDown } from 'lucide-vue-next';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
-import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import Avatar from '@/components/repo/Avatar.vue';
-import LabelBadge from '@/components/repo/LabelBadge.vue';
-import ProjectChip from '@/components/repo/ProjectChip.vue';
 import { renderMarkdown } from '@/lib/markdown';
 
-type State = { id: number; name: string; type: string; color: string };
+import StatusPicker from '@/components/repo/issues/StatusPicker.vue';
+import PriorityPicker from '@/components/repo/issues/PriorityPicker.vue';
+import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
+import CyclePicker from '@/components/repo/issues/CyclePicker.vue';
+import ProjectPicker from '@/components/repo/issues/ProjectPicker.vue';
+import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
+import DueDatePicker from '@/components/repo/issues/DueDatePicker.vue';
+import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
+import IssueActions from '@/components/repo/issues/IssueActions.vue';
+import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
+import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
+
+type State = { id: number; name: string; type: string; color: string; position: number };
 type Label = { id: number; name: string; color?: string | null };
 type User = { id: number; name: string; email: string };
 type Cycle = {
@@ -28,6 +27,13 @@ type Cycle = {
     name: string | null;
     starts_at: string | null;
     ends_at: string | null;
+};
+type Project = {
+    id: number;
+    name: string;
+    slug: string;
+    color: string | null;
+    icon: string | null;
 };
 type Issue = {
     id: number;
@@ -39,16 +45,10 @@ type Issue = {
     priority_label: string;
     estimate: number | null;
     due_date: string | null;
-    state: State | null;
+    state: { id: number; name: string; type: string; color: string } | null;
     assignee: User | null;
     creator: User | null;
-    project: {
-        id: number;
-        name: string;
-        slug: string;
-        color: string | null;
-        icon: string | null;
-    } | null;
+    project: Project | null;
     cycle: Cycle | null;
     labels: Label[];
     parent: { identifier: string; title: string } | null;
@@ -78,11 +78,11 @@ const props = defineProps<{
     issue: Issue;
     comments: Comment[];
     states: State[];
+    cycles: Cycle[];
+    labels: Label[];
+    projects: Project[];
+    priorities: Record<string, string>;
 }>();
-
-const descriptionHtml = computed<string>(() =>
-    renderMarkdown(props.issue.description),
-);
 
 const commentBodies = computed<Record<number, string>>(() =>
     Object.fromEntries(props.comments.map((c) => [c.id, renderMarkdown(c.body)])),
@@ -109,15 +109,14 @@ function relativeTime(iso: string | null): string {
     return fmtDate(iso);
 }
 
-// Strip time from a date and return midnight ms.
 function dayMs(iso: string): number {
     const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
     return new Date(y!, (m ?? 1) - 1, d ?? 1).getTime();
 }
 
-const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
+const isOverdue = computed<boolean>(() => {
     const iso = props.issue.due_date;
-    if (!iso) return null;
+    if (!iso) return false;
     const target = dayMs(iso);
     const now = new Date();
     const today = new Date(
@@ -125,28 +124,10 @@ const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
         now.getMonth(),
         now.getDate(),
     ).getTime();
-    const diffDays = Math.round((target - today) / 86_400_000);
-    let label: string;
-    if (diffDays === 0) label = 'Today';
-    else if (diffDays === 1) label = 'Tomorrow';
-    else if (diffDays === -1) label = 'Yesterday';
-    else if (diffDays > 1 && diffDays < 7) {
-        label = new Date(target).toLocaleDateString(undefined, {
-            weekday: 'long',
-        });
-    } else {
-        const sameYear =
-            new Date(target).getFullYear() === now.getFullYear();
-        label = new Date(target).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            ...(sameYear ? {} : { year: 'numeric' }),
-        });
-    }
-    const isCompleted =
+    const completed =
         props.issue.state?.type === 'completed' ||
         props.issue.state?.type === 'canceled';
-    return { label, isOverdue: diffDays < 0 && !isCompleted };
+    return target < today && !completed;
 });
 </script>
 
@@ -174,65 +155,33 @@ const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
                 >{{ issue.identifier }}</span
             >
 
-            <div class="ml-auto flex items-center gap-0.5 text-muted-foreground">
-                <button
-                    type="button"
-                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="Copy link"
-                >
-                    <LinkIcon class="size-4" />
-                </button>
-                <button
-                    type="button"
-                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="Copy ID"
-                >
-                    <Copy class="size-4" />
-                </button>
-                <button
-                    type="button"
-                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="Branch"
-                >
-                    <GitBranch class="size-4" />
-                </button>
-                <button
-                    type="button"
-                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="Relations"
-                >
-                    <Network class="size-4" />
-                </button>
-                <button
-                    type="button"
-                    class="ml-1 inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="More"
-                >
-                    <ChevronDown class="size-4" />
-                </button>
-            </div>
+            <IssueActions
+                :identifier="issue.identifier"
+                :title="issue.title"
+                :related="
+                    issue.children.map((c) => ({
+                        identifier: c.identifier,
+                        title: c.title,
+                        state: c.state,
+                    }))
+                "
+            />
         </header>
 
         <div class="flex min-h-0 flex-1">
             <div class="flex min-w-0 flex-1 flex-col overflow-y-auto">
                 <div class="mx-auto w-full max-w-3xl px-8 py-8">
-                    <h1
-                        class="text-[22px] font-semibold leading-tight tracking-tight text-foreground"
-                    >
-                        {{ issue.title }}
-                    </h1>
+                    <InlineTitleEditor
+                        :identifier="issue.identifier"
+                        :title="issue.title"
+                    />
 
-                    <div
-                        v-if="descriptionHtml"
-                        class="markdown-body mt-6"
-                        v-html="descriptionHtml"
-                    ></div>
-                    <p
-                        v-else
-                        class="mt-6 text-[14px] italic text-muted-foreground"
-                    >
-                        No description.
-                    </p>
+                    <div class="mt-6">
+                        <InlineDescriptionEditor
+                            :identifier="issue.identifier"
+                            :description="issue.description"
+                        />
+                    </div>
 
                     <section class="mt-10">
                         <h2
@@ -289,97 +238,36 @@ const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
                             <span>Properties</span>
                             <ChevronDown class="size-3" />
                         </button>
-                        <div class="mt-2 flex flex-col gap-1.5">
-                            <!-- Status -->
-                            <button
-                                type="button"
-                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
-                            >
-                                <template v-if="issue.state">
-                                    <StatusIcon
-                                        :type="issue.state.type"
-                                        :color="issue.state.color"
-                                    />
-                                    <span>{{ issue.state.name }}</span>
-                                </template>
-                                <template v-else>
-                                    <span
-                                        class="size-3.5 rounded-full border border-dashed border-border"
-                                    ></span>
-                                    <span class="text-muted-foreground">—</span>
-                                </template>
-                            </button>
-
-                            <!-- Priority -->
-                            <button
-                                type="button"
-                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
-                            >
-                                <PriorityIcon :priority="issue.priority" :size="14" />
-                                <span>{{ issue.priority_label }}</span>
-                            </button>
-
-                            <!-- Assignee -->
-                            <button
-                                type="button"
-                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
-                            >
-                                <template v-if="issue.assignee">
-                                    <Avatar
-                                        :name="issue.assignee.name"
-                                        :email="issue.assignee.email"
-                                        :size="18"
-                                    />
-                                    <span>{{ issue.assignee.name }}</span>
-                                </template>
-                                <template v-else>
-                                    <span
-                                        class="size-3.5 rounded-full border border-dashed border-border"
-                                    ></span>
-                                    <span class="text-muted-foreground">Unassigned</span>
-                                </template>
-                            </button>
-
-                            <!-- Cycle -->
-                            <button
-                                type="button"
-                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
-                            >
-                                <template v-if="issue.cycle">
-                                    <Play
-                                        class="size-3.5 shrink-0 fill-indigo-400 text-indigo-400"
-                                    />
-                                    <span>Cycle {{ issue.cycle.number }}</span>
-                                </template>
-                                <template v-else>
-                                    <span
-                                        class="size-3.5 rounded-full border border-dashed border-border"
-                                    ></span>
-                                    <span class="text-muted-foreground">No cycle</span>
-                                </template>
-                            </button>
-
-                            <!-- Due date -->
-                            <button
-                                v-if="dueInfo"
-                                type="button"
-                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] hover:bg-accent/60"
-                                :class="
-                                    dueInfo.isOverdue
-                                        ? 'text-red-400'
-                                        : 'text-foreground'
-                                "
-                            >
-                                <Calendar
-                                    class="size-3.5 shrink-0"
-                                    :class="
-                                        dueInfo.isOverdue
-                                            ? 'text-red-400'
-                                            : 'text-muted-foreground'
-                                    "
-                                />
-                                <span>{{ dueInfo.label }}</span>
-                            </button>
+                        <div class="mt-2 flex flex-col gap-1">
+                            <StatusPicker
+                                :identifier="issue.identifier"
+                                :states="states"
+                                :current="issue.state"
+                            />
+                            <PriorityPicker
+                                :identifier="issue.identifier"
+                                :current="issue.priority"
+                                :current-label="issue.priority_label"
+                                :priorities="priorities"
+                            />
+                            <AssigneePicker
+                                :identifier="issue.identifier"
+                                :current="issue.assignee"
+                            />
+                            <CyclePicker
+                                :identifier="issue.identifier"
+                                :cycles="cycles"
+                                :current="issue.cycle"
+                            />
+                            <DueDatePicker
+                                :identifier="issue.identifier"
+                                :current="issue.due_date"
+                                :overdue="isOverdue"
+                            />
+                            <EstimatePicker
+                                :identifier="issue.identifier"
+                                :current="issue.estimate"
+                            />
                         </div>
                     </section>
 
@@ -393,31 +281,11 @@ const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
                             <ChevronDown class="size-3" />
                         </button>
                         <div class="mt-2">
-                            <template v-if="issue.labels.length">
-                                <div class="flex flex-wrap items-center gap-1.5">
-                                    <LabelBadge
-                                        v-for="label in issue.labels"
-                                        :key="label.id"
-                                        :name="label.name"
-                                        :color="label.color"
-                                    />
-                                    <button
-                                        type="button"
-                                        class="inline-flex size-[18px] items-center justify-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-                                        aria-label="Add label"
-                                    >
-                                        <Plus class="size-3" />
-                                    </button>
-                                </div>
-                            </template>
-                            <button
-                                v-else
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2 py-px text-[11px] leading-[16px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-                            >
-                                <Plus class="size-3" />
-                                <span>Add label</span>
-                            </button>
+                            <LabelsPicker
+                                :identifier="issue.identifier"
+                                :labels="labels"
+                                :current="issue.labels"
+                            />
                         </div>
                     </section>
 
@@ -431,22 +299,11 @@ const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
                             <ChevronDown class="size-3" />
                         </button>
                         <div class="mt-2">
-                            <ProjectChip
-                                v-if="issue.project"
-                                :name="issue.project.name"
-                                :color="issue.project.color"
-                                :icon="issue.project.icon"
-                                :slug="issue.project.slug"
-                                :href="`/projects/${issue.project.slug}`"
+                            <ProjectPicker
+                                :identifier="issue.identifier"
+                                :projects="projects"
+                                :current="issue.project"
                             />
-                            <button
-                                v-else
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-                            >
-                                <Plus class="size-3" />
-                                <span>Add to project</span>
-                            </button>
                         </div>
                     </section>
 
@@ -486,7 +343,7 @@ const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
                                 <div
                                     class="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
                                 >
-                                    Related
+                                    Sub-issues
                                 </div>
                                 <ul class="flex flex-col">
                                     <li
