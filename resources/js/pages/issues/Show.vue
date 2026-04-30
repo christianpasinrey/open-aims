@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, ChevronDown } from 'lucide-vue-next';
+import { ArrowLeft, ChevronDown, Star } from 'lucide-vue-next';
 import { computed } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
+import { useFavourites } from '@/composables/useFavourites';
 
 import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
 import CyclePicker from '@/components/repo/issues/CyclePicker.vue';
@@ -156,6 +157,23 @@ function dayMs(iso: string): number {
     return new Date(y!, (m ?? 1) - 1, d ?? 1).getTime();
 }
 
+// ─── Favourites ─────────────────────────────────────────────────────────
+const { isFavourited, toggle: toggleFavServer } = useFavourites();
+const isStarred = computed<boolean>(() =>
+    isFavourited('issue', props.issue.id),
+);
+function toggleStar() {
+    toggleFavServer({
+        kind: 'issue',
+        href: `/issues/${props.issue.identifier}`,
+        label: `${props.issue.identifier} ${props.issue.title}`,
+        icon: 'Circle',
+        color: props.team.color ?? null,
+        target_type: 'App\\Modules\\Issues\\Models\\Issue',
+        target_id: props.issue.id,
+    });
+}
+
 const isOverdue = computed<boolean>(() => {
     const iso = props.issue.due_date;
 
@@ -201,6 +219,21 @@ const isOverdue = computed<boolean>(() => {
             <span class="font-mono text-[12px] text-muted-foreground">{{
                 issue.identifier
             }}</span>
+
+            <button
+                type="button"
+                :class="[
+                    'transition-colors',
+                    isStarred
+                        ? 'text-amber-400 hover:text-amber-500'
+                        : 'text-muted-foreground hover:text-foreground',
+                ]"
+                :aria-label="isStarred ? 'Unfavourite' : 'Favourite'"
+                :title="isStarred ? 'Unfavourite' : 'Favourite'"
+                @click="toggleStar"
+            >
+                <Star class="size-3.5" :fill="isStarred ? 'currentColor' : 'none'" />
+            </button>
 
             <IssueActions
                 :identifier="issue.identifier"

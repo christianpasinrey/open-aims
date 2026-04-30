@@ -11,7 +11,7 @@ import {
     SlidersHorizontal,
     Star,
 } from 'lucide-vue-next';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -125,102 +125,45 @@ function applySort(s: SortKey) {
     });
 }
 
-// ─── localStorage favourites ─────────────────────────────────────────────
-const FAV_VIEW_PREFIX = 'aims:fav-cycle-view:';
-const FAV_CYCLE_PREFIX = 'aims:fav-cycle:';
+// ─── Favourites (server-side) ────────────────────────────────────────────
+const { isFavourited, toggle: toggleFav } = useFavourites();
 
-const teamViewFavorited = ref(false);
-const favoritedCycleIds = ref<Set<number>>(new Set());
-
-function readFavView(): boolean {
-    if (!teamKey.value) {
-        return false;
-    }
-
-    try {
-        return localStorage.getItem(FAV_VIEW_PREFIX + teamKey.value) === '1';
-    } catch {
-        return false;
-    }
-}
-function readFavCycles(): Set<number> {
-    if (!teamKey.value) {
-        return new Set();
-    }
-
-    try {
-        const raw = localStorage.getItem(FAV_CYCLE_PREFIX + teamKey.value);
-
-        if (!raw) {
-            return new Set();
-        }
-
-        const arr = JSON.parse(raw) as unknown;
-
-        if (!Array.isArray(arr)) {
-            return new Set();
-        }
-
-        return new Set(arr.filter((v): v is number => typeof v === 'number'));
-    } catch {
-        return new Set();
-    }
-}
-
-function writeFavView(v: boolean) {
-    if (!teamKey.value) {
-        return;
-    }
-
-    try {
-        localStorage.setItem(FAV_VIEW_PREFIX + teamKey.value, v ? '1' : '0');
-    } catch {
-        /* ignore */
-    }
-}
-function writeFavCycles(set: Set<number>) {
-    if (!teamKey.value) {
-        return;
-    }
-
-    try {
-        localStorage.setItem(
-            FAV_CYCLE_PREFIX + teamKey.value,
-            JSON.stringify([...set]),
-        );
-    } catch {
-        /* ignore */
-    }
-}
-
-onMounted(() => {
-    teamViewFavorited.value = readFavView();
-    favoritedCycleIds.value = readFavCycles();
-});
-
-watch(
-    () => teamKey.value,
-    () => {
-        teamViewFavorited.value = readFavView();
-        favoritedCycleIds.value = readFavCycles();
-    },
+const teamCyclesHref = computed<string>(() =>
+    teamKey.value ? `/cycles?team=${teamKey.value}` : '/cycles',
+);
+const teamViewFavorited = computed<boolean>(() =>
+    isFavourited('team_view', teamCyclesHref.value),
 );
 
 function toggleTeamViewFavorite() {
-    teamViewFavorited.value = !teamViewFavorited.value;
-    writeFavView(teamViewFavorited.value);
+    toggleFav({
+        kind: 'team_view',
+        href: teamCyclesHref.value,
+        label: props.team
+            ? `${props.team.name} · Cycles`
+            : 'Cycles',
+        icon: 'CalendarRange',
+        color: props.team?.color ?? null,
+    });
 }
-function toggleCycleFavorite(id: number) {
-    const next = new Set(favoritedCycleIds.value);
 
-    if (next.has(id)) {
-        next.delete(id);
-    } else {
-        next.add(id);
-    }
+function isCycleFav(cycle: Cycle): boolean {
+    return isFavourited('cycle', cycle.id);
+}
 
-    favoritedCycleIds.value = next;
-    writeFavCycles(next);
+function toggleCycleFavorite(cycle: Cycle) {
+    const href = teamKey.value
+        ? `/cycles/${cycle.number}?team=${teamKey.value}`
+        : `/cycles/${cycle.number}`;
+    toggleFav({
+        kind: 'cycle',
+        href,
+        label: cycle.name || `Cycle ${cycle.number}`,
+        icon: 'CalendarRange',
+        color: props.team?.color ?? null,
+        target_type: 'App\\Modules\\Cycles\\Models\\Cycle',
+        target_id: cycle.id,
+    });
 }
 
 // ─── New Cycle dialog ────────────────────────────────────────────────────
@@ -564,24 +507,20 @@ function cycleHref(c: Cycle): string {
                     type="button"
                     :class="[
                         'rounded p-0.5 transition-colors',
-                        favoritedCycleIds.has(cycle.id)
+                        isCycleFav(cycle)
                             ? 'text-amber-400 hover:text-amber-500'
                             : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent',
                     ]"
                     :aria-label="
-                        favoritedCycleIds.has(cycle.id)
+                        isCycleFav(cycle)
                             ? 'Unfavourite cycle'
                             : 'Favourite cycle'
                     "
-                    @click.stop.prevent="toggleCycleFavorite(cycle.id)"
+                    @click.stop.prevent="toggleCycleFavorite(cycle)"
                 >
                     <Star
                         class="size-3.5"
-                        :fill="
-                            favoritedCycleIds.has(cycle.id)
-                                ? 'currentColor'
-                                : 'none'
-                        "
+                        :fill="isCycleFav(cycle) ? 'currentColor' : 'none'"
                     />
                 </button>
                 <Link

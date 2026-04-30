@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import type { FormDataConvertible } from '@inertiajs/core';
 import { Layers, Plus, Star, MoreHorizontal } from 'lucide-vue-next';
 import Avatar from '@/components/repo/Avatar.vue';
+import { useFavourites } from '@/composables/useFavourites';
 import {
     Dialog,
     DialogClose,
@@ -74,12 +75,20 @@ function fmtShort(iso: string | null): string {
     });
 }
 
+const { isFavourited, toggle: toggleFavServer } = useFavourites();
+function isViewFavourited(view: ViewItem): boolean {
+    return isFavourited('view', view.id) || view.is_favorite;
+}
 function toggleFavorite(view: ViewItem, e: Event) {
     e.preventDefault();
     e.stopPropagation();
-    router.post(`/views/${view.id}/favorite`, {}, {
-        preserveScroll: true,
-        preserveState: false,
+    toggleFavServer({
+        kind: 'view',
+        href: `/views/${view.id}`,
+        label: view.name,
+        icon: 'Eye',
+        target_type: 'App\\Modules\\Views\\Models\\IssueView',
+        target_id: view.id,
     });
 }
 
@@ -335,17 +344,17 @@ defineExpose({ openNewWithPreset });
                             type="button"
                             class="absolute right-9 top-1/2 -translate-y-1/2 rounded p-1 transition-opacity"
                             :class="[
-                                v.is_favorite
+                                isViewFavourited(v)
                                     ? 'text-amber-400 opacity-100 hover:bg-accent'
                                     : 'text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/row:opacity-100',
                             ]"
-                            :aria-label="v.is_favorite ? 'Unfavourite' : 'Favourite'"
-                            :title="v.is_favorite ? 'Unfavourite' : 'Favourite'"
+                            :aria-label="isViewFavourited(v) ? 'Unfavourite' : 'Favourite'"
+                            :title="isViewFavourited(v) ? 'Unfavourite' : 'Favourite'"
                             @click="toggleFavorite(v, $event)"
                         >
                             <Star
                                 class="size-3.5"
-                                :fill="v.is_favorite ? 'currentColor' : 'none'"
+                                :fill="isViewFavourited(v) ? 'currentColor' : 'none'"
                             />
                         </button>
                         <DropdownMenu v-if="v.is_owner">

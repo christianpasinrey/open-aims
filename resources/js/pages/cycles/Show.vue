@@ -16,6 +16,7 @@ import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectChip from '@/components/repo/ProjectChip.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
+import { useFavourites } from '@/composables/useFavourites';
 import { startedProgressByState } from '@/lib/states';
 
 type Team = { id: number; name: string; key: string; color: string | null };
@@ -308,26 +309,22 @@ const startedPercent = computed<number>(() => {
     return Math.round((props.progress.started / props.progress.total) * 100);
 });
 
-// ─── Favourites (localStorage) ──────────────────────────────────────────
-const FAV_KEY = `aims:fav-cycle:${props.team.key}:${props.cycle.id}`;
-const cycleFav = ref(false);
-function readFav(): boolean {
-    try {
-        return localStorage.getItem(FAV_KEY) === '1';
-    } catch {
-        return false;
-    }
-}
-function writeFav(v: boolean) {
-    try {
-        localStorage.setItem(FAV_KEY, v ? '1' : '0');
-    } catch {
-        /* ignore */
-    }
-}
+// ─── Favourites (server-side) ───────────────────────────────────────────
+const { isFavourited, toggle: toggleFavServer } = useFavourites();
+const cycleFav = computed<boolean>(() =>
+    isFavourited('cycle', props.cycle.id),
+);
 function toggleFav() {
-    cycleFav.value = !cycleFav.value;
-    writeFav(cycleFav.value);
+    const href = `/cycles/${props.cycle.number}?team=${props.team.key}`;
+    toggleFavServer({
+        kind: 'cycle',
+        href,
+        label: props.cycle.name || `Cycle ${props.cycle.number}`,
+        icon: 'CalendarRange',
+        color: props.team.color ?? null,
+        target_type: 'App\\Modules\\Cycles\\Models\\Cycle',
+        target_id: props.cycle.id,
+    });
 }
 
 // ─── Group collapse (localStorage) ──────────────────────────────────────
@@ -373,7 +370,6 @@ function toggleGroup(id: number) {
 }
 
 onMounted(() => {
-    cycleFav.value = readFav();
     collapsed.value = readCollapsed();
 });
 
