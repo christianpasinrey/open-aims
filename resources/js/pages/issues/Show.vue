@@ -12,6 +12,7 @@ import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
 import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
 import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
 import IssueActions from '@/components/repo/issues/IssueActions.vue';
+import IssueActivityRow from '@/components/repo/issues/IssueActivityRow.vue';
 import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
 import LinkedPullRequests from '@/components/repo/issues/LinkedPullRequests.vue';
 import MarkdownContent from '@/components/repo/MarkdownContent.vue';
@@ -94,6 +95,26 @@ type Comment = {
     edited_at: string | null;
 };
 
+type ActivityActor = { id: number; name: string; email: string };
+type Activity = {
+    id: number;
+    kind: string;
+    payload: Record<string, unknown> | null;
+    occurred_at: string | null;
+    actor: ActivityActor | null;
+};
+type RelationStub = {
+    identifier: string;
+    title: string;
+    state: { name: string; type: string; color: string } | null;
+};
+type Relations = {
+    blocks: RelationStub[];
+    blocked_by: RelationStub[];
+    related: RelationStub[];
+    duplicate_of: RelationStub[];
+};
+
 const props = defineProps<{
     team: { id: number; name: string; key: string; color: string | null };
     issue: Issue;
@@ -104,7 +125,29 @@ const props = defineProps<{
     projects: Project[];
     priorities: Record<string, string>;
     linked_pull_requests?: LinkedPullRequest[];
+    activities?: Activity[];
+    relations?: Relations;
 }>();
+
+type FeedItem =
+    | { kind: 'comment'; id: number; at: string | null; comment: Comment }
+    | { kind: 'activity'; id: number; at: string | null; activity: Activity };
+
+const activityFeed = computed<FeedItem[]>(() => {
+    const items: FeedItem[] = [];
+    for (const c of props.comments ?? []) {
+        items.push({ kind: 'comment', id: c.id, at: c.created_at, comment: c });
+    }
+    for (const a of props.activities ?? []) {
+        items.push({ kind: 'activity', id: a.id, at: a.occurred_at, activity: a });
+    }
+    items.sort((x, y) => {
+        const xt = x.at ? new Date(x.at).getTime() : 0;
+        const yt = y.at ? new Date(y.at).getTime() : 0;
+        return xt - yt;
+    });
+    return items;
+});
 
 function fmtDate(iso: string | null): string {
     if (!iso) {
@@ -264,38 +307,44 @@ const isOverdue = computed<boolean>(() => {
                             Activity
                         </h2>
                         <div
-                            v-if="!comments.length"
+                            v-if="!activityFeed.length"
                             class="text-[13px] text-muted-foreground"
                         >
-                            No comments yet.
+                            No activity yet.
                         </div>
-                        <ul v-else class="space-y-4">
-                            <li
-                                v-for="c in comments"
-                                :key="c.id"
-                                class="rounded-md border border-border bg-card p-3"
+                        <ul v-else class="flex flex-col">
+                            <template
+                                v-for="item in activityFeed"
+                                :key="`${item.kind}-${item.id}`"
                             >
-                                <div
-                                    class="flex items-center gap-2 text-[12px]"
+                                <li
+                                    v-if="item.kind === 'comment'"
+                                    class="my-1 rounded-md border border-border bg-card p-3"
                                 >
-                                    <Avatar
-                                        v-if="c.user"
-                                        :name="c.user.name"
-                                        :email="c.user.email"
-                                        :size="20"
+                                    <div class="flex items-center gap-2 text-[12px]">
+                                        <Avatar
+                                            v-if="item.comment.user"
+                                            :name="item.comment.user.name"
+                                            :email="item.comment.user.email"
+                                            :size="20"
+                                        />
+                                        <span class="font-medium text-foreground">{{
+                                            item.comment.user?.name ?? 'Unknown'
+                                        }}</span>
+                                        <span class="text-muted-foreground">{{
+                                            relativeTime(item.comment.created_at)
+                                        }}</span>
+                                    </div>
+                                    <MarkdownContent
+                                        :source="item.comment.body"
+                                        class="mt-2"
                                     />
-                                    <span class="font-medium text-foreground">{{
-                                        c.user?.name ?? 'Unknown'
-                                    }}</span>
-                                    <span class="text-muted-foreground">{{
-                                        relativeTime(c.created_at)
-                                    }}</span>
-                                </div>
-                                <MarkdownContent
-                                    :source="c.body"
-                                    class="mt-2"
+                                </li>
+                                <IssueActivityRow
+                                    v-else
+                                    :activity="item.activity"
                                 />
-                            </li>
+                            </template>
                         </ul>
                     </section>
                 </div>

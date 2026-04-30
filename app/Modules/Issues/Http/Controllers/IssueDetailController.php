@@ -9,6 +9,8 @@ use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
 use App\Modules\Issues\Enums\IssuePriority;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Models\IssueActivity;
+use App\Modules\Issues\Models\IssueRelation;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
@@ -96,6 +98,14 @@ final class IssueDetailController
             ->orderByDesc('opened_at')
             ->orderByDesc('id')
             ->get();
+
+        $activities = IssueActivity::query()
+            ->where('issue_id', $issue->id)
+            ->with('actor:id,name,email')
+            ->orderBy('occurred_at')
+            ->get();
+
+        $relationsOut = $this->loadRelations($issue);
 
         return Inertia::render('issues/Show', [
             'team' => [
@@ -227,7 +237,78 @@ final class IssueDetailController
                     'merged_at' => $pr->merged_at?->toIso8601String(),
                 ])
                 ->all(),
+            'activities' => $activities->map(fn (IssueActivity $a): array => [
+                'id' => $a->id,
+                'kind' => $a->kind,
+                'payload' => $a->payload,
+                'occurred_at' => $a->occurred_at?->toIso8601String(),
+                'actor' => $a->actor ? [
+                    'id' => $a->actor->id,
+                    'name' => $a->actor->name,
+                    'email' => $a->actor->email,
+                ] : null,
+            ])->all(),
+            'relations' => $relationsOut,
         ]);
+    }
+
+    /**
+     * @return array{
+     *   blocks: list<array<string,mixed>>,
+     *   blocked_by: list<array<string,mixed>>,
+     *   related: list<array<string,mixed>>,
+     *   duplicate_of: list<array<string,mixed>>,
+     * }
+     */
+    private function loadRelations(Issue $issue): array
+    {
+        $teamKey = $issue->team?->key ?? '';
+
+        $outgoing = IssueRelation::query()
+            ->where('source_issue_id', $issue->id)
+            ->with(['target.workflowState:id,name,type,color', 'target.team:id,key'])
+            ->get();
+        $incoming = IssueRelation::query()
+            ->where('target_issue_id', $issue->id)
+            ->with(['source.workflowState:id,name,type,color', 'source.team:id,key'])
+            ->get();
+
+        $shape = static fn (Issue $other, ?string $key): array => [
+            'identifier' => ($key ?? '').'-'.$other->number,
+            'title' => $other->title,
+            'state' => $other->workflowState ? [
+                'name' => $other->workflowState->name,
+                'type' => $other->workflowState->type,
+                'color' => $other->workflowState->color,
+            ] : null,
+        ];
+
+        $blocks = $outgoing->where('type', 'blocks')
+            ->map(fn (IssueRelation $r): array => $shape($r->target, $r->target->team?->key))
+            ->values()->all();
+        $blockedBy = $incoming->where('type', 'blocks')
+            ->map(fn (IssueRelation $r): array => $shape($r->source, $r->source->team?->key))
+            ->values()->all();
+
+        $related = $outgoing->where('type', 'related')
+            ->map(fn (IssueRelation $r): array => $shape($r->target, $r->target->team?->key))
+            ->concat(
+                $incoming->where('type', 'related')
+                    ->map(fn (IssueRelation $r): array => $shape($r->source, $r->source->team?->key)),
+            )
+            ->unique('identifier')
+            ->values()->all();
+
+        $duplicateOf = $outgoing->where('type', 'duplicate')
+            ->map(fn (IssueRelation $r): array => $shape($r->target, $r->target->team?->key))
+            ->values()->all();
+
+        return [
+            'blocks' => $blocks,
+            'blocked_by' => $blockedBy,
+            'related' => $related,
+            'duplicate_of' => $duplicateOf,
+        ];
     }
 
     /**

@@ -1317,11 +1317,11 @@ watch(
 
             <!-- Right rail -->
             <aside
-                class="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 px-5 py-5 lg:block"
+                class="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border bg-background/40 px-3 py-3 lg:block"
             >
-                <div class="space-y-6 text-[13px]">
+                <div class="space-y-2 text-[13px]">
                     <!-- ============== PROPERTIES ============== -->
-                    <section>
+                    <section class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
@@ -1660,7 +1660,7 @@ watch(
                     </section>
 
                     <!-- ============== MILESTONES ============== -->
-                    <section>
+                    <section class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
@@ -1727,7 +1727,7 @@ watch(
                     </section>
 
                     <!-- ============== PROGRESS ============== -->
-                    <section>
+                    <section class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
