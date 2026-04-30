@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft } from 'lucide-vue-next';
+import {
+    ArrowLeft,
+    Calendar,
+    ChevronDown,
+    Copy,
+    GitBranch,
+    Link as LinkIcon,
+    Network,
+    Play,
+    Plus,
+} from 'lucide-vue-next';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import Avatar from '@/components/repo/Avatar.vue';
@@ -12,6 +22,13 @@ import { renderMarkdown } from '@/lib/markdown';
 type State = { id: number; name: string; type: string; color: string };
 type Label = { id: number; name: string; color?: string | null };
 type User = { id: number; name: string; email: string };
+type Cycle = {
+    id: number;
+    number: number;
+    name: string | null;
+    starts_at: string | null;
+    ends_at: string | null;
+};
 type Issue = {
     id: number;
     identifier: string;
@@ -25,7 +42,14 @@ type Issue = {
     state: State | null;
     assignee: User | null;
     creator: User | null;
-    project: { id: number; name: string; slug: string; color: string | null } | null;
+    project: {
+        id: number;
+        name: string;
+        slug: string;
+        color: string | null;
+        icon: string | null;
+    } | null;
+    cycle: Cycle | null;
     labels: Label[];
     parent: { identifier: string; title: string } | null;
     children: Array<{
@@ -36,6 +60,8 @@ type Issue = {
         state: { name: string; type: string; color: string } | null;
         assignee: { id: number; name: string } | null;
     }>;
+    completed_at?: string | null;
+    canceled_at?: string | null;
     created_at: string | null;
     updated_at: string | null;
 };
@@ -82,6 +108,46 @@ function relativeTime(iso: string | null): string {
     if (days < 30) return `${days}d ago`;
     return fmtDate(iso);
 }
+
+// Strip time from a date and return midnight ms.
+function dayMs(iso: string): number {
+    const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+    return new Date(y!, (m ?? 1) - 1, d ?? 1).getTime();
+}
+
+const dueInfo = computed<{ label: string; isOverdue: boolean } | null>(() => {
+    const iso = props.issue.due_date;
+    if (!iso) return null;
+    const target = dayMs(iso);
+    const now = new Date();
+    const today = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+    ).getTime();
+    const diffDays = Math.round((target - today) / 86_400_000);
+    let label: string;
+    if (diffDays === 0) label = 'Today';
+    else if (diffDays === 1) label = 'Tomorrow';
+    else if (diffDays === -1) label = 'Yesterday';
+    else if (diffDays > 1 && diffDays < 7) {
+        label = new Date(target).toLocaleDateString(undefined, {
+            weekday: 'long',
+        });
+    } else {
+        const sameYear =
+            new Date(target).getFullYear() === now.getFullYear();
+        label = new Date(target).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            ...(sameYear ? {} : { year: 'numeric' }),
+        });
+    }
+    const isCompleted =
+        props.issue.state?.type === 'completed' ||
+        props.issue.state?.type === 'canceled';
+    return { label, isOverdue: diffDays < 0 && !isCompleted };
+});
 </script>
 
 <template>
@@ -107,6 +173,44 @@ function relativeTime(iso: string | null): string {
             <span class="font-mono text-[12px] text-muted-foreground"
                 >{{ issue.identifier }}</span
             >
+
+            <div class="ml-auto flex items-center gap-0.5 text-muted-foreground">
+                <button
+                    type="button"
+                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Copy link"
+                >
+                    <LinkIcon class="size-4" />
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Copy ID"
+                >
+                    <Copy class="size-4" />
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Branch"
+                >
+                    <GitBranch class="size-4" />
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Relations"
+                >
+                    <Network class="size-4" />
+                </button>
+                <button
+                    type="button"
+                    class="ml-1 inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="More"
+                >
+                    <ChevronDown class="size-4" />
+                </button>
+            </div>
         </header>
 
         <div class="flex min-h-0 flex-1">
@@ -117,19 +221,6 @@ function relativeTime(iso: string | null): string {
                     >
                         {{ issue.title }}
                     </h1>
-
-                    <p
-                        v-if="issue.parent"
-                        class="mt-2 text-[13px] text-muted-foreground"
-                    >
-                        Sub-issue of
-                        <Link
-                            :href="`/issues/${issue.parent.identifier}`"
-                            class="text-foreground hover:underline"
-                        >
-                            {{ issue.parent.identifier }} · {{ issue.parent.title }}
-                        </Link>
-                    </p>
 
                     <div
                         v-if="descriptionHtml"
@@ -143,38 +234,16 @@ function relativeTime(iso: string | null): string {
                         No description.
                     </p>
 
-                    <section v-if="issue.children.length" class="mt-10">
-                        <h2 class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
-                            Sub-issues
-                        </h2>
-                        <ul class="divide-y divide-border rounded-md border border-border">
-                            <li v-for="child in issue.children" :key="child.id">
-                                <Link
-                                    :href="`/issues/${child.identifier}`"
-                                    class="flex items-center gap-3 px-3 py-2 hover:bg-accent/50"
-                                >
-                                    <PriorityIcon :priority="child.priority" :size="14" />
-                                    <StatusIcon
-                                        :type="child.state?.type ?? 'unstarted'"
-                                        :color="child.state?.color"
-                                    />
-                                    <span class="font-mono text-[11px] text-muted-foreground">{{ child.identifier }}</span>
-                                    <span class="min-w-0 flex-1 truncate text-[13px]">{{ child.title }}</span>
-                                    <Avatar
-                                        v-if="child.assignee"
-                                        :name="child.assignee.name"
-                                        :size="18"
-                                    />
-                                </Link>
-                            </li>
-                        </ul>
-                    </section>
-
                     <section class="mt-10">
-                        <h2 class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <h2
+                            class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground"
+                        >
                             Activity
                         </h2>
-                        <div v-if="!comments.length" class="text-[13px] text-muted-foreground">
+                        <div
+                            v-if="!comments.length"
+                            class="text-[13px] text-muted-foreground"
+                        >
                             No comments yet.
                         </div>
                         <ul v-else class="space-y-4">
@@ -190,8 +259,12 @@ function relativeTime(iso: string | null): string {
                                         :email="c.user.email"
                                         :size="20"
                                     />
-                                    <span class="font-medium text-foreground">{{ c.user?.name ?? 'Unknown' }}</span>
-                                    <span class="text-muted-foreground">{{ relativeTime(c.created_at) }}</span>
+                                    <span class="font-medium text-foreground">{{
+                                        c.user?.name ?? 'Unknown'
+                                    }}</span>
+                                    <span class="text-muted-foreground">{{
+                                        relativeTime(c.created_at)
+                                    }}</span>
                                 </div>
                                 <div
                                     class="markdown-body mt-2"
@@ -206,79 +279,244 @@ function relativeTime(iso: string | null): string {
             <aside
                 class="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 px-5 py-5 lg:block"
             >
-                <div class="space-y-4 text-[13px]">
-                    <div>
-                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Status</div>
-                        <div class="flex items-center gap-2 text-foreground">
-                            <StatusIcon
-                                :type="issue.state?.type ?? 'unstarted'"
-                                :color="issue.state?.color"
+                <div class="space-y-5">
+                    <!-- Properties -->
+                    <section>
+                        <button
+                            type="button"
+                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        >
+                            <span>Properties</span>
+                            <ChevronDown class="size-3" />
+                        </button>
+                        <div class="mt-2 flex flex-col gap-1.5">
+                            <!-- Status -->
+                            <button
+                                type="button"
+                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
+                            >
+                                <template v-if="issue.state">
+                                    <StatusIcon
+                                        :type="issue.state.type"
+                                        :color="issue.state.color"
+                                    />
+                                    <span>{{ issue.state.name }}</span>
+                                </template>
+                                <template v-else>
+                                    <span
+                                        class="size-3.5 rounded-full border border-dashed border-border"
+                                    ></span>
+                                    <span class="text-muted-foreground">—</span>
+                                </template>
+                            </button>
+
+                            <!-- Priority -->
+                            <button
+                                type="button"
+                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
+                            >
+                                <PriorityIcon :priority="issue.priority" :size="14" />
+                                <span>{{ issue.priority_label }}</span>
+                            </button>
+
+                            <!-- Assignee -->
+                            <button
+                                type="button"
+                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
+                            >
+                                <template v-if="issue.assignee">
+                                    <Avatar
+                                        :name="issue.assignee.name"
+                                        :email="issue.assignee.email"
+                                        :size="18"
+                                    />
+                                    <span>{{ issue.assignee.name }}</span>
+                                </template>
+                                <template v-else>
+                                    <span
+                                        class="size-3.5 rounded-full border border-dashed border-border"
+                                    ></span>
+                                    <span class="text-muted-foreground">Unassigned</span>
+                                </template>
+                            </button>
+
+                            <!-- Cycle -->
+                            <button
+                                type="button"
+                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] text-foreground hover:bg-accent/60"
+                            >
+                                <template v-if="issue.cycle">
+                                    <Play
+                                        class="size-3.5 shrink-0 fill-indigo-400 text-indigo-400"
+                                    />
+                                    <span>Cycle {{ issue.cycle.number }}</span>
+                                </template>
+                                <template v-else>
+                                    <span
+                                        class="size-3.5 rounded-full border border-dashed border-border"
+                                    ></span>
+                                    <span class="text-muted-foreground">No cycle</span>
+                                </template>
+                            </button>
+
+                            <!-- Due date -->
+                            <button
+                                v-if="dueInfo"
+                                type="button"
+                                class="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] hover:bg-accent/60"
+                                :class="
+                                    dueInfo.isOverdue
+                                        ? 'text-red-400'
+                                        : 'text-foreground'
+                                "
+                            >
+                                <Calendar
+                                    class="size-3.5 shrink-0"
+                                    :class="
+                                        dueInfo.isOverdue
+                                            ? 'text-red-400'
+                                            : 'text-muted-foreground'
+                                    "
+                                />
+                                <span>{{ dueInfo.label }}</span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Labels -->
+                    <section>
+                        <button
+                            type="button"
+                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        >
+                            <span>Labels</span>
+                            <ChevronDown class="size-3" />
+                        </button>
+                        <div class="mt-2">
+                            <template v-if="issue.labels.length">
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <LabelBadge
+                                        v-for="label in issue.labels"
+                                        :key="label.id"
+                                        :name="label.name"
+                                        :color="label.color"
+                                    />
+                                    <button
+                                        type="button"
+                                        class="inline-flex size-[18px] items-center justify-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                                        aria-label="Add label"
+                                    >
+                                        <Plus class="size-3" />
+                                    </button>
+                                </div>
+                            </template>
+                            <button
+                                v-else
+                                type="button"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2 py-px text-[11px] leading-[16px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                            >
+                                <Plus class="size-3" />
+                                <span>Add label</span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Project -->
+                    <section>
+                        <button
+                            type="button"
+                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        >
+                            <span>Project</span>
+                            <ChevronDown class="size-3" />
+                        </button>
+                        <div class="mt-2">
+                            <ProjectChip
+                                v-if="issue.project"
+                                :name="issue.project.name"
+                                :color="issue.project.color"
+                                :icon="issue.project.icon"
+                                :slug="issue.project.slug"
+                                :href="`/projects/${issue.project.slug}`"
                             />
-                            <span>{{ issue.state?.name ?? '—' }}</span>
+                            <button
+                                v-else
+                                type="button"
+                                class="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                            >
+                                <Plus class="size-3" />
+                                <span>Add to project</span>
+                            </button>
                         </div>
-                    </div>
+                    </section>
 
-                    <div>
-                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Priority</div>
-                        <div class="flex items-center gap-2 text-foreground">
-                            <PriorityIcon :priority="issue.priority" :size="14" />
-                            <span>{{ issue.priority_label }}</span>
+                    <!-- Relations -->
+                    <section v-if="issue.parent || issue.children.length">
+                        <button
+                            type="button"
+                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        >
+                            <span>Relations</span>
+                            <ChevronDown class="size-3" />
+                        </button>
+
+                        <div class="mt-2 space-y-3">
+                            <div v-if="issue.parent">
+                                <div
+                                    class="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                                >
+                                    Sub-issue of
+                                </div>
+                                <Link
+                                    :href="`/issues/${issue.parent.identifier}`"
+                                    class="flex items-center gap-2 rounded px-1 py-1 text-[13px] text-foreground hover:bg-accent/60"
+                                >
+                                    <StatusIcon type="unstarted" />
+                                    <span
+                                        class="font-mono text-[11px] text-muted-foreground"
+                                        >{{ issue.parent.identifier }}</span
+                                    >
+                                    <span class="min-w-0 flex-1 truncate">{{
+                                        issue.parent.title
+                                    }}</span>
+                                </Link>
+                            </div>
+
+                            <div v-if="issue.children.length">
+                                <div
+                                    class="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                                >
+                                    Related
+                                </div>
+                                <ul class="flex flex-col">
+                                    <li
+                                        v-for="child in issue.children"
+                                        :key="child.id"
+                                    >
+                                        <Link
+                                            :href="`/issues/${child.identifier}`"
+                                            class="flex items-center gap-2 rounded px-1 py-1 text-[13px] text-foreground hover:bg-accent/60"
+                                        >
+                                            <StatusIcon
+                                                :type="
+                                                    child.state?.type ?? 'unstarted'
+                                                "
+                                                :color="child.state?.color"
+                                            />
+                                            <span
+                                                class="font-mono text-[11px] text-muted-foreground"
+                                                >{{ child.identifier }}</span
+                                            >
+                                            <span
+                                                class="min-w-0 flex-1 truncate"
+                                                >{{ child.title }}</span
+                                            >
+                                        </Link>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
-                    </div>
-
-                    <div>
-                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Assignee</div>
-                        <div v-if="issue.assignee" class="flex items-center gap-2 text-foreground">
-                            <Avatar :name="issue.assignee.name" :email="issue.assignee.email" :size="20" />
-                            <span>{{ issue.assignee.name }}</span>
-                        </div>
-                        <span v-else class="text-muted-foreground">Unassigned</span>
-                    </div>
-
-                    <div v-if="issue.creator">
-                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Created by</div>
-                        <div class="flex items-center gap-2 text-foreground">
-                            <Avatar :name="issue.creator.name" :email="issue.creator.email" :size="20" />
-                            <span>{{ issue.creator.name }}</span>
-                        </div>
-                    </div>
-
-                    <div v-if="issue.project">
-                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Project</div>
-                        <ProjectChip
-                            :name="issue.project.name"
-                            :color="issue.project.color"
-                            :slug="issue.project.slug"
-                            :href="`/projects/${issue.project.slug}`"
-                        />
-                    </div>
-
-                    <div v-if="issue.labels.length">
-                        <div class="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Labels</div>
-                        <div class="flex flex-wrap gap-1.5">
-                            <LabelBadge
-                                v-for="label in issue.labels"
-                                :key="label.id"
-                                :name="label.name"
-                                :color="label.color"
-                            />
-                        </div>
-                    </div>
-
-                    <div v-if="issue.estimate !== null">
-                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Estimate</div>
-                        <div class="text-foreground">{{ issue.estimate }} pt</div>
-                    </div>
-
-                    <div v-if="issue.due_date">
-                        <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Due</div>
-                        <div class="text-foreground">{{ fmtDate(issue.due_date) }}</div>
-                    </div>
-
-                    <div class="border-t border-border pt-4 text-[12px] text-muted-foreground">
-                        Created {{ relativeTime(issue.created_at) }}<br />
-                        Updated {{ relativeTime(issue.updated_at) }}
-                    </div>
+                    </section>
                 </div>
             </aside>
         </div>

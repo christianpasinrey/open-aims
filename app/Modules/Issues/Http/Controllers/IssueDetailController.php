@@ -112,6 +112,14 @@ final class IssueDetailController
                     'name' => $issue->project->name,
                     'slug' => $issue->project->slug,
                     'color' => $issue->project->color,
+                    'icon' => $issue->project->icon,
+                ] : null,
+                'cycle' => $issue->cycle ? [
+                    'id' => $issue->cycle->id,
+                    'number' => $issue->cycle->number,
+                    'name' => $issue->cycle->name,
+                    'starts_at' => $issue->cycle->starts_at?->toDateString(),
+                    'ends_at' => $issue->cycle->ends_at?->toDateString(),
                 ] : null,
                 'labels' => $issue->labels->map(fn ($l): array => [
                     'id' => $l->id,
