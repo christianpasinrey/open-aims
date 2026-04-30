@@ -7,6 +7,7 @@ namespace App\Modules\Integrations;
 use App\Core\Registries\ModuleRegistry;
 use App\Core\Support\ModuleServiceProvider;
 use App\Modules\Integrations\repo\Console\ImportFromrepoCommand;
+use App\Modules\Integrations\repo\Console\ImportrepoFreshCommand;
 
 final class IntegrationsServiceProvider extends ModuleServiceProvider
 {
@@ -32,6 +33,7 @@ final class IntegrationsServiceProvider extends ModuleServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 ImportFromrepoCommand::class,
+                ImportrepoFreshCommand::class,
             ]);
         }
     }
