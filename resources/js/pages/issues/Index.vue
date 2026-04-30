@@ -1,24 +1,18 @@
 <script setup lang="ts">
+import { Head, Link } from '@inertiajs/vue3';
+import { Bell, ChevronDown, ChevronRight, Plus, Star } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import {
-    Bell,
-    ChevronDown,
-    ChevronRight,
-    Plus,
-    Star,
-} from 'lucide-vue-next';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
-import PriorityIcon from '@/components/repo/PriorityIcon.vue';
+import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
+import DisplayMenu from '@/components/repo/issues/DisplayMenu.vue';
+import FilterMenu from '@/components/repo/issues/FilterMenu.vue';
+import InlineComposer from '@/components/repo/issues/InlineComposer.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
+import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectChip from '@/components/repo/ProjectChip.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
-import FilterMenu from '@/components/repo/issues/FilterMenu.vue';
-import DisplayMenu from '@/components/repo/issues/DisplayMenu.vue';
-import InlineComposer from '@/components/repo/issues/InlineComposer.vue';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
 import { startedProgressByState } from '@/lib/states';
-import { toast } from 'vue-sonner';
 
 type State = {
     id: number;
@@ -95,7 +89,11 @@ const stateOrder = computed(() =>
     [...props.states].sort((a, b) => {
         const ta = TYPE_RANK[a.type] ?? 99;
         const tb = TYPE_RANK[b.type] ?? 99;
-        if (ta !== tb) return ta - tb;
+
+        if (ta !== tb) {
+            return ta - tb;
+        }
+
         return a.position - b.position;
     }),
 );
@@ -122,11 +120,16 @@ const grouped = computed<GroupBucket[]>(() => {
     if (g === 'priority') {
         const order = [1, 2, 3, 4, 0]; // Urgent → No priority
         const buckets = new Map<number, Issue[]>();
-        for (const p of order) buckets.set(p, []);
+
+        for (const p of order) {
+            buckets.set(p, []);
+        }
+
         for (const i of props.issues) {
             const k = order.includes(i.priority) ? i.priority : 0;
             buckets.get(k)!.push(i);
         }
+
         return order
             .map<GroupBucket>((p) => ({
                 key: `priority:${p}`,
@@ -139,14 +142,21 @@ const grouped = computed<GroupBucket[]>(() => {
     }
 
     if (g === 'assignee') {
-        const buckets = new Map<string, { assignee: Assignee | null; issues: Issue[] }>();
+        const buckets = new Map<
+            string,
+            { assignee: Assignee | null; issues: Issue[] }
+        >();
+
         for (const i of props.issues) {
             const k = i.assignee ? String(i.assignee.id) : 'none';
+
             if (!buckets.has(k)) {
                 buckets.set(k, { assignee: i.assignee, issues: [] });
             }
+
             buckets.get(k)!.issues.push(i);
         }
+
         const out: GroupBucket[] = [];
         // Assigned first (alpha), then Unassigned at the end.
         const assigned = [...buckets.entries()]
@@ -154,6 +164,7 @@ const grouped = computed<GroupBucket[]>(() => {
             .sort(([, a], [, b]) =>
                 (a.assignee?.name ?? '').localeCompare(b.assignee?.name ?? ''),
             );
+
         for (const [k, v] of assigned) {
             out.push({
                 key: `assignee:${k}`,
@@ -163,6 +174,7 @@ const grouped = computed<GroupBucket[]>(() => {
                 assignee: v.assignee,
             });
         }
+
         if (buckets.has('none')) {
             const v = buckets.get('none')!;
             out.push({
@@ -173,24 +185,33 @@ const grouped = computed<GroupBucket[]>(() => {
                 assignee: null,
             });
         }
+
         return out;
     }
 
     if (g === 'project') {
-        const buckets = new Map<string, { project: Project | null; issues: Issue[] }>();
+        const buckets = new Map<
+            string,
+            { project: Project | null; issues: Issue[] }
+        >();
+
         for (const i of props.issues) {
             const k = i.project ? String(i.project.id) : 'none';
+
             if (!buckets.has(k)) {
                 buckets.set(k, { project: i.project, issues: [] });
             }
+
             buckets.get(k)!.issues.push(i);
         }
+
         const out: GroupBucket[] = [];
         const projected = [...buckets.entries()]
             .filter(([k]) => k !== 'none')
             .sort(([, a], [, b]) =>
                 (a.project?.name ?? '').localeCompare(b.project?.name ?? ''),
             );
+
         for (const [k, v] of projected) {
             out.push({
                 key: `project:${k}`,
@@ -200,6 +221,7 @@ const grouped = computed<GroupBucket[]>(() => {
                 project: v.project,
             });
         }
+
         if (buckets.has('none')) {
             const v = buckets.get('none')!;
             out.push({
@@ -210,16 +232,25 @@ const grouped = computed<GroupBucket[]>(() => {
                 project: null,
             });
         }
+
         return out;
     }
 
     // status (default)
     const buckets = new Map<number, Issue[]>();
-    for (const s of stateOrder.value) buckets.set(s.id, []);
+
+    for (const s of stateOrder.value) {
+        buckets.set(s.id, []);
+    }
+
     for (const i of props.issues) {
         const bucket = buckets.get(i.state_id);
-        if (bucket) bucket.push(i);
+
+        if (bucket) {
+            bucket.push(i);
+        }
     }
+
     return stateOrder.value
         .map<GroupBucket>((s) => ({
             key: `status:${s.id}`,
@@ -234,14 +265,21 @@ const grouped = computed<GroupBucket[]>(() => {
 const totalIssues = computed(() => props.issues.length);
 
 const headerLabel = computed<string>(() => {
-    if (safeFilters.value.assignee === 'me') return 'My Issues';
-    if (safeFilters.value.assignee === 'unassigned') return 'Unassigned';
+    if (safeFilters.value.assignee === 'me') {
+        return 'My Issues';
+    }
+
+    if (safeFilters.value.assignee === 'unassigned') {
+        return 'Unassigned';
+    }
+
     return 'All issues';
 });
 
 // ------- Tabs ------------------------------------------------------------
 const tabs = computed(() => {
     const base = props.team ? `?team=${props.team.key}` : '';
+
     return [
         { key: null, label: 'All issues', href: `/issues${base}` },
         {
@@ -258,14 +296,25 @@ const tabs = computed(() => {
 });
 const activeTab = computed<string | null>(() => {
     const s = safeFilters.value.state;
-    if (s === 'started') return 'active';
-    if (s === 'backlog') return 'backlog';
+
+    if (s === 'started') {
+        return 'active';
+    }
+
+    if (s === 'backlog') {
+        return 'backlog';
+    }
+
     return null;
 });
 
 function relativeTime(iso: string | null): string {
-    if (!iso) return '';
+    if (!iso) {
+        return '';
+    }
+
     const d = new Date(iso);
+
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
@@ -274,28 +323,38 @@ const collapsed = ref<Set<string>>(new Set());
 
 function collapseStorageKey(groupKey: string): string {
     const team = props.team?.key ?? '';
+
     return `aims:collapsed:/issues?team=${team}:group=${safeFilters.value.group}:groupKey=${groupKey}`;
 }
 
 function loadCollapsed(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+        return;
+    }
+
     const next = new Set<string>();
+
     for (const b of grouped.value) {
         try {
-            if (window.localStorage.getItem(collapseStorageKey(b.key)) === '1') {
+            if (
+                window.localStorage.getItem(collapseStorageKey(b.key)) === '1'
+            ) {
                 next.add(b.key);
             }
         } catch {
             // ignore quota / private mode errors.
         }
     }
+
     collapsed.value = next;
 }
 
 function toggleGroup(groupKey: string): void {
     const next = new Set(collapsed.value);
+
     if (next.has(groupKey)) {
         next.delete(groupKey);
+
         try {
             window.localStorage.removeItem(collapseStorageKey(groupKey));
         } catch {
@@ -303,12 +362,14 @@ function toggleGroup(groupKey: string): void {
         }
     } else {
         next.add(groupKey);
+
         try {
             window.localStorage.setItem(collapseStorageKey(groupKey), '1');
         } catch {
             // ignore
         }
     }
+
     collapsed.value = next;
 }
 
@@ -324,7 +385,10 @@ function favouriteKey(): string {
 }
 const favourited = ref(false);
 function loadFavourite(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+        return;
+    }
+
     try {
         favourited.value = window.localStorage.getItem(favouriteKey()) === '1';
     } catch {
@@ -333,6 +397,7 @@ function loadFavourite(): void {
 }
 function toggleFavourite(): void {
     favourited.value = !favourited.value;
+
     try {
         if (favourited.value) {
             window.localStorage.setItem(favouriteKey(), '1');
@@ -356,9 +421,12 @@ function closeComposer(): void {
     composerOpen.value = null;
 }
 
-function composerContext(bucket: GroupBucket): Record<string, string | number | null> {
+function composerContext(
+    bucket: GroupBucket,
+): Record<string, string | number | null> {
     const ctx: Record<string, string | number | null> = {};
     const g = safeFilters.value.group;
+
     if (g === 'status' && bucket.state) {
         ctx.state_id = bucket.state.id;
     } else if (g === 'priority' && bucket.priority !== undefined) {
@@ -368,14 +436,19 @@ function composerContext(bucket: GroupBucket): Record<string, string | number | 
     } else if (g === 'project' && bucket.project) {
         ctx.project_id = bucket.project.id;
     }
+
     return ctx;
 }
 
 // ------- Cmd/Ctrl+click on identifier to copy ---------------------------
 function onIdentifierClick(e: MouseEvent, identifier: string): void {
-    if (!(e.metaKey || e.ctrlKey)) return;
+    if (!(e.metaKey || e.ctrlKey)) {
+        return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
+
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
         navigator.clipboard
             .writeText(identifier)
@@ -401,7 +474,9 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                 >
                     {{ team.key.charAt(0) }}
                 </span>
-                <h1 class="text-[13px] font-medium text-foreground">{{ headerLabel }}</h1>
+                <h1 class="text-[13px] font-medium text-foreground">
+                    {{ headerLabel }}
+                </h1>
                 <button
                     type="button"
                     class="transition-colors"
@@ -413,7 +488,10 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                     aria-label="Favourite"
                     @click="toggleFavourite"
                 >
-                    <Star class="size-3.5" :fill="favourited ? 'currentColor' : 'none'" />
+                    <Star
+                        class="size-3.5"
+                        :fill="favourited ? 'currentColor' : 'none'"
+                    />
                 </button>
             </div>
             <Link
@@ -463,10 +541,13 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
             class="flex flex-1 items-center justify-center px-6 py-12 text-center"
         >
             <div class="max-w-sm">
-                <h2 class="text-base font-medium text-foreground">No issues yet</h2>
+                <h2 class="text-base font-medium text-foreground">
+                    No issues yet
+                </h2>
                 <p class="mt-2 text-sm text-muted-foreground">
                     Run
-                    <code class="rounded bg-muted px-1.5 py-0.5 font-mono text-[12px]"
+                    <code
+                        class="rounded bg-muted px-1.5 py-0.5 font-mono text-[12px]"
                         >php artisan aims:import-snapshot</code
                     >
                     to populate the workspace.
@@ -486,7 +567,11 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                         @click="toggleGroup(group.key)"
                     >
                         <component
-                            :is="collapsed.has(group.key) ? ChevronRight : ChevronDown"
+                            :is="
+                                collapsed.has(group.key)
+                                    ? ChevronRight
+                                    : ChevronDown
+                            "
                             class="size-3 text-muted-foreground"
                         />
                         <!-- Status group icon -->
@@ -499,7 +584,10 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                         />
                         <!-- Priority group icon -->
                         <PriorityIcon
-                            v-else-if="safeFilters.group === 'priority' && group.priority !== undefined"
+                            v-else-if="
+                                safeFilters.group === 'priority' &&
+                                group.priority !== undefined
+                            "
                             :priority="group.priority"
                             :size="14"
                         />
@@ -530,10 +618,13 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                             ></span>
                         </template>
 
-                        <span class="text-[12.5px] font-medium text-foreground">{{
-                            group.title
+                        <span
+                            class="text-[12.5px] font-medium text-foreground"
+                            >{{ group.title }}</span
+                        >
+                        <span class="text-[12px] text-muted-foreground">{{
+                            group.count
                         }}</span>
-                        <span class="text-[12px] text-muted-foreground">{{ group.count }}</span>
                     </button>
                     <button
                         v-if="team"
@@ -554,17 +645,25 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                     @close="closeComposer"
                 />
 
-                <ul v-show="!collapsed.has(group.key)" class="divide-y divide-border">
+                <ul
+                    v-show="!collapsed.has(group.key)"
+                    class="divide-y divide-border"
+                >
                     <li v-for="issue in group.issues" :key="issue.id">
                         <Link
                             :href="`/issues/${issue.identifier}`"
                             class="grid grid-cols-[auto_auto_64px_1fr_auto_auto_42px_24px] items-center gap-2 px-4 py-1.5 hover:bg-accent/40"
                         >
-                            <PriorityIcon :priority="issue.priority" :size="14" />
+                            <PriorityIcon
+                                :priority="issue.priority"
+                                :size="14"
+                            />
 
                             <span
                                 class="font-mono text-[11px] text-muted-foreground tabular-nums"
-                                @click="onIdentifierClick($event, issue.identifier)"
+                                @click="
+                                    onIdentifierClick($event, issue.identifier)
+                                "
                                 >{{ issue.identifier }}</span
                             >
 
@@ -575,7 +674,10 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                                 :size="14"
                             />
 
-                            <span class="min-w-0 truncate text-[13px] text-foreground">{{ issue.title }}</span>
+                            <span
+                                class="min-w-0 truncate text-[13px] text-foreground"
+                                >{{ issue.title }}</span
+                            >
 
                             <div
                                 v-if="issue.labels.length"
@@ -605,7 +707,9 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                             />
                             <span v-else></span>
 
-                            <span class="text-right text-[11px] text-muted-foreground tabular-nums">
+                            <span
+                                class="text-right text-[11px] text-muted-foreground tabular-nums"
+                            >
                                 {{ relativeTime(issue.updated_at) }}
                             </span>
 

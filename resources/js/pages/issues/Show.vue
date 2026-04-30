@@ -1,25 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, ChevronDown } from 'lucide-vue-next';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
+import { computed } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
-import { renderMarkdown } from '@/lib/markdown';
 
-import StatusPicker from '@/components/repo/issues/StatusPicker.vue';
-import PriorityPicker from '@/components/repo/issues/PriorityPicker.vue';
 import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
 import CyclePicker from '@/components/repo/issues/CyclePicker.vue';
-import ProjectPicker from '@/components/repo/issues/ProjectPicker.vue';
-import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
 import DueDatePicker from '@/components/repo/issues/DueDatePicker.vue';
 import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
-import IssueActions from '@/components/repo/issues/IssueActions.vue';
-import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
 import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
+import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
+import IssueActions from '@/components/repo/issues/IssueActions.vue';
+import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
 import LinkedPullRequests from '@/components/repo/issues/LinkedPullRequests.vue';
+import PriorityPicker from '@/components/repo/issues/PriorityPicker.vue';
+import ProjectPicker from '@/components/repo/issues/ProjectPicker.vue';
+import StatusPicker from '@/components/repo/issues/StatusPicker.vue';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
+import { renderMarkdown } from '@/lib/markdown';
 
-type State = { id: number; name: string; type: string; color: string; position: number };
+type State = {
+    id: number;
+    name: string;
+    type: string;
+    color: string;
+    position: number;
+};
 type Label = { id: number; name: string; color?: string | null };
 type User = { id: number; name: string; email: string };
 type Cycle = {
@@ -100,11 +106,16 @@ const props = defineProps<{
 }>();
 
 const commentBodies = computed<Record<number, string>>(() =>
-    Object.fromEntries(props.comments.map((c) => [c.id, renderMarkdown(c.body)])),
+    Object.fromEntries(
+        props.comments.map((c) => [c.id, renderMarkdown(c.body)]),
+    ),
 );
 
 function fmtDate(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) {
+        return '—';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -112,26 +123,46 @@ function fmtDate(iso: string | null): string {
     });
 }
 function relativeTime(iso: string | null): string {
-    if (!iso) return '';
+    if (!iso) {
+        return '';
+    }
+
     const d = new Date(iso).getTime();
     const diff = Math.max(0, Date.now() - d);
     const m = Math.floor(diff / 60000);
-    if (m < 60) return `${m}m ago`;
+
+    if (m < 60) {
+        return `${m}m ago`;
+    }
+
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
+
+    if (h < 24) {
+        return `${h}h ago`;
+    }
+
     const days = Math.floor(h / 24);
-    if (days < 30) return `${days}d ago`;
+
+    if (days < 30) {
+        return `${days}d ago`;
+    }
+
     return fmtDate(iso);
 }
 
 function dayMs(iso: string): number {
     const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+
     return new Date(y!, (m ?? 1) - 1, d ?? 1).getTime();
 }
 
 const isOverdue = computed<boolean>(() => {
     const iso = props.issue.due_date;
-    if (!iso) return false;
+
+    if (!iso) {
+        return false;
+    }
+
     const target = dayMs(iso);
     const now = new Date();
     const today = new Date(
@@ -142,6 +173,7 @@ const isOverdue = computed<boolean>(() => {
     const completed =
         props.issue.state?.type === 'completed' ||
         props.issue.state?.type === 'canceled';
+
     return target < today && !completed;
 });
 </script>
@@ -166,9 +198,9 @@ const isOverdue = computed<boolean>(() => {
             >
                 {{ team.key.charAt(0) }}
             </span>
-            <span class="font-mono text-[12px] text-muted-foreground"
-                >{{ issue.identifier }}</span
-            >
+            <span class="font-mono text-[12px] text-muted-foreground">{{
+                issue.identifier
+            }}</span>
 
             <IssueActions
                 :identifier="issue.identifier"
@@ -200,7 +232,7 @@ const isOverdue = computed<boolean>(() => {
 
                     <section class="mt-10">
                         <h2
-                            class="mb-3 text-[12px] font-medium uppercase tracking-wide text-muted-foreground"
+                            class="mb-3 text-[12px] font-medium tracking-wide text-muted-foreground uppercase"
                         >
                             Activity
                         </h2>
@@ -216,7 +248,9 @@ const isOverdue = computed<boolean>(() => {
                                 :key="c.id"
                                 class="rounded-md border border-border bg-card p-3"
                             >
-                                <div class="flex items-center gap-2 text-[12px]">
+                                <div
+                                    class="flex items-center gap-2 text-[12px]"
+                                >
                                     <Avatar
                                         v-if="c.user"
                                         :name="c.user.name"
@@ -248,7 +282,7 @@ const isOverdue = computed<boolean>(() => {
                     <section>
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Properties</span>
                             <ChevronDown class="size-3" />
@@ -290,7 +324,7 @@ const isOverdue = computed<boolean>(() => {
                     <section>
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Labels</span>
                             <ChevronDown class="size-3" />
@@ -308,7 +342,7 @@ const isOverdue = computed<boolean>(() => {
                     <section>
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Project</span>
                             <ChevronDown class="size-3" />
@@ -327,13 +361,14 @@ const isOverdue = computed<boolean>(() => {
                         v-if="
                             issue.parent ||
                             issue.children.length ||
-                            (linked_pull_requests && linked_pull_requests.length) ||
+                            (linked_pull_requests &&
+                                linked_pull_requests.length) ||
                             issue.git_branch_name
                         "
                     >
                         <button
                             type="button"
-                            class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                            class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
                         >
                             <span>Relations</span>
                             <ChevronDown class="size-3" />
@@ -342,7 +377,7 @@ const isOverdue = computed<boolean>(() => {
                         <div class="mt-2 space-y-3">
                             <div v-if="issue.parent">
                                 <div
-                                    class="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                                    class="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
                                 >
                                     Sub-issue of
                                 </div>
@@ -363,7 +398,7 @@ const isOverdue = computed<boolean>(() => {
 
                             <div v-if="issue.children.length">
                                 <div
-                                    class="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                                    class="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
                                 >
                                     Sub-issues
                                 </div>
@@ -378,7 +413,8 @@ const isOverdue = computed<boolean>(() => {
                                         >
                                             <StatusIcon
                                                 :type="
-                                                    child.state?.type ?? 'unstarted'
+                                                    child.state?.type ??
+                                                    'unstarted'
                                                 "
                                                 :color="child.state?.color"
                                             />

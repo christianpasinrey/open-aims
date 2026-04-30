@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { nextTick, ref, watch } from 'vue';
 
 const props = defineProps<{
     identifier: string;
@@ -14,7 +14,9 @@ const inputEl = ref<HTMLTextAreaElement | null>(null);
 watch(
     () => props.title,
     (next) => {
-        if (!editing.value) local.value = next;
+        if (!editing.value) {
+            local.value = next;
+        }
     },
 );
 
@@ -34,14 +36,19 @@ function cancel(): void {
 
 function save(): void {
     const next = local.value.trim();
+
     if (!next) {
         cancel();
+
         return;
     }
+
     if (next === props.title) {
         editing.value = false;
+
         return;
     }
+
     router.patch(
         `/issues/${props.identifier}`,
         { title: next },
@@ -69,7 +76,11 @@ function onKeydown(e: KeyboardEvent): void {
 
 function autosize(): void {
     const el = inputEl.value;
-    if (!el) return;
+
+    if (!el) {
+        return;
+    }
+
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
 }
@@ -82,14 +93,14 @@ function autosize(): void {
             ref="inputEl"
             v-model="local"
             rows="1"
-            class="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-[22px] font-semibold leading-tight tracking-tight text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-[22px] leading-tight font-semibold tracking-tight text-foreground focus:ring-1 focus:ring-ring focus:outline-none"
             @blur="save"
             @keydown="onKeydown"
             @input="autosize"
         ></textarea>
         <h1
             v-else
-            class="cursor-text rounded-md px-2 py-1.5 text-[22px] font-semibold leading-tight tracking-tight text-foreground transition-colors hover:bg-accent/40 -mx-2"
+            class="-mx-2 cursor-text rounded-md px-2 py-1.5 text-[22px] leading-tight font-semibold tracking-tight text-foreground transition-colors hover:bg-accent/40"
             @click="startEditing"
         >
             {{ title }}

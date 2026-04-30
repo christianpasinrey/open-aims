@@ -12,6 +12,7 @@ const props = withDefaults(
 
 const p = computed<number>(() => {
     const v = Number(props.priority ?? 0);
+
     return [0, 1, 2, 3, 4].includes(v) ? v : 0;
 });
 
@@ -60,14 +61,7 @@ const accent = computed<string>(() => {
     >
         <!-- URGENT: filled red rounded square with exclamation mark -->
         <template v-if="p === 1">
-            <rect
-                x="1"
-                y="1"
-                width="12"
-                height="12"
-                rx="2.5"
-                fill="#ef4444"
-            />
+            <rect x="1" y="1" width="12" height="12" rx="2.5" fill="#ef4444" />
             <rect
                 x="6.4"
                 y="3.4"
@@ -88,9 +82,30 @@ const accent = computed<string>(() => {
 
         <!-- NO PRIORITY: three short horizontal dashes -->
         <template v-else-if="p === 0">
-            <rect x="2" y="6.4" width="2.6" height="1.2" rx="0.6" fill="#a1a1aa" />
-            <rect x="5.7" y="6.4" width="2.6" height="1.2" rx="0.6" fill="#a1a1aa" />
-            <rect x="9.4" y="6.4" width="2.6" height="1.2" rx="0.6" fill="#a1a1aa" />
+            <rect
+                x="2"
+                y="6.4"
+                width="2.6"
+                height="1.2"
+                rx="0.6"
+                fill="#a1a1aa"
+            />
+            <rect
+                x="5.7"
+                y="6.4"
+                width="2.6"
+                height="1.2"
+                rx="0.6"
+                fill="#a1a1aa"
+            />
+            <rect
+                x="9.4"
+                y="6.4"
+                width="2.6"
+                height="1.2"
+                rx="0.6"
+                fill="#a1a1aa"
+            />
         </template>
 
         <!-- LOW / MEDIUM / HIGH: 3 vertical bars, filled by priority -->

@@ -27,16 +27,22 @@ const palette = [
 
 function hash(s: string): number {
     let h = 0;
+
     for (let i = 0; i < s.length; i++) {
         h = (h << 5) - h + s.charCodeAt(i);
         h |= 0;
     }
+
     return Math.abs(h);
 }
 
 const initials = computed<string>(() => {
     const n = (props.name ?? '').trim();
-    if (!n) return '?';
+
+    if (!n) {
+        return '?';
+    }
+
     return n
         .split(/\s+/)
         .slice(0, 2)
@@ -46,16 +52,22 @@ const initials = computed<string>(() => {
 
 const bg = computed<string>(() => {
     const seed = props.email ?? props.name ?? '';
-    if (!seed) return '#52525b';
+
+    if (!seed) {
+        return '#52525b';
+    }
+
     return palette[hash(seed) % palette.length] ?? '#52525b';
 });
 
-const fontSize = computed<number>(() => Math.max(8, Math.round(props.size * 0.42)));
+const fontSize = computed<number>(() =>
+    Math.max(8, Math.round(props.size * 0.42)),
+);
 </script>
 
 <template>
     <span
-        class="inline-flex shrink-0 items-center justify-center rounded-full font-medium leading-none text-white"
+        class="inline-flex shrink-0 items-center justify-center rounded-full leading-none font-medium text-white"
         :style="{
             width: `${size}px`,
             height: `${size}px`,

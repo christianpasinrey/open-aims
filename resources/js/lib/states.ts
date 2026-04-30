@@ -14,7 +14,9 @@ export type StateLite = {
     position: number;
 };
 
-export function startedProgressByState(states: StateLite[]): Record<number, number> {
+export function startedProgressByState(
+    states: StateLite[],
+): Record<number, number> {
     const out: Record<number, number> = {};
     const started = states
         .filter((s) => s.type === 'started')
@@ -23,5 +25,6 @@ export function startedProgressByState(states: StateLite[]): Record<number, numb
     started.forEach((s, i) => {
         out[s.id] = total === 0 ? 0.5 : (i * 2 + 1) / (total * 2);
     });
+
     return out;
 }

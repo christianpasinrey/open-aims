@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     Bell,
@@ -10,12 +9,13 @@ import {
     Plus,
     Star,
 } from 'lucide-vue-next';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
-import PriorityIcon from '@/components/repo/PriorityIcon.vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
+import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectChip from '@/components/repo/ProjectChip.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
 import { startedProgressByState } from '@/lib/states';
 
 type Team = { id: number; name: string; key: string; color: string | null };
@@ -116,17 +116,29 @@ const stateOrder = computed(() =>
     [...props.states].sort((a, b) => {
         const ta = TYPE_RANK[a.type] ?? 99;
         const tb = TYPE_RANK[b.type] ?? 99;
-        if (ta !== tb) return ta - tb;
+
+        if (ta !== tb) {
+            return ta - tb;
+        }
+
         return a.position - b.position;
     }),
 );
 const grouped = computed(() => {
     const buckets = new Map<number, Issue[]>();
-    for (const s of stateOrder.value) buckets.set(s.id, []);
+
+    for (const s of stateOrder.value) {
+        buckets.set(s.id, []);
+    }
+
     for (const i of props.issues) {
         const bucket = buckets.get(i.state_id);
-        if (bucket) bucket.push(i);
+
+        if (bucket) {
+            bucket.push(i);
+        }
     }
+
     return stateOrder.value
         .map((s) => ({ state: s, issues: buckets.get(s.id) ?? [] }))
         .filter((g) => g.issues.length > 0);
@@ -140,14 +152,20 @@ const activeRailTab = ref<'assignees' | 'labels' | 'priority' | 'projects'>(
 
 // ─── Date helpers ───────────────────────────────────────────────────────
 function fmtShort(iso: string | null): string {
-    if (!iso) return '';
+    if (!iso) {
+        return '';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
     });
 }
 function relativeTime(iso: string | null): string {
-    if (!iso) return '';
+    if (!iso) {
+        return '';
+    }
+
     return new Date(iso).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
@@ -159,18 +177,24 @@ function dayKey(iso: string): string {
 function diffDaysInclusive(a: string, b: string): number {
     const da = new Date(a + 'T00:00:00');
     const db = new Date(b + 'T00:00:00');
+
     return Math.round((db.getTime() - da.getTime()) / 86400000) + 1;
 }
 function addDaysIso(iso: string, days: number): string {
     const d = new Date(iso + 'T00:00:00');
     d.setDate(d.getDate() + days);
+
     return d.toISOString().slice(0, 10);
 }
 
 const dateRangeLabel = computed<string>(() => {
     const s = fmtShort(props.cycle.starts_at);
     const e = fmtShort(props.cycle.ends_at);
-    if (!s && !e) return '';
+
+    if (!s && !e) {
+        return '';
+    }
+
     return `${s} → ${e}`;
 });
 
@@ -181,8 +205,14 @@ function ringDashOffsetFor(percent: number): number {
     return ringC * (1 - Math.max(0, Math.min(100, percent)) / 100);
 }
 function ringStrokeFor(percent: number): string {
-    if (percent >= 100) return '#10b981';
-    if (percent > 0) return '#6366f1';
+    if (percent >= 100) {
+        return '#10b981';
+    }
+
+    if (percent > 0) {
+        return '#6366f1';
+    }
+
     return '#a1a1aa';
 }
 
@@ -207,9 +237,11 @@ const burndown = computed<{
     const start = props.cycle.starts_at;
     const end = props.cycle.ends_at;
     const total = props.progress.total;
+
     if (!start || !end || total === 0) {
         return { target: [], actual: [], total, todayIndex: null };
     }
+
     const days = Math.max(1, diffDaysInclusive(start, end));
     const innerW = chartW - chartPadX * 2;
     const innerH = chartH - chartPadTop - chartPadBottom;
@@ -219,8 +251,12 @@ const burndown = computed<{
 
     // Completion counts by day
     const completedByDay = new Map<string, number>();
+
     for (const issue of props.issues) {
-        if (!issue.completed_at) continue;
+        if (!issue.completed_at) {
+            continue;
+        }
+
         const k = dayKey(issue.completed_at);
         completedByDay.set(k, (completedByDay.get(k) ?? 0) + 1);
     }
@@ -241,6 +277,7 @@ const burndown = computed<{
             date,
             open: total * (1 - tFrac),
         });
+
         if (date <= todayIso) {
             const completedToday = completedByDay.get(date) ?? 0;
             open = Math.max(0, open - completedToday);
@@ -248,18 +285,26 @@ const burndown = computed<{
             todayIndex = i;
         }
     }
+
     return { target, actual, total, todayIndex };
 });
 
 const targetPath = computed<string>(() =>
-    burndown.value.target.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '),
+    burndown.value.target
+        .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+        .join(' '),
 );
 const actualPath = computed<string>(() =>
-    burndown.value.actual.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '),
+    burndown.value.actual
+        .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+        .join(' '),
 );
 
 const startedPercent = computed<number>(() => {
-    if (props.progress.total === 0) return 0;
+    if (props.progress.total === 0) {
+        return 0;
+    }
+
     return Math.round((props.progress.started / props.progress.total) * 100);
 });
 
@@ -276,7 +321,9 @@ function readFav(): boolean {
 function writeFav(v: boolean) {
     try {
         localStorage.setItem(FAV_KEY, v ? '1' : '0');
-    } catch { /* ignore */ }
+    } catch {
+        /* ignore */
+    }
 }
 function toggleFav() {
     cycleFav.value = !cycleFav.value;
@@ -289,9 +336,17 @@ const collapsed = ref<Set<number>>(new Set());
 function readCollapsed(): Set<number> {
     try {
         const raw = localStorage.getItem(COLLAPSE_KEY);
-        if (!raw) return new Set();
+
+        if (!raw) {
+            return new Set();
+        }
+
         const arr = JSON.parse(raw) as unknown;
-        if (!Array.isArray(arr)) return new Set();
+
+        if (!Array.isArray(arr)) {
+            return new Set();
+        }
+
         return new Set(arr.filter((v): v is number => typeof v === 'number'));
     } catch {
         return new Set();
@@ -300,12 +355,19 @@ function readCollapsed(): Set<number> {
 function writeCollapsed(s: Set<number>) {
     try {
         localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...s]));
-    } catch { /* ignore */ }
+    } catch {
+        /* ignore */
+    }
 }
 function toggleGroup(id: number) {
     const next = new Set(collapsed.value);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+
+    if (next.has(id)) {
+        next.delete(id);
+    } else {
+        next.add(id);
+    }
+
     collapsed.value = next;
     writeCollapsed(next);
 }
@@ -334,7 +396,11 @@ function cancelComposer() {
 }
 function submitComposer(stateId: number) {
     const title = composerTitle.value.trim();
-    if (!title || composerSubmitting.value) return;
+
+    if (!title || composerSubmitting.value) {
+        return;
+    }
+
     composerSubmitting.value = true;
     router.post(
         '/issues',
@@ -376,10 +442,13 @@ function cancelEditName() {
 }
 function commitEditName() {
     const v = nameDraft.value.trim();
+
     if (!v || v === props.cycle.name || nameSubmitting.value) {
         editingName.value = false;
+
         return;
     }
+
     nameSubmitting.value = true;
     router.patch(
         `/cycles/${props.cycle.number}?team=${encodeURIComponent(props.team.key)}`,
@@ -396,7 +465,9 @@ function commitEditName() {
 watch(
     () => props.cycle.name,
     (n) => {
-        if (!editingName.value) nameDraft.value = n;
+        if (!editingName.value) {
+            nameDraft.value = n;
+        }
     },
 );
 
@@ -439,7 +510,9 @@ function priorityRowColor(p: number): string {
                     <span>{{ team.name }}</span>
                 </Link>
                 <span class="text-muted-foreground">›</span>
-                <Play class="size-3.5 shrink-0 fill-indigo-500 text-indigo-500" />
+                <Play
+                    class="size-3.5 shrink-0 fill-indigo-500 text-indigo-500"
+                />
                 <span class="text-foreground">Cycle {{ cycle.number }}</span>
                 <button
                     type="button"
@@ -496,18 +569,18 @@ function priorityRowColor(p: number): string {
                     </p>
                 </div>
 
-                <section
-                    v-for="group in grouped"
-                    v-else
-                    :key="group.state.id"
-                >
+                <section v-for="group in grouped" v-else :key="group.state.id">
                     <button
                         type="button"
                         class="sticky top-0 z-10 flex w-full items-center gap-2 bg-muted/40 px-4 py-1.5 text-left backdrop-blur transition-colors hover:bg-muted/60"
                         @click="toggleGroup(group.state.id)"
                     >
                         <component
-                            :is="collapsed.has(group.state.id) ? ChevronRight : ChevronDown"
+                            :is="
+                                collapsed.has(group.state.id)
+                                    ? ChevronRight
+                                    : ChevronDown
+                            "
                             class="size-3 text-muted-foreground"
                         />
                         <StatusIcon
@@ -516,9 +589,10 @@ function priorityRowColor(p: number): string {
                             :progress="startedProgress[group.state.id]"
                             :size="14"
                         />
-                        <span class="text-[12.5px] font-medium text-foreground">{{
-                            group.state.name
-                        }}</span>
+                        <span
+                            class="text-[12.5px] font-medium text-foreground"
+                            >{{ group.state.name }}</span
+                        >
                         <span class="text-[12px] text-muted-foreground">{{
                             group.issues.length
                         }}</span>
@@ -546,8 +620,10 @@ function priorityRowColor(p: number): string {
                             v-model="composerTitle"
                             type="text"
                             placeholder="Issue title"
-                            class="min-w-0 flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground outline-none"
-                            @keydown.enter.prevent="submitComposer(group.state.id)"
+                            class="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+                            @keydown.enter.prevent="
+                                submitComposer(group.state.id)
+                            "
                             @keydown.escape="cancelComposer"
                         />
                         <button
@@ -560,7 +636,9 @@ function priorityRowColor(p: number): string {
                         <button
                             type="button"
                             class="rounded-md bg-indigo-500 px-2 py-0.5 text-[11.5px] font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
-                            :disabled="composerSubmitting || !composerTitle.trim()"
+                            :disabled="
+                                composerSubmitting || !composerTitle.trim()
+                            "
                             @click="submitComposer(group.state.id)"
                         >
                             {{ composerSubmitting ? 'Saving…' : 'Create' }}
@@ -576,11 +654,15 @@ function priorityRowColor(p: number): string {
                                 :href="`/issues/${issue.identifier}`"
                                 class="grid grid-cols-[auto_auto_64px_1fr_auto_auto_42px_24px] items-center gap-2 px-4 py-1.5 hover:bg-accent/40"
                             >
-                                <PriorityIcon :priority="issue.priority" :size="14" />
+                                <PriorityIcon
+                                    :priority="issue.priority"
+                                    :size="14"
+                                />
 
                                 <span
                                     class="font-mono text-[11px] text-muted-foreground tabular-nums"
-                                >{{ issue.identifier }}</span>
+                                    >{{ issue.identifier }}</span
+                                >
 
                                 <StatusIcon
                                     :type="issue.state?.type ?? 'unstarted'"
@@ -589,16 +671,20 @@ function priorityRowColor(p: number): string {
                                     :size="14"
                                 />
 
-                                <span class="min-w-0 truncate text-[13px] text-foreground">{{
-                                    issue.title
-                                }}</span>
+                                <span
+                                    class="min-w-0 truncate text-[13px] text-foreground"
+                                    >{{ issue.title }}</span
+                                >
 
                                 <div
                                     v-if="issue.labels.length"
                                     class="hidden shrink-0 items-center gap-1 lg:flex"
                                 >
                                     <LabelBadge
-                                        v-for="label in issue.labels.slice(0, 3)"
+                                        v-for="label in issue.labels.slice(
+                                            0,
+                                            3,
+                                        )"
                                         :key="label.id"
                                         :name="label.name"
                                         :color="label.color"
@@ -606,7 +692,8 @@ function priorityRowColor(p: number): string {
                                     <span
                                         v-if="issue.labels.length > 3"
                                         class="text-[11px] text-muted-foreground"
-                                    >+{{ issue.labels.length - 3 }}</span>
+                                        >+{{ issue.labels.length - 3 }}</span
+                                    >
                                 </div>
                                 <span v-else></span>
 
@@ -678,7 +765,7 @@ function priorityRowColor(p: number): string {
                         ref="nameInputRef"
                         v-model="nameDraft"
                         type="text"
-                        class="min-w-0 flex-1 rounded-sm bg-transparent text-[14px] font-semibold text-foreground outline-none ring-1 ring-indigo-500/40 ring-offset-1 ring-offset-background"
+                        class="min-w-0 flex-1 rounded-sm bg-transparent text-[14px] font-semibold text-foreground ring-1 ring-indigo-500/40 ring-offset-1 ring-offset-background outline-none"
                         @blur="commitEditName"
                         @keydown.enter.prevent="commitEditName"
                         @keydown.escape="cancelEditName"
@@ -718,10 +805,16 @@ function priorityRowColor(p: number): string {
                 </div>
 
                 <div
-                    v-if="cycle.status === 'current' && cycle.weekdays_left !== null"
+                    v-if="
+                        cycle.status === 'current' &&
+                        cycle.weekdays_left !== null
+                    "
                     class="mt-1 text-[12px] text-muted-foreground"
                 >
-                    {{ cycle.weekdays_left }} weekday{{ cycle.weekdays_left === 1 ? '' : 's' }} left
+                    {{ cycle.weekdays_left }} weekday{{
+                        cycle.weekdays_left === 1 ? '' : 's'
+                    }}
+                    left
                 </div>
 
                 <button
@@ -734,7 +827,7 @@ function priorityRowColor(p: number): string {
                 <!-- Progress section -->
                 <div class="mt-6">
                     <div
-                        class="mb-2 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                        class="mb-2 flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
                     >
                         <ChevronDown class="size-3" />
                         Progress
@@ -742,12 +835,20 @@ function priorityRowColor(p: number): string {
 
                     <!-- Stat cards -->
                     <div class="grid grid-cols-3 gap-2">
-                        <div class="rounded-md border border-border bg-card p-2">
-                            <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                <span class="size-1.5 rounded-full bg-zinc-500"></span>
+                        <div
+                            class="rounded-md border border-border bg-card p-2"
+                        >
+                            <div
+                                class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                            >
+                                <span
+                                    class="size-1.5 rounded-full bg-zinc-500"
+                                ></span>
                                 Scope
                             </div>
-                            <div class="mt-1 text-[16px] font-semibold tabular-nums text-foreground">
+                            <div
+                                class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
+                            >
                                 {{ progress.total }}
                             </div>
                             <div
@@ -757,34 +858,56 @@ function priorityRowColor(p: number): string {
                                 +{{ progress.scope_change_percent }}%
                             </div>
                         </div>
-                        <div class="rounded-md border border-border bg-card p-2">
-                            <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                <span class="size-1.5 rounded-full bg-amber-400"></span>
+                        <div
+                            class="rounded-md border border-border bg-card p-2"
+                        >
+                            <div
+                                class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                            >
+                                <span
+                                    class="size-1.5 rounded-full bg-amber-400"
+                                ></span>
                                 Started
                             </div>
-                            <div class="mt-1 text-[16px] font-semibold tabular-nums text-foreground">
+                            <div
+                                class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
+                            >
                                 {{ progress.started }}
                             </div>
-                            <div class="text-[11px] text-muted-foreground tabular-nums">
+                            <div
+                                class="text-[11px] text-muted-foreground tabular-nums"
+                            >
                                 · {{ startedPercent }}%
                             </div>
                         </div>
-                        <div class="rounded-md border border-border bg-card p-2">
-                            <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                <span class="size-1.5 rounded-full bg-indigo-500"></span>
+                        <div
+                            class="rounded-md border border-border bg-card p-2"
+                        >
+                            <div
+                                class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                            >
+                                <span
+                                    class="size-1.5 rounded-full bg-indigo-500"
+                                ></span>
                                 Completed
                             </div>
-                            <div class="mt-1 text-[16px] font-semibold tabular-nums text-foreground">
+                            <div
+                                class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
+                            >
                                 {{ progress.completed }}
                             </div>
-                            <div class="text-[11px] text-muted-foreground tabular-nums">
+                            <div
+                                class="text-[11px] text-muted-foreground tabular-nums"
+                            >
                                 · {{ progress.percent }}%
                             </div>
                         </div>
                     </div>
 
                     <!-- Burndown chart -->
-                    <div class="relative mt-3 h-[160px] rounded-md border border-border bg-card">
+                    <div
+                        class="relative mt-3 h-[160px] rounded-md border border-border bg-card"
+                    >
                         <svg
                             :viewBox="`0 0 ${chartW} ${chartH}`"
                             preserveAspectRatio="none"
@@ -817,14 +940,18 @@ function priorityRowColor(p: number): string {
                                 text-anchor="end"
                                 font-size="8"
                                 class="fill-muted-foreground tabular-nums"
-                            >{{ progress.total }}</text>
+                            >
+                                {{ progress.total }}
+                            </text>
                             <text
                                 :x="chartPadX - 2"
                                 :y="chartH - chartPadBottom + 3"
                                 text-anchor="end"
                                 font-size="8"
                                 class="fill-muted-foreground tabular-nums"
-                            >0</text>
+                            >
+                                0
+                            </text>
 
                             <!-- Ideal -->
                             <polyline
@@ -870,7 +997,12 @@ function priorityRowColor(p: number): string {
                     class="mt-5 flex items-center gap-1 border-b border-border text-[12px]"
                 >
                     <button
-                        v-for="t in (['assignees','labels','priority','projects'] as const)"
+                        v-for="t in [
+                            'assignees',
+                            'labels',
+                            'priority',
+                            'projects',
+                        ] as const"
                         :key="t"
                         type="button"
                         :class="[
@@ -886,7 +1018,10 @@ function priorityRowColor(p: number): string {
                 </div>
 
                 <!-- Assignees -->
-                <div v-if="activeRailTab === 'assignees'" class="mt-3 space-y-2">
+                <div
+                    v-if="activeRailTab === 'assignees'"
+                    class="mt-3 space-y-2"
+                >
                     <div
                         v-if="!assignees.length"
                         class="text-[12px] text-muted-foreground"
@@ -909,13 +1044,22 @@ function priorityRowColor(p: number): string {
                             class="flex size-5 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground"
                             aria-label="Unassigned"
                         ></span>
-                        <span class="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                        <span
+                            class="min-w-0 flex-1 truncate text-[12.5px] text-foreground"
+                        >
                             {{ row.user?.name ?? 'Unassigned' }}
                         </span>
-                        <span class="text-[11px] text-muted-foreground tabular-nums">
+                        <span
+                            class="text-[11px] text-muted-foreground tabular-nums"
+                        >
                             {{ row.percent }}% of {{ row.total }}
                         </span>
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                        >
                             <circle
                                 cx="7"
                                 cy="7"
@@ -932,7 +1076,9 @@ function priorityRowColor(p: number): string {
                                 stroke-width="2"
                                 :stroke="ringStrokeFor(row.percent)"
                                 :stroke-dasharray="`${ringC} ${ringC}`"
-                                :stroke-dashoffset="ringDashOffsetFor(row.percent)"
+                                :stroke-dashoffset="
+                                    ringDashOffsetFor(row.percent)
+                                "
                                 transform="rotate(-90 7 7)"
                             />
                         </svg>
@@ -940,7 +1086,10 @@ function priorityRowColor(p: number): string {
                 </div>
 
                 <!-- Labels -->
-                <div v-else-if="activeRailTab === 'labels'" class="mt-3 space-y-2">
+                <div
+                    v-else-if="activeRailTab === 'labels'"
+                    class="mt-3 space-y-2"
+                >
                     <div
                         v-if="!labels_breakdown.length"
                         class="text-[12px] text-muted-foreground"
@@ -952,11 +1101,21 @@ function priorityRowColor(p: number): string {
                         :key="row.label.id"
                         class="flex items-center gap-2"
                     >
-                        <LabelBadge :name="row.label.name" :color="row.label.color" />
-                        <span class="ml-auto text-[11px] text-muted-foreground tabular-nums">
+                        <LabelBadge
+                            :name="row.label.name"
+                            :color="row.label.color"
+                        />
+                        <span
+                            class="ml-auto text-[11px] text-muted-foreground tabular-nums"
+                        >
                             {{ row.percent }}% of {{ row.total }}
                         </span>
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                        >
                             <circle
                                 cx="7"
                                 cy="7"
@@ -973,7 +1132,9 @@ function priorityRowColor(p: number): string {
                                 stroke-width="2"
                                 :stroke="ringStrokeFor(row.percent)"
                                 :stroke-dasharray="`${ringC} ${ringC}`"
-                                :stroke-dashoffset="ringDashOffsetFor(row.percent)"
+                                :stroke-dashoffset="
+                                    ringDashOffsetFor(row.percent)
+                                "
                                 transform="rotate(-90 7 7)"
                             />
                         </svg>
@@ -981,7 +1142,10 @@ function priorityRowColor(p: number): string {
                 </div>
 
                 <!-- Priority -->
-                <div v-else-if="activeRailTab === 'priority'" class="mt-3 space-y-2">
+                <div
+                    v-else-if="activeRailTab === 'priority'"
+                    class="mt-3 space-y-2"
+                >
                     <div
                         v-if="!priority_breakdown.length"
                         class="text-[12px] text-muted-foreground"
@@ -997,11 +1161,19 @@ function priorityRowColor(p: number): string {
                         <span
                             class="min-w-0 flex-1 truncate text-[12.5px]"
                             :style="{ color: priorityRowColor(row.priority) }"
-                        >{{ row.label }}</span>
-                        <span class="text-[11px] text-muted-foreground tabular-nums">
+                            >{{ row.label }}</span
+                        >
+                        <span
+                            class="text-[11px] text-muted-foreground tabular-nums"
+                        >
                             {{ row.percent }}% of {{ row.total }}
                         </span>
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                        >
                             <circle
                                 cx="7"
                                 cy="7"
@@ -1018,7 +1190,9 @@ function priorityRowColor(p: number): string {
                                 stroke-width="2"
                                 :stroke="ringStrokeFor(row.percent)"
                                 :stroke-dasharray="`${ringC} ${ringC}`"
-                                :stroke-dashoffset="ringDashOffsetFor(row.percent)"
+                                :stroke-dashoffset="
+                                    ringDashOffsetFor(row.percent)
+                                "
                                 transform="rotate(-90 7 7)"
                             />
                         </svg>
@@ -1049,13 +1223,22 @@ function priorityRowColor(p: number): string {
                             v-else
                             class="size-4 rounded-sm border border-dashed border-border"
                         ></span>
-                        <span class="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                        <span
+                            class="min-w-0 flex-1 truncate text-[12.5px] text-foreground"
+                        >
                             {{ row.project?.name ?? 'No project' }}
                         </span>
-                        <span class="text-[11px] text-muted-foreground tabular-nums">
+                        <span
+                            class="text-[11px] text-muted-foreground tabular-nums"
+                        >
                             {{ row.percent }}% of {{ row.total }}
                         </span>
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                        >
                             <circle
                                 cx="7"
                                 cy="7"
@@ -1072,7 +1255,9 @@ function priorityRowColor(p: number): string {
                                 stroke-width="2"
                                 :stroke="ringStrokeFor(row.percent)"
                                 :stroke-dasharray="`${ringC} ${ringC}`"
-                                :stroke-dashoffset="ringDashOffsetFor(row.percent)"
+                                :stroke-dashoffset="
+                                    ringDashOffsetFor(row.percent)
+                                "
                                 transform="rotate(-90 7 7)"
                             />
                         </svg>

@@ -82,19 +82,29 @@ const SHORTCODES: Record<string, string> = {
 };
 
 export function resolveEmoji(input: string | null | undefined): string | null {
-    if (!input) return null;
+    if (!input) {
+        return null;
+    }
+
     const trimmed = input.trim();
-    if (!trimmed) return null;
+
+    if (!trimmed) {
+        return null;
+    }
 
     const m = trimmed.match(/^:([a-z0-9_+-]+):$/i);
+
     if (m) {
         const key = m[1].toLowerCase();
+
         return SHORTCODES[key] ?? null;
     }
 
     // Already an emoji or text — heuristic: if it has any non-ASCII, treat as emoji.
-    // eslint-disable-next-line no-control-regex
-    if (/[^\x00-\x7F]/.test(trimmed)) return trimmed;
+
+    if (/[^\x00-\x7F]/.test(trimmed)) {
+        return trimmed;
+    }
 
     return null;
 }

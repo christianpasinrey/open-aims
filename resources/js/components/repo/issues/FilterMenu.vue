@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { Check, SlidersHorizontal } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import Avatar from '@/components/repo/Avatar.vue';
+import PriorityIcon from '@/components/repo/PriorityIcon.vue';
+import ProjectIcon from '@/components/repo/ProjectIcon.vue';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,10 +17,6 @@ import {
     DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
-import PriorityIcon from '@/components/repo/PriorityIcon.vue';
-import Avatar from '@/components/repo/Avatar.vue';
-import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import { startedProgressByState } from '@/lib/states';
 
 type State = {
@@ -69,7 +69,11 @@ const orderedStates = computed(() =>
     [...props.states].sort((a, b) => {
         const ta = TYPE_RANK[a.type] ?? 99;
         const tb = TYPE_RANK[b.type] ?? 99;
-        if (ta !== tb) return ta - tb;
+
+        if (ta !== tb) {
+            return ta - tb;
+        }
+
         return a.position - b.position;
     }),
 );
@@ -79,13 +83,21 @@ const membersLoaded = ref(false);
 const membersLoading = ref(false);
 
 async function loadMembers(): Promise<void> {
-    if (membersLoaded.value || membersLoading.value) return;
+    if (membersLoaded.value || membersLoading.value) {
+        return;
+    }
+
     membersLoading.value = true;
+
     try {
         const res = await fetch('/workspace/members', {
             headers: { Accept: 'application/json' },
         });
-        if (!res.ok) return;
+
+        if (!res.ok) {
+            return;
+        }
+
         const json = (await res.json()) as { data?: Member[] };
         members.value = json.data ?? [];
         membersLoaded.value = true;
@@ -96,23 +108,42 @@ async function loadMembers(): Promise<void> {
     }
 }
 
-function navigate(patch: Record<string, string | number | null | undefined>): void {
+function navigate(
+    patch: Record<string, string | number | null | undefined>,
+): void {
     const params: Record<string, string> = {};
-    if (props.filters.team) params.team = props.filters.team;
-    if (props.filters.assignee) params.assignee = props.filters.assignee;
-    if (props.filters.state) params.state = props.filters.state;
-    if (props.filters.priority !== null && props.filters.priority !== undefined) {
+
+    if (props.filters.team) {
+        params.team = props.filters.team;
+    }
+
+    if (props.filters.assignee) {
+        params.assignee = props.filters.assignee;
+    }
+
+    if (props.filters.state) {
+        params.state = props.filters.state;
+    }
+
+    if (
+        props.filters.priority !== null &&
+        props.filters.priority !== undefined
+    ) {
         params.priority = String(props.filters.priority);
     }
+
     if (props.filters.project !== null && props.filters.project !== undefined) {
         params.project = String(props.filters.project);
     }
+
     if (props.filters.labels.length) {
         params.labels = props.filters.labels.join(',');
     }
+
     if (props.filters.group && props.filters.group !== 'status') {
         params.group = props.filters.group;
     }
+
     if (props.filters.sort && props.filters.sort !== 'priority') {
         params.sort = props.filters.sort;
     }
@@ -133,8 +164,13 @@ function navigate(patch: Record<string, string | number | null | undefined>): vo
 
 function toggleLabel(id: number): void {
     const current = new Set(props.filters.labels);
-    if (current.has(id)) current.delete(id);
-    else current.add(id);
+
+    if (current.has(id)) {
+        current.delete(id);
+    } else {
+        current.add(id);
+    }
+
     const next = [...current];
     navigate({ labels: next.length ? next.join(',') : null });
 }
@@ -143,11 +179,27 @@ const priorityOrder = [1, 2, 3, 4, 0]; // Urgent, High, Medium, Low, No priority
 
 const activeFilterCount = computed(() => {
     let n = 0;
-    if (props.filters.state) n++;
-    if (props.filters.priority !== null) n++;
-    if (props.filters.assignee) n++;
-    if (props.filters.project) n++;
-    if (props.filters.labels.length) n++;
+
+    if (props.filters.state) {
+        n++;
+    }
+
+    if (props.filters.priority !== null) {
+        n++;
+    }
+
+    if (props.filters.assignee) {
+        n++;
+    }
+
+    if (props.filters.project) {
+        n++;
+    }
+
+    if (props.filters.labels.length) {
+        n++;
+    }
+
     return n;
 });
 </script>
@@ -158,15 +210,20 @@ const activeFilterCount = computed(() => {
             <button
                 type="button"
                 class="relative rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
-                :class="activeFilterCount > 0 ? 'text-foreground' : 'text-muted-foreground'"
+                :class="
+                    activeFilterCount > 0
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
+                "
                 aria-label="Filter"
                 title="Filter"
             >
                 <SlidersHorizontal class="size-3.5" />
                 <span
                     v-if="activeFilterCount > 0"
-                    class="absolute -right-0.5 -top-0.5 inline-flex size-3.5 items-center justify-center rounded-full bg-brand text-[9px] font-semibold text-white"
-                >{{ activeFilterCount }}</span>
+                    class="absolute -top-0.5 -right-0.5 inline-flex size-3.5 items-center justify-center rounded-full bg-brand text-[9px] font-semibold text-white"
+                    >{{ activeFilterCount }}</span
+                >
             </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" class="w-52">
@@ -189,7 +246,10 @@ const activeFilterCount = computed(() => {
                             :size="14"
                         />
                         <span class="flex-1 truncate">{{ s.name }}</span>
-                        <Check v-if="filters.state === s.type" class="size-3.5 text-foreground" />
+                        <Check
+                            v-if="filters.state === s.type"
+                            class="size-3.5 text-foreground"
+                        />
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -211,8 +271,13 @@ const activeFilterCount = computed(() => {
                         @select="navigate({ priority: p })"
                     >
                         <PriorityIcon :priority="p" :size="14" />
-                        <span class="flex-1">{{ priorities[String(p)] ?? '' }}</span>
-                        <Check v-if="filters.priority === p" class="size-3.5 text-foreground" />
+                        <span class="flex-1">{{
+                            priorities[String(p)] ?? ''
+                        }}</span>
+                        <Check
+                            v-if="filters.priority === p"
+                            class="size-3.5 text-foreground"
+                        />
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -226,26 +291,44 @@ const activeFilterCount = computed(() => {
 
             <!-- Assignee -->
             <DropdownMenuSub>
-                <DropdownMenuSubTrigger @pointerdown="loadMembers" @pointerover="loadMembers">
+                <DropdownMenuSubTrigger
+                    @pointerdown="loadMembers"
+                    @pointerover="loadMembers"
+                >
                     Assignee
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent class="max-h-72 w-60 overflow-y-auto">
                     <DropdownMenuItem @select="navigate({ assignee: 'me' })">
-                        <span class="flex size-4 items-center justify-center rounded-full bg-muted text-[10px]">M</span>
+                        <span
+                            class="flex size-4 items-center justify-center rounded-full bg-muted text-[10px]"
+                            >M</span
+                        >
                         <span class="flex-1">Just me</span>
-                        <Check v-if="filters.assignee === 'me'" class="size-3.5 text-foreground" />
+                        <Check
+                            v-if="filters.assignee === 'me'"
+                            class="size-3.5 text-foreground"
+                        />
                     </DropdownMenuItem>
-                    <DropdownMenuItem @select="navigate({ assignee: 'unassigned' })">
-                        <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                    <DropdownMenuItem
+                        @select="navigate({ assignee: 'unassigned' })"
+                    >
+                        <span
+                            class="size-3.5 rounded-full border border-dashed border-border"
+                        ></span>
                         <span class="flex-1">Unassigned</span>
-                        <Check v-if="filters.assignee === 'unassigned'" class="size-3.5 text-foreground" />
+                        <Check
+                            v-if="filters.assignee === 'unassigned'"
+                            class="size-3.5 text-foreground"
+                        />
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <div
                         v-if="!membersLoaded"
                         class="px-2 py-1.5 text-xs text-muted-foreground"
                     >
-                        {{ membersLoading ? 'Loading…' : 'Open to load members' }}
+                        {{
+                            membersLoading ? 'Loading…' : 'Open to load members'
+                        }}
                     </div>
                     <template v-else>
                         <DropdownMenuItem
@@ -253,7 +336,11 @@ const activeFilterCount = computed(() => {
                             :key="m.id"
                             @select="navigate({ assignee: m.id })"
                         >
-                            <Avatar :name="m.name" :email="m.email" :size="16" />
+                            <Avatar
+                                :name="m.name"
+                                :email="m.email"
+                                :size="16"
+                            />
                             <span class="flex-1 truncate">{{ m.name }}</span>
                             <Check
                                 v-if="filters.assignee === String(m.id)"
@@ -309,9 +396,16 @@ const activeFilterCount = computed(() => {
                         :key="p.id"
                         @select="navigate({ project: p.id })"
                     >
-                        <ProjectIcon :icon="p.icon" :color="p.color" :size="14" />
+                        <ProjectIcon
+                            :icon="p.icon"
+                            :color="p.color"
+                            :size="14"
+                        />
                         <span class="flex-1 truncate">{{ p.name }}</span>
-                        <Check v-if="filters.project === p.id" class="size-3.5 text-foreground" />
+                        <Check
+                            v-if="filters.project === p.id"
+                            class="size-3.5 text-foreground"
+                        />
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

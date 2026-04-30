@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Integrations\Github;
 
 use Firebase\JWT\JWT;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -242,7 +243,7 @@ final class GithubAppService
         return hash_equals($expected, $signature);
     }
 
-    private function client(string $token): \Illuminate\Http\Client\PendingRequest
+    private function client(string $token): PendingRequest
     {
         return Http::withHeaders([
             'Accept' => self::ACCEPT,

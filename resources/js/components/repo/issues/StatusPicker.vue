@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { Check } from 'lucide-vue-next';
+import { computed } from 'vue';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
-import PropertyRow from './PropertyRow.vue';
 import { startedProgressByState } from '@/lib/states';
+import PropertyRow from './PropertyRow.vue';
 
 type State = {
     id: number;
@@ -40,13 +40,20 @@ const ordered = computed(() =>
     [...props.states].sort((a, b) => {
         const ta = TYPE_RANK[a.type] ?? 99;
         const tb = TYPE_RANK[b.type] ?? 99;
-        if (ta !== tb) return ta - tb;
+
+        if (ta !== tb) {
+            return ta - tb;
+        }
+
         return a.position - b.position;
     }),
 );
 
 function pick(stateId: number): void {
-    if (props.current?.id === stateId) return;
+    if (props.current?.id === stateId) {
+        return;
+    }
+
     router.patch(
         `/issues/${props.identifier}`,
         { workflow_state_id: stateId },
@@ -68,12 +75,17 @@ function pick(stateId: number): void {
                     <span>{{ current.name }}</span>
                 </template>
                 <template v-else>
-                    <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                    <span
+                        class="size-3.5 rounded-full border border-dashed border-border"
+                    ></span>
                     <span>—</span>
                 </template>
             </PropertyRow>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" class="max-h-72 w-56 overflow-y-auto">
+        <DropdownMenuContent
+            align="start"
+            class="max-h-72 w-56 overflow-y-auto"
+        >
             <DropdownMenuItem
                 v-for="s in ordered"
                 :key="s.id"

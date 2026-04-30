@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { Check } from 'lucide-vue-next';
+import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import PropertyRow from './PropertyRow.vue';
 
 const props = defineProps<{
@@ -20,7 +20,10 @@ const props = defineProps<{
 const order = [1, 2, 3, 4, 0]; // Urgent, High, Medium, Low, No priority
 
 function pick(p: number): void {
-    if (props.current === p) return;
+    if (props.current === p) {
+        return;
+    }
+
     router.patch(
         `/issues/${props.identifier}`,
         { priority: p },
@@ -38,11 +41,7 @@ function pick(p: number): void {
             </PropertyRow>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" class="w-52">
-            <DropdownMenuItem
-                v-for="p in order"
-                :key="p"
-                @select="pick(p)"
-            >
+            <DropdownMenuItem v-for="p in order" :key="p" @select="pick(p)">
                 <PriorityIcon :priority="p" :size="14" />
                 <span class="flex-1">{{ priorities[String(p)] ?? '' }}</span>
                 <Check v-if="current === p" class="size-3.5 text-foreground" />

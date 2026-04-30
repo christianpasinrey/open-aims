@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { Calendar, Plus, X } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -28,22 +28,40 @@ watch(
 );
 
 const display = computed(() => {
-    if (!props.current) return null;
+    if (!props.current) {
+        return null;
+    }
+
     const target = new Date(props.current);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     target.setHours(0, 0, 0, 0);
-    const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    if (diffDays === -1) return 'Yesterday';
+    const diffDays = Math.round(
+        (target.getTime() - today.getTime()) / 86_400_000,
+    );
+
+    if (diffDays === 0) {
+        return 'Today';
+    }
+
+    if (diffDays === 1) {
+        return 'Tomorrow';
+    }
+
+    if (diffDays === -1) {
+        return 'Yesterday';
+    }
+
     if (diffDays > 1 && diffDays < 7) {
         return target.toLocaleDateString(undefined, { weekday: 'long' });
     }
+
     return target.toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
-        ...(target.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+        ...(target.getFullYear() === today.getFullYear()
+            ? {}
+            : { year: 'numeric' }),
     });
 });
 
@@ -58,7 +76,11 @@ function commit(value: string | null): void {
 
 function onDateInput(e: Event): void {
     const next = (e.target as HTMLInputElement).value;
-    if (!next) return;
+
+    if (!next) {
+        return;
+    }
+
     commit(next);
 }
 </script>
@@ -73,8 +95,8 @@ function onDateInput(e: Event): void {
                     overdue
                         ? 'text-red-400 hover:bg-red-500/10'
                         : current
-                            ? 'text-foreground hover:bg-accent/60'
-                            : 'text-muted-foreground hover:bg-accent/60'
+                          ? 'text-foreground hover:bg-accent/60'
+                          : 'text-muted-foreground hover:bg-accent/60'
                 "
                 aria-label="Due date"
             >
@@ -90,20 +112,19 @@ function onDateInput(e: Event): void {
             </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" class="w-56 p-2">
-            <label class="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+            <label
+                class="mb-1 block text-[11px] tracking-wide text-muted-foreground uppercase"
+            >
                 Due date
             </label>
             <input
                 v-model="localValue"
                 type="date"
-                class="w-full rounded border border-border bg-background px-2 py-1 text-[13px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                class="w-full rounded border border-border bg-background px-2 py-1 text-[13px] text-foreground focus:ring-1 focus:ring-ring focus:outline-none"
                 @change="onDateInput"
             />
             <DropdownMenuSeparator class="my-2" />
-            <DropdownMenuItem
-                :disabled="!current"
-                @select="commit(null)"
-            >
+            <DropdownMenuItem :disabled="!current" @select="commit(null)">
                 <X class="size-3.5" />
                 <span>Clear</span>
             </DropdownMenuItem>

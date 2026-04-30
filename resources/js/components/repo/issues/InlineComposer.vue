@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { Loader2 } from 'lucide-vue-next';
+import { nextTick, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
 const props = defineProps<{
     open: boolean;
@@ -32,20 +34,35 @@ function close(): void {
 
 function submit(): void {
     const t = title.value.trim();
+
     if (!t || submitting.value) {
-        if (!t) close();
+        if (!t) {
+            close();
+        }
+
         return;
     }
+
     submitting.value = true;
     const payload: Record<string, string | number | null> = {
         title: t,
         team_key: props.teamKey,
     };
+
     for (const [k, v] of Object.entries(props.context ?? {})) {
-        if (v !== null && v !== undefined && v !== '') payload[k] = v as string | number;
+        if (v !== null && v !== undefined && v !== '') {
+            payload[k] = v as string | number;
+        }
     }
+
     router.post('/issues', payload, {
         preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Issue created');
+        },
+        onError: () => {
+            toast.error('Could not create issue');
+        },
         onFinish: () => {
             submitting.value = false;
         },
@@ -54,7 +71,9 @@ function submit(): void {
 
 function onBlur(): void {
     // Mirror repo: empty input dismisses on blur, populated input stays.
-    if (!title.value.trim()) close();
+    if (!title.value.trim()) {
+        close();
+    }
 }
 </script>
 
@@ -63,7 +82,9 @@ function onBlur(): void {
         v-if="open"
         class="flex items-center gap-2 border-b border-border bg-background px-4 py-1.5"
     >
-        <span class="size-3.5 shrink-0 rounded-full border border-dashed border-border"></span>
+        <span
+            class="size-3.5 shrink-0 rounded-full border border-dashed border-border"
+        ></span>
         <input
             ref="inputEl"
             v-model="title"
@@ -75,8 +96,15 @@ function onBlur(): void {
             @keydown.esc.prevent="close"
             @blur="onBlur"
         />
+        <Loader2
+            v-if="submitting"
+            class="size-3.5 shrink-0 animate-spin text-muted-foreground"
+            aria-label="Creating issue"
+        />
         <kbd
+            v-else
             class="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-        >Enter</kbd>
+            >Enter</kbd
+        >
     </div>
 </template>

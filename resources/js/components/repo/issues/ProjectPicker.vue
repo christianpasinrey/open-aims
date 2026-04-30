@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { Check, Plus } from 'lucide-vue-next';
+import ProjectChip from '@/components/repo/ProjectChip.vue';
+import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -8,8 +10,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import ProjectIcon from '@/components/repo/ProjectIcon.vue';
-import ProjectChip from '@/components/repo/ProjectChip.vue';
 
 type Project = {
     id: number;
@@ -26,7 +26,10 @@ const props = defineProps<{
 }>();
 
 function pick(id: number | null): void {
-    if ((props.current?.id ?? null) === id) return;
+    if ((props.current?.id ?? null) === id) {
+        return;
+    }
+
     router.patch(
         `/issues/${props.identifier}`,
         { project_id: id },
@@ -59,9 +62,14 @@ function pick(id: number | null): void {
                 </span>
             </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" class="max-h-72 w-60 overflow-y-auto">
+        <DropdownMenuContent
+            align="start"
+            class="max-h-72 w-60 overflow-y-auto"
+        >
             <DropdownMenuItem @select="pick(null)">
-                <span class="size-3.5 rounded-full border border-dashed border-border"></span>
+                <span
+                    class="size-3.5 rounded-full border border-dashed border-border"
+                ></span>
                 <span class="flex-1">No project</span>
                 <Check v-if="!current" class="size-3.5 text-foreground" />
             </DropdownMenuItem>
@@ -73,7 +81,10 @@ function pick(id: number | null): void {
             >
                 <ProjectIcon :icon="p.icon" :color="p.color" :size="14" />
                 <span class="flex-1 truncate">{{ p.name }}</span>
-                <Check v-if="current?.id === p.id" class="size-3.5 text-foreground" />
+                <Check
+                    v-if="current?.id === p.id"
+                    class="size-3.5 text-foreground"
+                />
             </DropdownMenuItem>
         </DropdownMenuContent>
     </DropdownMenu>

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import {
     Archive,
     ChevronDown,
@@ -9,6 +8,9 @@ import {
     Network,
     Trash2,
 } from 'lucide-vue-next';
+import { computed } from 'vue';
+import { toast } from 'vue-sonner';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -17,8 +19,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
-import { toast } from 'vue-sonner';
 
 type RelatedIssue = {
     identifier: string;
@@ -41,14 +41,17 @@ const branchName = computed(() => {
         .trim()
         .replace(/\s+/g, '-')
         .slice(0, 60);
+
     return `christianpasinrey/${props.identifier.toLowerCase()}-${slug}`;
 });
 
 function copy(text: string, message: string): void {
     if (typeof navigator === 'undefined' || !navigator.clipboard) {
         toast.error('Clipboard not available');
+
         return;
     }
+
     navigator.clipboard
         .writeText(text)
         .then(() => toast.success(message))
@@ -125,13 +128,18 @@ function copyBranch(): void {
                             :color="r.state?.color"
                             :size="14"
                         />
-                        <span class="font-mono text-[11px] text-muted-foreground">{{
-                            r.identifier
+                        <span
+                            class="font-mono text-[11px] text-muted-foreground"
+                            >{{ r.identifier }}</span
+                        >
+                        <span class="min-w-0 flex-1 truncate">{{
+                            r.title
                         }}</span>
-                        <span class="min-w-0 flex-1 truncate">{{ r.title }}</span>
                     </DropdownMenuItem>
                 </template>
-                <DropdownMenuItem v-else disabled>No suggestions</DropdownMenuItem>
+                <DropdownMenuItem v-else disabled
+                    >No suggestions</DropdownMenuItem
+                >
             </DropdownMenuContent>
         </DropdownMenu>
 

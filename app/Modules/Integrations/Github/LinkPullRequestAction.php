@@ -8,6 +8,7 @@ use App\Modules\Integrations\Github\Models\GithubInstallation;
 use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Teams\Models\Team;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -72,9 +73,9 @@ final class LinkPullRequestAction
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, Issue>
+     * @return Collection<int, Issue>
      */
-    private function matchIssues(GithubInstallation $installation, string $branch): \Illuminate\Support\Collection
+    private function matchIssues(GithubInstallation $installation, string $branch): Collection
     {
         $workspaceId = $installation->workspace_id;
 
