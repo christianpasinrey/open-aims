@@ -42,7 +42,7 @@ final class GithubOAuthController
         $request->session()->put('gh_intent', $intent);
 
         return Socialite::driver('github')
-            ->scopes(['read:user', 'user:email'])
+            ->scopes(['read:user', 'user:email', 'read:org'])
             ->redirect();
     }
 
