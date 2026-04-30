@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
 use Illuminate\Http\Request;
@@ -63,17 +64,38 @@ class HandleInertiaRequests extends Middleware
             return null;
         }
 
+        $now = now();
+
         $teams = Team::query()
             ->where('workspace_id', $workspace->getKey())
             ->orderBy('name')
             ->get(['id', 'name', 'key', 'icon', 'color'])
-            ->map(fn (Team $t): array => [
-                'id' => $t->id,
-                'name' => $t->name,
-                'key' => $t->key,
-                'icon' => $t->icon,
-                'color' => $t->color,
-            ])
+            ->map(function (Team $t) use ($now): array {
+                $current = Cycle::query()
+                    ->where('team_id', $t->id)
+                    ->whereNull('completed_at')
+                    ->where('starts_at', '<=', $now)
+                    ->where('ends_at', '>=', $now)
+                    ->orderBy('starts_at')
+                    ->value('number');
+
+                $upcoming = Cycle::query()
+                    ->where('team_id', $t->id)
+                    ->whereNull('completed_at')
+                    ->where('starts_at', '>', $now)
+                    ->orderBy('starts_at')
+                    ->value('number');
+
+                return [
+                    'id' => $t->id,
+                    'name' => $t->name,
+                    'key' => $t->key,
+                    'icon' => $t->icon,
+                    'color' => $t->color,
+                    'current_cycle_number' => $current !== null ? (int) $current : null,
+                    'upcoming_cycle_number' => $upcoming !== null ? (int) $upcoming : null,
+                ];
+            })
             ->all();
 
         return [
