@@ -23,6 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        // GitHub App webhook is signature-verified, not session-backed.
+        $middleware->validateCsrfTokens(except: [
+            'gh/webhook',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

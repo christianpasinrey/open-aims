@@ -30,6 +30,7 @@ class Issue extends Model
         'number',
         'title',
         'description',
+        'git_branch_name',
         'workflow_state_id',
         'priority',
         'assignee_user_id',

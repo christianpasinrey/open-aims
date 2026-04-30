@@ -17,6 +17,7 @@ import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
 import IssueActions from '@/components/repo/issues/IssueActions.vue';
 import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
 import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
+import LinkedPullRequests from '@/components/repo/issues/LinkedPullRequests.vue';
 
 type State = { id: number; name: string; type: string; color: string; position: number };
 type Label = { id: number; name: string; color?: string | null };
@@ -41,6 +42,7 @@ type Issue = {
     number: number;
     title: string;
     description: string | null;
+    git_branch_name: string | null;
     priority: number;
     priority_label: string;
     estimate: number | null;
@@ -65,6 +67,18 @@ type Issue = {
     created_at: string | null;
     updated_at: string | null;
 };
+type LinkedPullRequest = {
+    id: number;
+    number: number;
+    title: string;
+    state: 'open' | 'closed' | 'merged' | string;
+    url: string;
+    branch_name: string;
+    author_login: string | null;
+    opened_at: string | null;
+    closed_at: string | null;
+    merged_at: string | null;
+};
 type Comment = {
     id: number;
     body: string;
@@ -82,6 +96,7 @@ const props = defineProps<{
     labels: Label[];
     projects: Project[];
     priorities: Record<string, string>;
+    linked_pull_requests?: LinkedPullRequest[];
 }>();
 
 const commentBodies = computed<Record<number, string>>(() =>
@@ -308,7 +323,14 @@ const isOverdue = computed<boolean>(() => {
                     </section>
 
                     <!-- Relations -->
-                    <section v-if="issue.parent || issue.children.length">
+                    <section
+                        v-if="
+                            issue.parent ||
+                            issue.children.length ||
+                            (linked_pull_requests && linked_pull_requests.length) ||
+                            issue.git_branch_name
+                        "
+                    >
                         <button
                             type="button"
                             class="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
@@ -372,6 +394,11 @@ const isOverdue = computed<boolean>(() => {
                                     </li>
                                 </ul>
                             </div>
+
+                            <LinkedPullRequests
+                                :pull-requests="linked_pull_requests ?? []"
+                                :branch-name="issue.git_branch_name"
+                            />
                         </div>
                     </section>
                 </div>
