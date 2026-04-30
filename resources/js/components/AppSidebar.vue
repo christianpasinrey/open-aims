@@ -700,7 +700,7 @@ const tryOpen = ref(false);
                 </SidebarMenuItem>
             </SidebarMenu>
             <a
-                href="https://the app/changelog"
+                href="https://github.com/repo-lab"
                 target="_blank"
                 rel="noreferrer"
                 class="mx-2 mt-2 block rounded-md border border-sidebar-border bg-card/50 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground transition-colors group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-foreground"
@@ -708,7 +708,7 @@ const tryOpen = ref(false);
                 <span class="block font-medium text-foreground"
                     >What&rsquo;s new</span
                 >
-                repo Agent MCP support
+                repo-lab Agent MCP support
             </a>
         </SidebarFooter>
 
