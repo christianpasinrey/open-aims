@@ -19,6 +19,7 @@ import {
     KeyRound,
     SunMoon,
     Github,
+    Terminal,
     LogOut,
     Check,
     Plus,
@@ -797,6 +798,12 @@ const tryOpen = ref(false);
                                 <Link :href="'/settings/github'">
                                     <Github class="size-3.5" />
                                     <span>GitHub integration</span>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem as-child>
+                                <Link :href="'/settings/developer'">
+                                    <Terminal class="size-3.5" />
+                                    <span>Connect Claude (MCP)</span>
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
