@@ -23,6 +23,10 @@ const sidebarNavItems: NavItem[] = [
         title: 'Appearance',
         href: editAppearance(),
     },
+    {
+        title: 'GitHub',
+        href: '/settings/github',
+    },
 ];
 
 const { isCurrentOrParentUrl } = useCurrentUrl();

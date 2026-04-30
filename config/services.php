@@ -41,4 +41,19 @@ return [
         'redirect' => env('GITHUB_REDIRECT', '/gh/callback'),
     ],
 
+    'github_app' => [
+        'app_id' => env('GITHUB_APP_ID'),
+        'app_name' => env('GITHUB_APP_NAME'),
+        'webhook_secret' => env('GITHUB_APP_WEBHOOK_SECRET'),
+        'private_key_path' => env('GITHUB_APP_PRIVATE_KEY_PATH', 'storage/keys/github-app.pem'),
+        'install_url' => env('GITHUB_APP_INSTALL_URL'),
+
+        // repo team key → GitHub repo full name. Hardcoded for now,
+        // env-overridable per entry. Future: move to a `teams.github_repo_full_name`
+        // column.
+        'team_repo_map' => [
+            'LAM' => env('GITHUB_APP_REPO_LAM', 'repo-lab/repo'),
+        ],
+    ],
+
 ];

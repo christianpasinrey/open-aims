@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Issues\Http\Controllers;
 
 use App\Modules\Cycles\Models\Cycle;
+use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
 use App\Modules\Issues\Enums\IssuePriority;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\Issue;
@@ -90,6 +91,12 @@ final class IssueDetailController
             ->orderBy('name')
             ->get(['id', 'name', 'slug', 'color', 'icon']);
 
+        $linkedPullRequests = GithubLinkedPullRequest::query()
+            ->where('issue_id', $issue->id)
+            ->orderByDesc('opened_at')
+            ->orderByDesc('id')
+            ->get();
+
         return Inertia::render('issues/Show', [
             'team' => [
                 'id' => $team->id,
@@ -103,6 +110,7 @@ final class IssueDetailController
                 'number' => $issue->number,
                 'title' => $issue->title,
                 'description' => $issue->description,
+                'git_branch_name' => $issue->git_branch_name,
                 'priority' => (int) ($issue->priority?->value ?? 0),
                 'priority_label' => ($issue->priority ?? IssuePriority::None)->label(),
                 'estimate' => $issue->estimate,
@@ -205,6 +213,20 @@ final class IssueDetailController
                 'color' => $p->color,
                 'icon' => $p->icon,
             ])->all(),
+            'linked_pull_requests' => $linkedPullRequests
+                ->map(fn (GithubLinkedPullRequest $pr): array => [
+                    'id' => $pr->id,
+                    'number' => $pr->pr_number,
+                    'title' => $pr->pr_title,
+                    'state' => $pr->pr_state,
+                    'url' => $pr->pr_url,
+                    'branch_name' => $pr->branch_name,
+                    'author_login' => $pr->author_login,
+                    'opened_at' => $pr->opened_at?->toIso8601String(),
+                    'closed_at' => $pr->closed_at?->toIso8601String(),
+                    'merged_at' => $pr->merged_at?->toIso8601String(),
+                ])
+                ->all(),
         ]);
     }
 

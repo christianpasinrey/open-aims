@@ -21,6 +21,14 @@ final class IntegrationsServiceProvider extends ModuleServiceProvider
 
         $this->app->make(ModuleRegistry::class)->register(new IntegrationsModuleManifest);
 
+        // Sub-integrations live in their own directories; load their
+        // migrations explicitly since ModuleServiceProvider only scans
+        // the top-level Integrations/Database/Migrations folder.
+        $githubMigrations = __DIR__.'/Github/Database/Migrations';
+        if (is_dir($githubMigrations)) {
+            $this->loadMigrationsFrom($githubMigrations);
+        }
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 ImportFromrepoCommand::class,
