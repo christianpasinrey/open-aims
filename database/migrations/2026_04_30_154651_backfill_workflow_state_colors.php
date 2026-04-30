@@ -44,17 +44,16 @@ return new class extends Migration
                 continue;
             }
 
-            // repo-ish gradient within started: yellow (early) → purple
-            // (late, mirroring "In Review"). Avoids clashing with Done's
-            // purple by using a slightly different hue for the very-late slot.
+            // started gradient: yellow (early) → green (late, "In Review").
+            // Done is purple (repo's brand) so green here doesn't clash.
             $palette = match (true) {
-                $count === 1 => ['#f2c94c'],
-                $count === 2 => ['#f2c94c', '#a855f7'],
-                default => ['#f2c94c', '#3b82f6', '#a855f7'],
+                $count === 1 => ['#10b981'],
+                $count === 2 => ['#f2c94c', '#10b981'],
+                default => ['#f2c94c', '#3b82f6', '#10b981'],
             };
 
             foreach ($started as $i => $s) {
-                $color = $palette[$i] ?? '#a855f7';
+                $color = $palette[$i] ?? '#10b981';
                 DB::table('workflow_states')
                     ->where('id', $s->id)
                     ->update(['color' => $color]);

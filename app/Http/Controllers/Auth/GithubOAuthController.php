@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,6 +28,13 @@ final class GithubOAuthController
 {
     public function redirect(Request $request): Response
     {
+        if (config('services.github.client_id') === null
+            || config('services.github.client_id') === '') {
+            return redirect('/login')->withErrors([
+                'github' => 'GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env.',
+            ]);
+        }
+
         $intent = $request->query('intent') === 'connect' ? 'connect' : 'login';
         if ($intent === 'connect' && Auth::guest()) {
             return redirect('/login');
@@ -42,12 +50,26 @@ final class GithubOAuthController
     {
         $intent = $request->session()->pull('gh_intent', 'login');
 
+        // GitHub returns errors as query params before we hit Socialite.
+        if ($request->query('error')) {
+            $msg = (string) ($request->query('error_description')
+                ?: $request->query('error'));
+
+            return $this->redirectAfterFailure($intent, $msg);
+        }
+
         try {
             $ghUser = Socialite::driver('github')->user();
         } catch (Throwable $e) {
-            return redirect('/login')->withErrors([
-                'oauth' => 'GitHub authentication failed: '.$e->getMessage(),
+            Log::warning('GitHub OAuth callback failed', [
+                'intent' => $intent,
+                'error' => $e->getMessage(),
             ]);
+
+            return $this->redirectAfterFailure(
+                $intent,
+                'GitHub authentication failed. Verify GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET and that the registered callback URL matches your APP_URL. (Detail: '.$e->getMessage().')',
+            );
         }
 
         $githubId = (string) $ghUser->getId();
@@ -126,5 +148,12 @@ final class GithubOAuthController
         ])->save();
 
         return redirect('/settings/profile')->with('status', 'github-unlinked');
+    }
+
+    private function redirectAfterFailure(string $intent, string $message): RedirectResponse
+    {
+        $target = $intent === 'connect' ? '/settings/profile' : '/login';
+
+        return redirect($target)->withErrors(['github' => $message]);
     }
 }

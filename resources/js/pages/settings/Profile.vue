@@ -114,6 +114,13 @@ const user = computed(() => page.props.auth.user);
             description="Sign in with another provider or link an existing account."
         />
 
+        <p
+            v-if="(page.props.errors as Record<string, string>).github"
+            class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive"
+        >
+            {{ (page.props.errors as Record<string, string>).github }}
+        </p>
+
         <div
             class="flex items-center justify-between gap-4 rounded-md border border-border bg-card px-4 py-3"
         >
