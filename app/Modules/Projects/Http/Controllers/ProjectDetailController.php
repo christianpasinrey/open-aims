@@ -66,15 +66,51 @@ final class ProjectDetailController
         $completedIssues = $issues
             ->filter(static fn (Issue $i) => $i->workflowState?->type === 'completed')
             ->count();
+        $startedIssues = $issues
+            ->filter(static fn (Issue $i) => $i->workflowState?->type === 'started')
+            ->count();
         $progress = $totalIssues > 0 ? (int) round(($completedIssues / $totalIssues) * 100) : 0;
+
+        // Build per-assignee aggregates for the right-rail Progress > Assignees tab.
+        $assigneeBuckets = [];
+        foreach ($issues as $issue) {
+            /** @var Issue $issue */
+            $key = $issue->assignee?->id ?? 0;
+            if (! isset($assigneeBuckets[$key])) {
+                $assigneeBuckets[$key] = [
+                    'user' => $issue->assignee ? [
+                        'id' => $issue->assignee->id,
+                        'name' => $issue->assignee->name,
+                        'email' => $issue->assignee->email,
+                    ] : null,
+                    'total' => 0,
+                    'completed' => 0,
+                ];
+            }
+            $assigneeBuckets[$key]['total']++;
+            if ($issue->workflowState?->type === 'completed') {
+                $assigneeBuckets[$key]['completed']++;
+            }
+        }
+        $assignees = array_map(static function (array $row): array {
+            $row['percent'] = $row['total'] > 0
+                ? (int) round(($row['completed'] / $row['total']) * 100)
+                : 0;
+
+            return $row;
+        }, array_values($assigneeBuckets));
+        usort($assignees, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
 
         return Inertia::render('projects/Show', [
             'tab' => $tab,
             'progress' => [
                 'total' => $totalIssues,
                 'completed' => $completedIssues,
+                'started' => $startedIssues,
                 'percent' => $progress,
             ],
+            'assignees' => $assignees,
+            'labels' => [],
             'states' => $statePositions->values()->map(static fn ($s): array => [
                 'id' => $s->id,
                 'name' => $s->name,
@@ -109,6 +145,10 @@ final class ProjectDetailController
                     'name' => $ms->name,
                     'description' => $ms->description,
                     'target_date' => $ms->target_date,
+                    // TODO: when an `issues.project_milestone_id` column exists,
+                    // count issues per milestone here and compute the % completed.
+                    'issue_count' => 0,
+                    'percent' => 0,
                 ])->all(),
                 'teams' => $project->teams->map(fn ($t): array => [
                     'id' => $t->id,
