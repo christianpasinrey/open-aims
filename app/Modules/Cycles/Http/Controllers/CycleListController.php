@@ -18,9 +18,21 @@ final class CycleListController
         $teamKey = $request->query('team');
         $teamKey = is_string($teamKey) && $teamKey !== '' ? strtoupper($teamKey) : null;
 
+        $view = $request->query('view');
+        $view = is_string($view) ? strtolower($view) : 'all';
+        if (! in_array($view, ['all', 'current', 'upcoming', 'completed'], true)) {
+            $view = 'all';
+        }
+
+        $sort = $request->query('sort');
+        $sort = is_string($sort) ? strtolower($sort) : 'date_desc';
+        if (! in_array($sort, ['date_desc', 'number_desc'], true)) {
+            $sort = 'date_desc';
+        }
+
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
         if (! $workspace instanceof Workspace) {
-            return Inertia::render('cycles/Index', ['cycles' => [], 'team' => null]);
+            return $this->emptyResponse($view, $sort, $teamKey);
         }
 
         $teamQuery = Team::query()->where('workspace_id', $workspace->id);
@@ -29,15 +41,40 @@ final class CycleListController
             : $teamQuery->orderBy('name')->first();
 
         if ($team === null) {
-            return Inertia::render('cycles/Index', ['cycles' => [], 'team' => null]);
+            return $this->emptyResponse($view, $sort, $teamKey);
         }
 
-        $cycles = Cycle::query()
-            ->where('team_id', $team->id)
-            ->orderByDesc('starts_at')
-            ->get();
+        $cyclesQuery = Cycle::query()->where('team_id', $team->id);
 
         $now = now();
+
+        switch ($view) {
+            case 'current':
+                $cyclesQuery
+                    ->whereNull('completed_at')
+                    ->where('starts_at', '<=', $now)
+                    ->where('ends_at', '>=', $now);
+                break;
+            case 'upcoming':
+                $cyclesQuery->where('starts_at', '>', $now);
+                break;
+            case 'completed':
+                $cyclesQuery->where(function ($q) use ($now): void {
+                    $q->whereNotNull('completed_at')
+                        ->orWhere('ends_at', '<', $now);
+                });
+                break;
+            case 'all':
+            default:
+                // no filter
+                break;
+        }
+
+        $cyclesQuery = $sort === 'number_desc'
+            ? $cyclesQuery->orderByDesc('number')
+            : $cyclesQuery->orderByDesc('starts_at');
+
+        $cycles = $cyclesQuery->get();
 
         return Inertia::render('cycles/Index', [
             'team' => [
@@ -63,6 +100,24 @@ final class CycleListController
                     'is_current' => $isCurrent,
                 ];
             })->all(),
+            'filters' => [
+                'team' => $team->key,
+                'view' => $view,
+                'sort' => $sort,
+            ],
+        ]);
+    }
+
+    private function emptyResponse(string $view, string $sort, ?string $teamKey): Response
+    {
+        return Inertia::render('cycles/Index', [
+            'cycles' => [],
+            'team' => null,
+            'filters' => [
+                'team' => $teamKey,
+                'view' => $view,
+                'sort' => $sort,
+            ],
         ]);
     }
 }

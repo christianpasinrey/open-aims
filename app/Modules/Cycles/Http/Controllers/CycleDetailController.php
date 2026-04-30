@@ -11,12 +11,24 @@ use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class CycleDetailController
 {
+    /**
+     * @var array<int,string>
+     */
+    private const PRIORITY_LABELS = [
+        0 => 'No priority',
+        1 => 'Urgent',
+        2 => 'High',
+        3 => 'Medium',
+        4 => 'Low',
+    ];
+
     public function show(Request $request, int $number): Response
     {
         $teamKey = $request->query('team');
@@ -81,7 +93,7 @@ final class CycleDetailController
         $assigneeGroups = $issues->groupBy(static fn (Issue $i) => $i->assignee_user_id);
         $assignees = $assigneeGroups
             ->map(function ($group) {
-                /** @var \Illuminate\Support\Collection<int,Issue> $group */
+                /** @var Collection<int,Issue> $group */
                 $first = $group->first();
                 $user = $first?->assignee;
                 $total = $group->count();
@@ -105,6 +117,100 @@ final class CycleDetailController
             ->sortByDesc('total')
             ->values()
             ->all();
+
+        // Per-label breakdown
+        $labelBuckets = [];
+        foreach ($issues as $issue) {
+            $isCompleted = $issue->workflowState?->type === 'completed';
+            if ($issue->labels->isEmpty()) {
+                continue;
+            }
+            foreach ($issue->labels as $label) {
+                $key = (int) $label->id;
+                if (! isset($labelBuckets[$key])) {
+                    $labelBuckets[$key] = [
+                        'label' => [
+                            'id' => (int) $label->id,
+                            'name' => $label->name,
+                            'color' => $label->color,
+                        ],
+                        'total' => 0,
+                        'completed' => 0,
+                    ];
+                }
+                $labelBuckets[$key]['total']++;
+                if ($isCompleted) {
+                    $labelBuckets[$key]['completed']++;
+                }
+            }
+        }
+        $labelsBreakdown = array_values(array_map(static function (array $row): array {
+            $row['percent'] = $row['total'] > 0
+                ? (int) round(($row['completed'] / $row['total']) * 100)
+                : 0;
+
+            return $row;
+        }, $labelBuckets));
+        usort($labelsBreakdown, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
+
+        // Per-priority breakdown (0..4)
+        $priorityBuckets = [];
+        foreach ($issues as $issue) {
+            $p = (int) ($issue->priority?->value ?? 0);
+            if (! isset($priorityBuckets[$p])) {
+                $priorityBuckets[$p] = ['priority' => $p, 'total' => 0, 'completed' => 0];
+            }
+            $priorityBuckets[$p]['total']++;
+            if ($issue->workflowState?->type === 'completed') {
+                $priorityBuckets[$p]['completed']++;
+            }
+        }
+        $priorityBreakdown = array_values(array_map(static function (array $row): array {
+            $row['label'] = self::PRIORITY_LABELS[$row['priority']] ?? 'No priority';
+            $row['percent'] = $row['total'] > 0
+                ? (int) round(($row['completed'] / $row['total']) * 100)
+                : 0;
+
+            return $row;
+        }, $priorityBuckets));
+        // Order: Urgent → High → Medium → Low → No priority
+        $orderMap = [1 => 0, 2 => 1, 3 => 2, 4 => 3, 0 => 4];
+        usort(
+            $priorityBreakdown,
+            static fn (array $a, array $b): int => ($orderMap[$a['priority']] ?? 5) <=> ($orderMap[$b['priority']] ?? 5),
+        );
+
+        // Per-project breakdown
+        $projectBuckets = [];
+        foreach ($issues as $issue) {
+            $project = $issue->project;
+            $key = $project ? (int) $project->id : 0;
+            if (! isset($projectBuckets[$key])) {
+                $projectBuckets[$key] = [
+                    'project' => $project ? [
+                        'id' => (int) $project->id,
+                        'name' => $project->name,
+                        'slug' => $project->slug,
+                        'color' => $project->color,
+                        'icon' => $project->icon,
+                    ] : null,
+                    'total' => 0,
+                    'completed' => 0,
+                ];
+            }
+            $projectBuckets[$key]['total']++;
+            if ($issue->workflowState?->type === 'completed') {
+                $projectBuckets[$key]['completed']++;
+            }
+        }
+        $projectsBreakdown = array_values(array_map(static function (array $row): array {
+            $row['percent'] = $row['total'] > 0
+                ? (int) round(($row['completed'] / $row['total']) * 100)
+                : 0;
+
+            return $row;
+        }, $projectBuckets));
+        usort($projectsBreakdown, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
 
         // Cycle status
         $now = CarbonImmutable::now();
@@ -150,6 +256,9 @@ final class CycleDetailController
                 'scope_change_percent' => null,
             ],
             'assignees' => $assignees,
+            'labels_breakdown' => $labelsBreakdown,
+            'priority_breakdown' => $priorityBreakdown,
+            'projects_breakdown' => $projectsBreakdown,
             'states' => $states->map(fn (WorkflowState $s): array => [
                 'id' => $s->id,
                 'name' => $s->name,
@@ -186,6 +295,7 @@ final class CycleDetailController
                     'name' => $l->name,
                     'color' => $l->color,
                 ])->all(),
+                'completed_at' => $i->completed_at?->toIso8601String(),
                 'updated_at' => $i->updated_at?->toIso8601String(),
             ])->all(),
         ]);
