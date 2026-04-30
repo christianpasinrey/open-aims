@@ -81,27 +81,47 @@ const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint
             <AlertTriangle class="mt-0.5 size-4 shrink-0 text-amber-500" />
             <div class="space-y-1">
                 <div class="font-medium text-foreground">
-                    Not connected yet
+                    Not connected
                 </div>
                 <p class="text-muted-foreground">
-                    The MCP server endpoint and OAuth scaffolding land in
-                    the next deploy. The connector URL below is final — you
-                    can already register it in Claude and the OAuth handshake
-                    will activate once the server boots.
+                    No active MCP token for your account. Follow the setup
+                    below — once you authorise from Claude Desktop or Claude
+                    Code this banner turns green.
                 </p>
             </div>
         </div>
         <div
             v-else
-            class="flex items-start gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[13px]"
+            class="space-y-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[13px]"
         >
-            <Terminal class="mt-0.5 size-4 shrink-0 text-emerald-500" />
-            <div class="space-y-1">
-                <div class="font-medium text-foreground">Connected</div>
-                <p class="text-muted-foreground">
-                    Claude is authorised to operate this workspace.
-                </p>
+            <div class="flex items-start gap-3">
+                <Terminal class="mt-0.5 size-4 shrink-0 text-emerald-500" />
+                <div class="space-y-1">
+                    <div class="font-medium text-foreground">
+                        Connected · {{ mcp.tokens.length }}
+                        active token{{ mcp.tokens.length === 1 ? '' : 's' }}
+                    </div>
+                    <p class="text-muted-foreground">
+                        Claude is authorised to operate this workspace via
+                        the MCP server.
+                    </p>
+                </div>
             </div>
+            <ul
+                v-if="mcp.tokens.length"
+                class="ml-7 space-y-1 text-[12.5px] text-muted-foreground"
+            >
+                <li
+                    v-for="t in mcp.tokens"
+                    :key="t.id"
+                    class="flex items-center gap-2"
+                >
+                    <span class="size-1.5 shrink-0 rounded-full bg-emerald-500"></span>
+                    <span class="font-medium text-foreground">{{ t.name }}</span>
+                    <span class="text-muted-foreground">·</span>
+                    <span>{{ (t.scopes ?? []).join(', ') || 'mcp' }}</span>
+                </li>
+            </ul>
         </div>
 
         <!-- Connector URL -->
