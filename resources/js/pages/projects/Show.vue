@@ -87,8 +87,21 @@ const descriptionHtml = computed<string>(() =>
     renderMarkdown(props.project.description),
 );
 
+const TYPE_RANK: Record<string, number> = {
+    triage: 0,
+    started: 1,
+    unstarted: 2,
+    backlog: 3,
+    completed: 4,
+    canceled: 5,
+};
 const stateOrder = computed(() =>
-    [...props.states].sort((a, b) => a.position - b.position),
+    [...props.states].sort((a, b) => {
+        const ta = TYPE_RANK[a.type] ?? 99;
+        const tb = TYPE_RANK[b.type] ?? 99;
+        if (ta !== tb) return ta - tb;
+        return a.position - b.position;
+    }),
 );
 const grouped = computed(() => {
     const buckets = new Map<string, Issue[]>();
