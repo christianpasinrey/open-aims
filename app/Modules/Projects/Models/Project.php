@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Enums\ProjectState;
 use App\Modules\Teams\Models\Team;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Project extends Model
 {
-    use BelongsToWorkspace;
+    use BelongsToWorkspace, HasFactory;
 
     protected $fillable = [
         'workspace_id',

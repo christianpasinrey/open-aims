@@ -6,12 +6,15 @@ namespace App\Modules\Cycles\Models;
 
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Teams\Models\Team;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Cycle extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'team_id',
         'name',

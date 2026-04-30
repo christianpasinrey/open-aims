@@ -12,6 +12,7 @@ use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\WorkflowState;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Issue extends Model
 {
-    use BelongsToWorkspace;
+    use BelongsToWorkspace, HasFactory;
 
     protected $fillable = [
         'workspace_id',

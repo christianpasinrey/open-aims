@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Teams\Models;
 
 use App\Core\Concerns\BelongsToWorkspace;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Team extends Model
 {
-    use BelongsToWorkspace;
+    use BelongsToWorkspace, HasFactory;
 
     protected $fillable = [
         'workspace_id',
