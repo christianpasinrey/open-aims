@@ -1,24 +1,48 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 const page = usePage();
 
-const workspaceName = computed<string>(() => {
-    const ws = (page.props as { workspace?: { name?: string } }).workspace;
-    return ws?.name ?? 'AIMS';
+type WorkspaceProp = {
+    name?: string;
+    color?: string | null;
+    logo_url?: string | null;
+};
+
+const workspace = computed<WorkspaceProp>(() => {
+    const ws = (page.props as { workspace?: WorkspaceProp }).workspace;
+
+    return ws ?? {};
 });
 
-const initial = computed<string>(() => workspaceName.value.charAt(0).toUpperCase());
+const workspaceName = computed<string>(
+    () => workspace.value.name ?? 'AIMS',
+);
+const initial = computed<string>(() =>
+    workspaceName.value.charAt(0).toUpperCase(),
+);
+const color = computed<string>(() => workspace.value.color ?? '#6366f1');
+const logoUrl = computed<string | null>(() => workspace.value.logo_url ?? null);
 </script>
 
 <template>
-    <div
-        class="flex aspect-square size-7 items-center justify-center rounded-md bg-brand text-brand-foreground text-xs font-semibold"
+    <span
+        v-if="!logoUrl"
+        class="flex aspect-square size-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold text-white uppercase"
+        :style="{ backgroundColor: color }"
     >
         {{ initial }}
-    </div>
+    </span>
+    <img
+        v-else
+        :src="logoUrl"
+        :alt="workspaceName"
+        class="size-7 shrink-0 rounded-md object-cover"
+    />
     <div class="ml-1 grid flex-1 text-left">
-        <span class="truncate text-sm font-medium leading-tight">{{ workspaceName }}</span>
+        <span class="truncate text-[13px] leading-tight font-medium">{{
+            workspaceName
+        }}</span>
     </div>
 </template>

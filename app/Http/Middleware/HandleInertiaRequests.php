@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
+use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -45,6 +46,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'workspace' => fn () => $this->workspacePayload(),
+            'user_workspaces' => fn () => $this->userWorkspacesPayload($request),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }
@@ -102,7 +104,58 @@ class HandleInertiaRequests extends Middleware
             'id' => $workspace->id,
             'name' => $workspace->name,
             'slug' => $workspace->slug,
+            'color' => self::workspaceColor($workspace),
+            'logo_url' => $workspace->logo_url,
             'teams' => $teams,
         ];
+    }
+
+    /**
+     * The workspaces the current user is a member of, used by the sidebar
+     * switcher. Returns null when there's no auth user.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function userWorkspacesPayload(Request $request): ?array
+    {
+        $user = $request->user();
+        if ($user === null) {
+            return null;
+        }
+
+        $rows = WorkspaceMember::query()
+            ->where('user_id', $user->getKey())
+            ->with('workspace:id,name,slug,settings,logo_url')
+            ->get(['id', 'workspace_id', 'role'])
+            ->filter(fn (WorkspaceMember $m) => $m->workspace !== null);
+
+        return $rows->map(function (WorkspaceMember $m): array {
+            /** @var Workspace $w */
+            $w = $m->workspace;
+
+            return [
+                'id' => $w->id,
+                'name' => $w->name,
+                'slug' => $w->slug,
+                'color' => self::workspaceColor($w),
+                'logo_url' => $w->logo_url,
+                'role' => $m->role,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Workspaces don't have a dedicated color column yet; we read an
+     * optional `color` from `settings` JSON, falling back to a default
+     * repo-purple.
+     */
+    public static function workspaceColor(Workspace $workspace): string
+    {
+        $settings = $workspace->settings;
+        if (is_array($settings) && isset($settings['color']) && is_string($settings['color']) && $settings['color'] !== '') {
+            return $settings['color'];
+        }
+
+        return '#6366f1';
     }
 }

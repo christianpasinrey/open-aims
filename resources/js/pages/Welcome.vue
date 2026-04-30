@@ -10,15 +10,13 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
     <main
         class="relative flex min-h-svh w-full flex-col bg-background text-foreground antialiased"
     >
-        <header
-            class="flex items-center justify-between px-6 py-5 sm:px-10"
-        >
+        <header class="flex items-center justify-between px-6 py-5 sm:px-10">
             <div class="flex items-center gap-2">
                 <span
-                    class="flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground text-xs font-semibold"
+                    class="flex size-7 items-center justify-center rounded-md bg-brand text-xs font-semibold text-brand-foreground"
                     >D</span
                 >
-                <span class="text-sm font-medium">AIMS</span>
+                <span class="text-[13px] font-medium">AIMS</span>
             </div>
             <div class="flex items-center gap-2">
                 <ThemeToggle />
@@ -37,37 +35,37 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
                 class="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[12px] text-muted-foreground"
             >
                 <span class="size-1.5 rounded-full bg-brand"></span>
-                Issue tracking, simplified
+                Issue tracking, redesigned for speed
             </span>
 
             <h1
-                class="max-w-2xl text-balance text-4xl font-semibold tracking-tight sm:text-5xl"
+                class="max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl"
             >
                 The way modern teams ship software.
             </h1>
 
             <p
-                class="mt-4 max-w-xl text-balance text-[15px] text-muted-foreground"
+                class="mt-4 max-w-xl text-[15px] text-balance text-muted-foreground"
             >
                 AIMS is a fast, opinionated workspace for tracking
-                issues, projects, and cycles — built for teams that move
-                quickly.
+                issues, projects, and cycles &mdash; built for teams that move
+                quickly and care about craft.
             </p>
 
             <div class="mt-9 flex items-center gap-3">
                 <Link
                     :href="'/login'"
-                    class="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-[13px] font-medium text-brand-foreground transition-colors hover:opacity-90"
+                    class="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-[13px] font-medium text-brand-foreground transition-colors hover:opacity-90"
                 >
                     Sign in
-                    <ArrowRight class="size-4" />
+                    <ArrowRight class="size-3.5" />
                 </Link>
                 <a
                     href="https://the app"
                     target="_blank"
                     rel="noreferrer"
-                    class="rounded-md px-4 py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    >Inspired by repo ↗</a
+                    class="rounded-md px-4 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >Inspired by repo &rarr;</a
                 >
             </div>
         </section>
@@ -75,8 +73,8 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
         <footer
             class="flex items-center justify-between px-6 py-5 text-[12px] text-muted-foreground sm:px-10"
         >
-            <span>© {{ new Date().getFullYear() }} AIMS</span>
-            <span>Built with Laravel · Inertia · Vue</span>
+            <span>&copy; {{ new Date().getFullYear() }} AIMS</span>
+            <span>Built with Laravel &middot; Inertia &middot; Vue</span>
         </footer>
     </main>
 </template>

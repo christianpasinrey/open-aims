@@ -3,10 +3,20 @@
 declare(strict_types=1);
 
 use App\Modules\Teams\Http\Controllers\TeamMemberListController;
+use App\Modules\Teams\Http\Controllers\TeamSettingsController;
+use App\Modules\Teams\Http\Controllers\TeamWriteController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::get('teams/{key}/members', [TeamMemberListController::class, 'index'])
         ->where('key', '[A-Za-z0-9]+')
         ->name('teams.members');
+
+    Route::get('teams/{key}/settings', [TeamSettingsController::class, 'index'])
+        ->where('key', '[A-Za-z0-9]+')
+        ->name('teams.settings');
+
+    Route::patch('teams/{key}', [TeamWriteController::class, 'update'])
+        ->where('key', '[A-Za-z0-9]+')
+        ->name('teams.update');
 });
