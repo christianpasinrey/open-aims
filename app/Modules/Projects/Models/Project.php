@@ -14,10 +14,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
 {
-    use BelongsToWorkspace, HasFactory;
+    use BelongsToWorkspace, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'workspace_id',
@@ -25,6 +26,7 @@ class Project extends Model
         'slug',
         'description',
         'state',
+        'priority',
         'lead_user_id',
         'start_date',
         'target_date',
@@ -36,6 +38,7 @@ class Project extends Model
 
     protected $casts = [
         'state' => ProjectState::class,
+        'priority' => 'integer',
         'start_date' => 'date',
         'target_date' => 'date',
         'completed_at' => 'datetime',

@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import type { FormDataConvertible } from '@inertiajs/core';
 import {
     Calendar,
-    Plus,
-    MoreHorizontal,
+    ChevronDown,
+    ChevronRight,
     Diamond,
+    MoreHorizontal,
+    PanelRightClose,
+    PanelRightOpen,
+    Plus,
 } from 'lucide-vue-next';
 import Avatar from '@/components/repo/Avatar.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
@@ -56,8 +60,20 @@ type Initiative = {
     completed_at: string | null;
     owner: { id: number; name: string; email: string } | null;
     parent: { id: number; name: string; slug: string } | null;
-    children: Array<{ id: number; name: string; slug: string; state: string | null; color: string | null; icon: string | null }>;
-    members: Array<{ id: number; name: string; email: string; role: string | null }>;
+    children: Array<{
+        id: number;
+        name: string;
+        slug: string;
+        state: string | null;
+        color: string | null;
+        icon: string | null;
+    }>;
+    members: Array<{
+        id: number;
+        name: string;
+        email: string;
+        role: string | null;
+    }>;
 };
 
 const props = defineProps<{
@@ -65,7 +81,12 @@ const props = defineProps<{
     projects: ProjectRow[];
     available_projects: AvailableProject[];
     members: Member[];
-    progress: { total_projects: number; total_issues: number; completed_issues: number; percent: number };
+    progress: {
+        total_projects: number;
+        total_issues: number;
+        completed_issues: number;
+        percent: number;
+    };
     tab: 'overview' | 'projects' | 'activity';
 }>();
 
@@ -141,6 +162,62 @@ function setTargetDate(date: string) {
     patchInitiative({ target_date: date === '' ? null : date });
 }
 
+// ---- Right rail collapse ----
+const RAIL_KEY = 'aims:initiative-rail';
+const railCollapsed = ref<boolean>(false);
+const sectionCollapsed = ref<Record<string, boolean>>({
+    properties: false,
+    progress: false,
+    members: false,
+});
+function toggleRail() {
+    railCollapsed.value = !railCollapsed.value;
+    persistRailState();
+}
+function toggleSection(key: 'properties' | 'progress' | 'members') {
+    sectionCollapsed.value = {
+        ...sectionCollapsed.value,
+        [key]: !sectionCollapsed.value[key],
+    };
+    persistRailState();
+}
+function persistRailState() {
+    try {
+        window.localStorage.setItem(
+            RAIL_KEY,
+            JSON.stringify({
+                collapsed: railCollapsed.value,
+                sections: sectionCollapsed.value,
+            }),
+        );
+    } catch {
+        // ignore
+    }
+}
+onMounted(() => {
+    try {
+        const raw = window.localStorage.getItem(RAIL_KEY);
+        if (!raw) {
+            return;
+        }
+        const parsed = JSON.parse(raw) as {
+            collapsed?: boolean;
+            sections?: Record<string, boolean>;
+        };
+        if (typeof parsed.collapsed === 'boolean') {
+            railCollapsed.value = parsed.collapsed;
+        }
+        if (parsed.sections) {
+            sectionCollapsed.value = {
+                ...sectionCollapsed.value,
+                ...parsed.sections,
+            };
+        }
+    } catch {
+        // ignore
+    }
+});
+
 // ---- Inline editing: name + description ----
 const editingName = ref<boolean>(false);
 const nameDraft = ref<string>('');
@@ -177,8 +254,11 @@ function startEditDesc() {
 }
 function commitDesc() {
     editingDesc.value = false;
-    if ((descDraft.value ?? '') === (props.initiative.description ?? '')) return;
-    patchInitiative({ description: descDraft.value === '' ? null : descDraft.value });
+    if ((descDraft.value ?? '') === (props.initiative.description ?? ''))
+        return;
+    patchInitiative({
+        description: descDraft.value === '' ? null : descDraft.value,
+    });
 }
 function cancelDesc() {
     editingDesc.value = false;
@@ -198,7 +278,6 @@ function detachProject(projectId: number) {
         { preserveScroll: true, preserveState: false },
     );
 }
-
 </script>
 
 <template>
@@ -209,13 +288,31 @@ function detachProject(projectId: number) {
         <header
             class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5"
         >
-            <div class="flex min-w-0 items-center gap-2 text-[12.5px] text-muted-foreground">
+            <div
+                class="flex min-w-0 items-center gap-2 text-[12.5px] text-muted-foreground"
+            >
                 <Link href="/initiatives" class="hover:text-foreground">
                     Initiatives
                 </Link>
                 <span>/</span>
-                <span class="truncate text-foreground">{{ initiative.name }}</span>
+                <span class="truncate text-foreground">{{
+                    initiative.name
+                }}</span>
             </div>
+            <button
+                type="button"
+                class="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                :aria-label="
+                    railCollapsed ? 'Show right rail' : 'Hide right rail'
+                "
+                :title="railCollapsed ? 'Show right rail' : 'Hide right rail'"
+                @click="toggleRail"
+            >
+                <component
+                    :is="railCollapsed ? PanelRightOpen : PanelRightClose"
+                    class="size-3.5"
+                />
+            </button>
         </header>
 
         <!-- Tabs -->
@@ -224,7 +321,7 @@ function detachProject(projectId: number) {
         >
             <nav class="flex items-center gap-1 py-2 text-[12.5px]">
                 <Link
-                    v-for="t in (['overview', 'projects', 'activity'] as const)"
+                    v-for="t in ['overview', 'projects', 'activity'] as const"
                     :key="t"
                     :href="tabHref(t)"
                     :class="[
@@ -243,7 +340,10 @@ function detachProject(projectId: number) {
         <div class="flex flex-1 overflow-hidden">
             <main class="flex-1 overflow-y-auto px-6 py-5">
                 <!-- Overview tab -->
-                <section v-if="tab === 'overview'" class="mx-auto max-w-3xl space-y-6">
+                <section
+                    v-if="tab === 'overview'"
+                    class="mx-auto max-w-3xl space-y-6"
+                >
                     <div class="flex items-start gap-3">
                         <InitiativeIcon
                             :icon="initiative.icon"
@@ -257,23 +357,34 @@ function detachProject(projectId: number) {
                                 ref="nameInput"
                                 v-model="nameDraft"
                                 type="text"
-                                class="w-full bg-transparent text-[22px] font-semibold leading-tight text-foreground outline-none"
+                                class="w-full bg-transparent text-[22px] leading-tight font-semibold text-foreground outline-none"
                                 @keydown.enter.prevent="commitName"
                                 @keydown.escape="cancelName"
                                 @blur="commitName"
                             />
                             <h1
                                 v-else
-                                class="cursor-text text-[22px] font-semibold leading-tight text-foreground"
+                                class="cursor-text text-[22px] leading-tight font-semibold text-foreground"
                                 @click="startEditName"
                             >
                                 {{ initiative.name }}
                             </h1>
-                            <div class="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
-                                <span class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                                    {{ STATE_LABELS[initiative.state ?? 'planned'] }}
+                            <div
+                                class="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground"
+                            >
+                                <span
+                                    class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tracking-wide uppercase"
+                                >
+                                    {{
+                                        STATE_LABELS[
+                                            initiative.state ?? 'planned'
+                                        ]
+                                    }}
                                 </span>
-                                <span v-if="initiative.target_date" class="inline-flex items-center gap-1">
+                                <span
+                                    v-if="initiative.target_date"
+                                    class="inline-flex items-center gap-1"
+                                >
                                     <Calendar class="size-3.5" />
                                     {{ fmtDate(initiative.target_date) }}
                                 </span>
@@ -296,7 +407,10 @@ function detachProject(projectId: number) {
                             class="prose prose-invert max-w-none cursor-text rounded-md px-2 py-2 text-[13.5px] hover:bg-accent/30"
                             @click="startEditDesc"
                         >
-                            <div v-if="initiative.description" v-html="descriptionHtml" />
+                            <div
+                                v-if="initiative.description"
+                                v-html="descriptionHtml"
+                            />
                             <p v-else class="text-muted-foreground">
                                 Click to add a description…
                             </p>
@@ -331,18 +445,28 @@ function detachProject(projectId: number) {
 
                     <!-- Sub-initiatives -->
                     <div v-if="initiative.children.length" class="space-y-2">
-                        <h3 class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <h3
+                            class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                        >
                             Sub-initiatives
                         </h3>
-                        <ul class="divide-y divide-border rounded-md border border-border">
+                        <ul
+                            class="divide-y divide-border rounded-md border border-border"
+                        >
                             <li v-for="c in initiative.children" :key="c.id">
                                 <Link
                                     :href="`/initiatives/${c.slug}`"
                                     class="flex items-center gap-2 px-3 py-2 text-[13px] hover:bg-accent/40"
                                 >
-                                    <InitiativeIcon :icon="c.icon" :color="c.color" :size="16" />
+                                    <InitiativeIcon
+                                        :icon="c.icon"
+                                        :color="c.color"
+                                        :size="16"
+                                    />
                                     <span class="truncate">{{ c.name }}</span>
-                                    <span class="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    <span
+                                        class="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] tracking-wide text-muted-foreground uppercase"
+                                    >
                                         {{ STATE_LABELS[c.state ?? 'planned'] }}
                                     </span>
                                 </Link>
@@ -352,11 +476,16 @@ function detachProject(projectId: number) {
                 </section>
 
                 <!-- Projects tab -->
-                <section v-else-if="tab === 'projects'" class="mx-auto max-w-4xl space-y-4">
+                <section
+                    v-else-if="tab === 'projects'"
+                    class="mx-auto max-w-4xl space-y-4"
+                >
                     <div class="flex items-center justify-between">
                         <h2 class="text-[14px] font-medium text-foreground">
                             Projects
-                            <span class="ml-1 text-[12px] text-muted-foreground tabular-nums">
+                            <span
+                                class="ml-1 text-[12px] text-muted-foreground tabular-nums"
+                            >
                                 {{ projects.length }}
                             </span>
                         </h2>
@@ -370,33 +499,55 @@ function detachProject(projectId: number) {
                                     Add project
                                 </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="max-h-72 w-64 overflow-y-auto">
-                                <DropdownMenuLabel>Attach project</DropdownMenuLabel>
+                            <DropdownMenuContent
+                                align="end"
+                                class="max-h-72 w-64 overflow-y-auto"
+                            >
+                                <DropdownMenuLabel
+                                    >Attach project</DropdownMenuLabel
+                                >
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     v-for="p in available_projects"
                                     :key="p.id"
                                     @select="attachProject(p.id)"
                                 >
-                                    <span class="flex min-w-0 items-center gap-2">
-                                        <ProjectIcon :icon="p.icon" :color="p.color" :size="14" />
-                                        <span class="truncate">{{ p.name }}</span>
+                                    <span
+                                        class="flex min-w-0 items-center gap-2"
+                                    >
+                                        <ProjectIcon
+                                            :icon="p.icon"
+                                            :color="p.color"
+                                            :size="14"
+                                        />
+                                        <span class="truncate">{{
+                                            p.name
+                                        }}</span>
                                     </span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem v-if="!available_projects.length" disabled>
+                                <DropdownMenuItem
+                                    v-if="!available_projects.length"
+                                    disabled
+                                >
                                     No projects to attach
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
 
-                    <div v-if="!projects.length" class="rounded-md border border-dashed border-border px-6 py-12 text-center">
+                    <div
+                        v-if="!projects.length"
+                        class="rounded-md border border-dashed border-border px-6 py-12 text-center"
+                    >
                         <p class="text-sm text-muted-foreground">
                             No projects attached to this initiative yet.
                         </p>
                     </div>
 
-                    <ul v-else class="divide-y divide-border rounded-md border border-border">
+                    <ul
+                        v-else
+                        class="divide-y divide-border rounded-md border border-border"
+                    >
                         <li
                             v-for="p in projects"
                             :key="p.id"
@@ -406,8 +557,15 @@ function detachProject(projectId: number) {
                                 :href="`/projects/${p.slug}`"
                                 class="flex min-w-0 flex-1 items-center gap-3"
                             >
-                                <ProjectIcon :icon="p.icon" :color="p.color" :size="18" />
-                                <span class="truncate text-[13px] text-foreground">{{ p.name }}</span>
+                                <ProjectIcon
+                                    :icon="p.icon"
+                                    :color="p.color"
+                                    :size="18"
+                                />
+                                <span
+                                    class="truncate text-[13px] text-foreground"
+                                    >{{ p.name }}</span
+                                >
                             </Link>
                             <span
                                 v-if="p.target_date"
@@ -422,24 +580,30 @@ function detachProject(projectId: number) {
                                 :email="p.lead.email"
                                 :size="18"
                             />
-                            <span class="shrink-0 text-right text-[12px] text-muted-foreground tabular-nums">
+                            <span
+                                class="shrink-0 text-right text-[12px] text-muted-foreground tabular-nums"
+                            >
                                 {{ p.completed_issues }}/{{ p.total_issues }}
                             </span>
-                            <span class="shrink-0 text-right text-[12px] text-foreground tabular-nums">
+                            <span
+                                class="shrink-0 text-right text-[12px] text-foreground tabular-nums"
+                            >
                                 {{ p.progress }}%
                             </span>
                             <DropdownMenu>
                                 <DropdownMenuTrigger as-child>
                                     <button
                                         type="button"
-                                        class="rounded p-1 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/row:opacity-100"
+                                        class="rounded p-1 text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:bg-accent hover:text-foreground"
                                         aria-label="Project menu"
                                     >
                                         <MoreHorizontal class="size-3.5" />
                                     </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem @select="detachProject(p.id)">
+                                    <DropdownMenuItem
+                                        @select="detachProject(p.id)"
+                                    >
                                         Remove from initiative
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -450,26 +614,61 @@ function detachProject(projectId: number) {
 
                 <!-- Activity tab (placeholder) -->
                 <section v-else class="mx-auto max-w-3xl">
-                    <div class="rounded-md border border-dashed border-border px-6 py-12 text-center">
-                        <p class="text-sm text-muted-foreground">Activity stream coming soon.</p>
+                    <div
+                        class="rounded-md border border-dashed border-border px-6 py-12 text-center"
+                    >
+                        <p class="text-sm text-muted-foreground">
+                            Activity stream coming soon.
+                        </p>
                     </div>
                 </section>
             </main>
 
             <!-- Right rail -->
-            <aside class="hidden w-72 shrink-0 overflow-y-auto border-l border-border px-4 py-5 lg:block">
-                <h3 class="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <aside
+                v-if="!railCollapsed"
+                class="hidden w-72 shrink-0 overflow-y-auto border-l border-border px-4 py-5 lg:block"
+            >
+                <button
+                    type="button"
+                    class="mb-3 flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                    :aria-expanded="!sectionCollapsed.properties"
+                    @click="toggleSection('properties')"
+                >
+                    <component
+                        :is="
+                            sectionCollapsed.properties
+                                ? ChevronRight
+                                : ChevronDown
+                        "
+                        class="size-3"
+                    />
                     Properties
-                </h3>
-                <div class="space-y-2 text-[12.5px]">
+                </button>
+                <div
+                    v-show="!sectionCollapsed.properties"
+                    class="space-y-2 text-[12.5px]"
+                >
                     <!-- Status -->
                     <div class="flex items-center justify-between">
                         <span class="text-muted-foreground">Status</span>
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
-                                <button class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-foreground hover:bg-accent">
-                                    <Diamond class="size-3" :style="{ color: initiative.color || '#6366f1' }" />
-                                    {{ STATE_LABELS[initiative.state ?? 'planned'] }}
+                                <button
+                                    class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-foreground hover:bg-accent"
+                                >
+                                    <Diamond
+                                        class="size-3"
+                                        :style="{
+                                            color:
+                                                initiative.color || '#6366f1',
+                                        }"
+                                    />
+                                    {{
+                                        STATE_LABELS[
+                                            initiative.state ?? 'planned'
+                                        ]
+                                    }}
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -488,16 +687,31 @@ function detachProject(projectId: number) {
                         <span class="text-muted-foreground">Owner</span>
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
-                                <button class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-accent">
+                                <button
+                                    class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-accent"
+                                >
                                     <template v-if="initiative.owner">
-                                        <Avatar :name="initiative.owner.name" :email="initiative.owner.email" :size="16" />
-                                        <span class="text-foreground">{{ initiative.owner.name }}</span>
+                                        <Avatar
+                                            :name="initiative.owner.name"
+                                            :email="initiative.owner.email"
+                                            :size="16"
+                                        />
+                                        <span class="text-foreground">{{
+                                            initiative.owner.name
+                                        }}</span>
                                     </template>
-                                    <span v-else class="text-muted-foreground">No owner</span>
+                                    <span v-else class="text-muted-foreground"
+                                        >No owner</span
+                                    >
                                 </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="max-h-72 w-56 overflow-y-auto">
-                                <DropdownMenuItem @select="setOwner(null)">No owner</DropdownMenuItem>
+                            <DropdownMenuContent
+                                align="end"
+                                class="max-h-72 w-56 overflow-y-auto"
+                            >
+                                <DropdownMenuItem @select="setOwner(null)"
+                                    >No owner</DropdownMenuItem
+                                >
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     v-for="m in members"
@@ -505,7 +719,11 @@ function detachProject(projectId: number) {
                                     @select="setOwner(m.id)"
                                 >
                                     <span class="flex items-center gap-2">
-                                        <Avatar :name="m.name" :email="m.email" :size="14" />
+                                        <Avatar
+                                            :name="m.name"
+                                            :email="m.email"
+                                            :size="14"
+                                        />
                                         {{ m.name }}
                                     </span>
                                 </DropdownMenuItem>
@@ -519,7 +737,12 @@ function detachProject(projectId: number) {
                             type="date"
                             :value="initiative.start_date ?? ''"
                             class="rounded border border-input bg-transparent px-1.5 py-0.5 text-[12px]"
-                            @change="(e) => setStartDate((e.target as HTMLInputElement).value)"
+                            @change="
+                                (e) =>
+                                    setStartDate(
+                                        (e.target as HTMLInputElement).value,
+                                    )
+                            "
                         />
                     </div>
                     <div class="flex items-center justify-between">
@@ -528,10 +751,18 @@ function detachProject(projectId: number) {
                             type="date"
                             :value="initiative.target_date ?? ''"
                             class="rounded border border-input bg-transparent px-1.5 py-0.5 text-[12px]"
-                            @change="(e) => setTargetDate((e.target as HTMLInputElement).value)"
+                            @change="
+                                (e) =>
+                                    setTargetDate(
+                                        (e.target as HTMLInputElement).value,
+                                    )
+                            "
                         />
                     </div>
-                    <div v-if="initiative.parent" class="flex items-center justify-between">
+                    <div
+                        v-if="initiative.parent"
+                        class="flex items-center justify-between"
+                    >
                         <span class="text-muted-foreground">Parent</span>
                         <Link
                             :href="`/initiatives/${initiative.parent.slug}`"
@@ -542,20 +773,44 @@ function detachProject(projectId: number) {
                     </div>
                 </div>
 
-                <h3 class="mt-6 mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <button
+                    type="button"
+                    class="mt-6 mb-3 flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                    :aria-expanded="!sectionCollapsed.progress"
+                    @click="toggleSection('progress')"
+                >
+                    <component
+                        :is="
+                            sectionCollapsed.progress
+                                ? ChevronRight
+                                : ChevronDown
+                        "
+                        class="size-3"
+                    />
                     Progress
-                </h3>
-                <div class="space-y-2 text-[12.5px]">
+                </button>
+                <div
+                    v-show="!sectionCollapsed.progress"
+                    class="space-y-2 text-[12.5px]"
+                >
                     <div class="flex items-center justify-between">
                         <span class="text-muted-foreground">Projects</span>
-                        <span class="text-foreground tabular-nums">{{ progress.total_projects }}</span>
+                        <span class="text-foreground tabular-nums">{{
+                            progress.total_projects
+                        }}</span>
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="text-muted-foreground">Issues</span>
-                        <span class="text-foreground tabular-nums">{{ progress.completed_issues }}/{{ progress.total_issues }}</span>
+                        <span class="text-foreground tabular-nums"
+                            >{{ progress.completed_issues }}/{{
+                                progress.total_issues
+                            }}</span
+                        >
                     </div>
                     <div class="flex items-center gap-2">
-                        <div class="flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                            class="flex-1 overflow-hidden rounded-full bg-muted"
+                        >
                             <div
                                 class="h-1.5"
                                 :style="{
@@ -564,23 +819,47 @@ function detachProject(projectId: number) {
                                 }"
                             ></div>
                         </div>
-                        <span class="text-foreground tabular-nums">{{ progress.percent }}%</span>
+                        <span class="text-foreground tabular-nums"
+                            >{{ progress.percent }}%</span
+                        >
                     </div>
                 </div>
 
                 <div v-if="initiative.members.length" class="mt-6">
-                    <h3 class="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <button
+                        type="button"
+                        class="mb-3 flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                        :aria-expanded="!sectionCollapsed.members"
+                        @click="toggleSection('members')"
+                    >
+                        <component
+                            :is="
+                                sectionCollapsed.members
+                                    ? ChevronRight
+                                    : ChevronDown
+                            "
+                            class="size-3"
+                        />
                         Members
-                    </h3>
-                    <ul class="space-y-1.5">
+                    </button>
+                    <ul v-show="!sectionCollapsed.members" class="space-y-1.5">
                         <li
                             v-for="m in initiative.members"
                             :key="m.id ?? 0"
                             class="flex items-center gap-2 text-[12.5px]"
                         >
-                            <Avatar :name="m.name" :email="m.email" :size="16" />
-                            <span class="truncate text-foreground">{{ m.name }}</span>
-                            <span class="ml-auto text-[11px] text-muted-foreground">{{ m.role }}</span>
+                            <Avatar
+                                :name="m.name"
+                                :email="m.email"
+                                :size="16"
+                            />
+                            <span class="truncate text-foreground">{{
+                                m.name
+                            }}</span>
+                            <span
+                                class="ml-auto text-[11px] text-muted-foreground"
+                                >{{ m.role }}</span
+                            >
                         </li>
                     </ul>
                 </div>

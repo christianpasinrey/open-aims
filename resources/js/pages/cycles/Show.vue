@@ -5,6 +5,8 @@ import {
     ChevronDown,
     ChevronRight,
     MoreHorizontal,
+    PanelRightClose,
+    PanelRightOpen,
     Play,
     Plus,
     Star,
@@ -311,9 +313,7 @@ const startedPercent = computed<number>(() => {
 
 // ─── Favourites (server-side) ───────────────────────────────────────────
 const { isFavourited, toggle: toggleFavServer } = useFavourites();
-const cycleFav = computed<boolean>(() =>
-    isFavourited('cycle', props.cycle.id),
-);
+const cycleFav = computed<boolean>(() => isFavourited('cycle', props.cycle.id));
 function toggleFav() {
     const href = `/cycles/${props.cycle.number}?team=${props.team.key}`;
     toggleFavServer({
@@ -369,8 +369,51 @@ function toggleGroup(id: number) {
     writeCollapsed(next);
 }
 
+// ─── Right rail collapse ────────────────────────────────────────────────
+const RAIL_KEY = 'aims:cycle-rail';
+const railCollapsed = ref<boolean>(false);
+const progressCollapsed = ref<boolean>(false);
+function toggleRail() {
+    railCollapsed.value = !railCollapsed.value;
+    persistRail();
+}
+function toggleProgress() {
+    progressCollapsed.value = !progressCollapsed.value;
+    persistRail();
+}
+function persistRail() {
+    try {
+        localStorage.setItem(
+            RAIL_KEY,
+            JSON.stringify({
+                collapsed: railCollapsed.value,
+                progress: progressCollapsed.value,
+            }),
+        );
+    } catch {
+        // ignore
+    }
+}
+
 onMounted(() => {
     collapsed.value = readCollapsed();
+    try {
+        const raw = localStorage.getItem(RAIL_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw) as {
+                collapsed?: boolean;
+                progress?: boolean;
+            };
+            if (typeof parsed.collapsed === 'boolean') {
+                railCollapsed.value = parsed.collapsed;
+            }
+            if (typeof parsed.progress === 'boolean') {
+                progressCollapsed.value = parsed.progress;
+            }
+        }
+    } catch {
+        // ignore
+    }
 });
 
 // ─── Inline composer (per group) ────────────────────────────────────────
@@ -536,6 +579,22 @@ function priorityRowColor(p: number): string {
                 >
                     <Bell class="size-3.5" />
                 </Link>
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
+                    :aria-label="
+                        railCollapsed ? 'Show right rail' : 'Hide right rail'
+                    "
+                    :title="
+                        railCollapsed ? 'Show right rail' : 'Hide right rail'
+                    "
+                    @click="toggleRail"
+                >
+                    <component
+                        :is="railCollapsed ? PanelRightOpen : PanelRightClose"
+                        class="size-3.5"
+                    />
+                </button>
                 <button
                     type="button"
                     class="rounded-md p-1.5 transition-colors hover:bg-accent hover:text-foreground"
@@ -734,6 +793,7 @@ function priorityRowColor(p: number): string {
 
             <!-- Right rail -->
             <aside
+                v-if="!railCollapsed"
                 class="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 px-5 py-5 lg:block"
             >
                 <!-- Tabs row: Current button + date range pill -->
@@ -822,168 +882,178 @@ function priorityRowColor(p: number): string {
 
                 <!-- Progress section -->
                 <div class="mt-6">
-                    <div
-                        class="mb-2 flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                    <button
+                        type="button"
+                        class="mb-2 flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                        :aria-expanded="!progressCollapsed"
+                        @click="toggleProgress"
                     >
-                        <ChevronDown class="size-3" />
+                        <component
+                            :is="progressCollapsed ? ChevronRight : ChevronDown"
+                            class="size-3"
+                        />
                         Progress
-                    </div>
+                    </button>
 
-                    <!-- Stat cards -->
-                    <div class="grid grid-cols-3 gap-2">
-                        <div
-                            class="rounded-md border border-border bg-card p-2"
-                        >
+                    <div v-show="!progressCollapsed">
+                        <!-- Stat cards -->
+                        <div class="grid grid-cols-3 gap-2">
                             <div
-                                class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                class="rounded-md border border-border bg-card p-2"
                             >
-                                <span
-                                    class="size-1.5 rounded-full bg-zinc-500"
-                                ></span>
-                                Scope
+                                <div
+                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                >
+                                    <span
+                                        class="size-1.5 rounded-full bg-zinc-500"
+                                    ></span>
+                                    Scope
+                                </div>
+                                <div
+                                    class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
+                                >
+                                    {{ progress.total }}
+                                </div>
+                                <div
+                                    v-if="
+                                        progress.scope_change_percent !== null
+                                    "
+                                    class="text-[11px] text-muted-foreground tabular-nums"
+                                >
+                                    +{{ progress.scope_change_percent }}%
+                                </div>
                             </div>
                             <div
-                                class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
+                                class="rounded-md border border-border bg-card p-2"
                             >
-                                {{ progress.total }}
+                                <div
+                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                >
+                                    <span
+                                        class="size-1.5 rounded-full bg-amber-400"
+                                    ></span>
+                                    Started
+                                </div>
+                                <div
+                                    class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
+                                >
+                                    {{ progress.started }}
+                                </div>
+                                <div
+                                    class="text-[11px] text-muted-foreground tabular-nums"
+                                >
+                                    · {{ startedPercent }}%
+                                </div>
                             </div>
                             <div
-                                v-if="progress.scope_change_percent !== null"
-                                class="text-[11px] text-muted-foreground tabular-nums"
+                                class="rounded-md border border-border bg-card p-2"
                             >
-                                +{{ progress.scope_change_percent }}%
+                                <div
+                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                >
+                                    <span
+                                        class="size-1.5 rounded-full bg-indigo-500"
+                                    ></span>
+                                    Completed
+                                </div>
+                                <div
+                                    class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
+                                >
+                                    {{ progress.completed }}
+                                </div>
+                                <div
+                                    class="text-[11px] text-muted-foreground tabular-nums"
+                                >
+                                    · {{ progress.percent }}%
+                                </div>
                             </div>
                         </div>
-                        <div
-                            class="rounded-md border border-border bg-card p-2"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                            >
-                                <span
-                                    class="size-1.5 rounded-full bg-amber-400"
-                                ></span>
-                                Started
-                            </div>
-                            <div
-                                class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
-                            >
-                                {{ progress.started }}
-                            </div>
-                            <div
-                                class="text-[11px] text-muted-foreground tabular-nums"
-                            >
-                                · {{ startedPercent }}%
-                            </div>
-                        </div>
-                        <div
-                            class="rounded-md border border-border bg-card p-2"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                            >
-                                <span
-                                    class="size-1.5 rounded-full bg-indigo-500"
-                                ></span>
-                                Completed
-                            </div>
-                            <div
-                                class="mt-1 text-[16px] font-semibold text-foreground tabular-nums"
-                            >
-                                {{ progress.completed }}
-                            </div>
-                            <div
-                                class="text-[11px] text-muted-foreground tabular-nums"
-                            >
-                                · {{ progress.percent }}%
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Burndown chart -->
-                    <div
-                        class="relative mt-3 h-[160px] rounded-md border border-border bg-card"
-                    >
-                        <svg
-                            :viewBox="`0 0 ${chartW} ${chartH}`"
-                            preserveAspectRatio="none"
-                            class="absolute inset-0 h-full w-full"
-                            aria-hidden="true"
-                        >
-                            <!-- Y gridlines: 0 (bottom) and total (top) -->
-                            <line
-                                :x1="chartPadX"
-                                :y1="chartPadTop"
-                                :x2="chartW - chartPadX"
-                                :y2="chartPadTop"
-                                stroke="currentColor"
-                                stroke-width="0.5"
-                                class="text-border"
-                            />
-                            <line
-                                :x1="chartPadX"
-                                :y1="chartH - chartPadBottom"
-                                :x2="chartW - chartPadX"
-                                :y2="chartH - chartPadBottom"
-                                stroke="currentColor"
-                                stroke-width="0.5"
-                                class="text-border"
-                            />
-                            <!-- Y labels: total (top), 0 (bottom) -->
-                            <text
-                                :x="chartPadX - 2"
-                                :y="chartPadTop + 3"
-                                text-anchor="end"
-                                font-size="8"
-                                class="fill-muted-foreground tabular-nums"
-                            >
-                                {{ progress.total }}
-                            </text>
-                            <text
-                                :x="chartPadX - 2"
-                                :y="chartH - chartPadBottom + 3"
-                                text-anchor="end"
-                                font-size="8"
-                                class="fill-muted-foreground tabular-nums"
-                            >
-                                0
-                            </text>
-
-                            <!-- Ideal -->
-                            <polyline
-                                v-if="targetPath"
-                                :points="targetPath"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1"
-                                stroke-dasharray="3 3"
-                                class="text-muted-foreground/60"
-                            />
-                            <!-- Actual -->
-                            <polyline
-                                v-if="actualPath"
-                                :points="actualPath"
-                                fill="none"
-                                stroke="#6366f1"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            />
-                            <!-- Dot markers on actual -->
-                            <circle
-                                v-for="(p, i) in burndown.actual"
-                                :key="`actual-${i}`"
-                                :cx="p.x"
-                                :cy="p.y"
-                                r="1.5"
-                                fill="#6366f1"
-                            />
-                        </svg>
+                        <!-- Burndown chart -->
                         <div
-                            class="pointer-events-none absolute inset-x-3 bottom-1 flex items-center justify-between text-[10px] text-muted-foreground tabular-nums"
+                            class="relative mt-3 h-[160px] rounded-md border border-border bg-card"
                         >
-                            <span>{{ fmtShort(cycle.starts_at) }}</span>
-                            <span>{{ fmtShort(cycle.ends_at) }}</span>
+                            <svg
+                                :viewBox="`0 0 ${chartW} ${chartH}`"
+                                preserveAspectRatio="none"
+                                class="absolute inset-0 h-full w-full"
+                                aria-hidden="true"
+                            >
+                                <!-- Y gridlines: 0 (bottom) and total (top) -->
+                                <line
+                                    :x1="chartPadX"
+                                    :y1="chartPadTop"
+                                    :x2="chartW - chartPadX"
+                                    :y2="chartPadTop"
+                                    stroke="currentColor"
+                                    stroke-width="0.5"
+                                    class="text-border"
+                                />
+                                <line
+                                    :x1="chartPadX"
+                                    :y1="chartH - chartPadBottom"
+                                    :x2="chartW - chartPadX"
+                                    :y2="chartH - chartPadBottom"
+                                    stroke="currentColor"
+                                    stroke-width="0.5"
+                                    class="text-border"
+                                />
+                                <!-- Y labels: total (top), 0 (bottom) -->
+                                <text
+                                    :x="chartPadX - 2"
+                                    :y="chartPadTop + 3"
+                                    text-anchor="end"
+                                    font-size="8"
+                                    class="fill-muted-foreground tabular-nums"
+                                >
+                                    {{ progress.total }}
+                                </text>
+                                <text
+                                    :x="chartPadX - 2"
+                                    :y="chartH - chartPadBottom + 3"
+                                    text-anchor="end"
+                                    font-size="8"
+                                    class="fill-muted-foreground tabular-nums"
+                                >
+                                    0
+                                </text>
+
+                                <!-- Ideal -->
+                                <polyline
+                                    v-if="targetPath"
+                                    :points="targetPath"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1"
+                                    stroke-dasharray="3 3"
+                                    class="text-muted-foreground/60"
+                                />
+                                <!-- Actual -->
+                                <polyline
+                                    v-if="actualPath"
+                                    :points="actualPath"
+                                    fill="none"
+                                    stroke="#6366f1"
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                                <!-- Dot markers on actual -->
+                                <circle
+                                    v-for="(p, i) in burndown.actual"
+                                    :key="`actual-${i}`"
+                                    :cx="p.x"
+                                    :cy="p.y"
+                                    r="1.5"
+                                    fill="#6366f1"
+                                />
+                            </svg>
+                            <div
+                                class="pointer-events-none absolute inset-x-3 bottom-1 flex items-center justify-between text-[10px] text-muted-foreground tabular-nums"
+                            >
+                                <span>{{ fmtShort(cycle.starts_at) }}</span>
+                                <span>{{ fmtShort(cycle.ends_at) }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>

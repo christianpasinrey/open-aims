@@ -53,7 +53,9 @@ class ProjectsUpdate extends Tool
 
         $changes = [];
         foreach (['name', 'description', 'color', 'icon', 'start_date', 'target_date'] as $f) {
-            if (array_key_exists($f, $data)) $changes[$f] = $data[$f];
+            if (array_key_exists($f, $data)) {
+                $changes[$f] = $data[$f];
+            }
         }
 
         if (array_key_exists('state', $data)) {
@@ -82,8 +84,12 @@ class ProjectsUpdate extends Tool
 
     private function resolveUser(string $value, int $currentUserId): ?int
     {
-        if ($value === 'me') return $currentUserId;
-        if (is_numeric($value)) return (int) $value;
+        if ($value === 'me') {
+            return $currentUserId;
+        }
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
         $id = User::query()->where('email', $value)->value('id');
 
         return $id !== null ? (int) $id : null;

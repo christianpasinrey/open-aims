@@ -124,6 +124,7 @@ final class ProjectDetailController
                 'slug' => $project->slug,
                 'description' => $project->description,
                 'state' => $project->state?->value,
+                'priority' => (int) ($project->priority ?? 0),
                 'color' => $project->color,
                 'icon' => $project->icon,
                 'start_date' => $project->start_date?->toDateString(),

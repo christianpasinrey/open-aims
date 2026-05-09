@@ -26,6 +26,7 @@ import {
     Plus,
     MoreHorizontal,
     Target,
+    Trash2,
     Layers,
     Star,
     Eye,
@@ -105,7 +106,8 @@ const page = usePage();
 
 type CurrentUser = { id: number; name: string; email: string };
 const currentUser = computed<CurrentUser | null>(() => {
-    const u = (page.props as { auth?: { user?: CurrentUser | null } }).auth?.user;
+    const u = (page.props as { auth?: { user?: CurrentUser | null } }).auth
+        ?.user;
 
     return u ?? null;
 });
@@ -187,11 +189,16 @@ const onIssuesIndex = computed(() => currentPath.value === '/issues');
 const onProjectsIndex = computed(() => currentPath.value === '/projects');
 const onCyclesIndex = computed(() => currentPath.value === '/cycles');
 const onInitiativesIndex = computed(
-    () => currentPath.value === '/initiatives' || currentPath.value.startsWith('/initiatives/'),
+    () =>
+        currentPath.value === '/initiatives' ||
+        currentPath.value.startsWith('/initiatives/'),
 );
 const onViewsIndex = computed(
-    () => currentPath.value === '/views' || currentPath.value.startsWith('/views/'),
+    () =>
+        currentPath.value === '/views' ||
+        currentPath.value.startsWith('/views/'),
 );
+const isTrashActive = computed(() => currentPath.value === '/trash');
 const isInboxActive = computed(() => currentPath.value === '/inbox');
 const isMyIssuesActive = computed(
     () => onIssuesIndex.value && currentAssigneeParam.value === 'me',
@@ -235,6 +242,7 @@ const staticPages: SearchItem[] = [
     { label: 'Cycles', href: '/cycles', kind: 'Page' },
     { label: 'Workspace settings', href: '/workspace/settings', kind: 'Page' },
     { label: 'Workspace members', href: '/workspace/members', kind: 'Page' },
+    { label: 'Trash', href: '/trash', kind: 'Page' },
 ];
 const searchResults = computed<SearchItem[]>(() => {
     const q = searchQuery.value.trim().toLowerCase();
@@ -435,7 +443,7 @@ const tryOpen = ref(false);
                                         <span
                                             v-if="!ws.logo_url"
                                             aria-hidden="true"
-                                            class="flex size-5 shrink-0 items-center justify-center rounded-full text-[9.5px] font-semibold text-white uppercase tracking-tight"
+                                            class="flex size-5 shrink-0 items-center justify-center rounded-full text-[9.5px] font-semibold tracking-tight text-white uppercase"
                                             :style="{
                                                 backgroundColor:
                                                     ws.color || '#6366f1',
@@ -602,6 +610,18 @@ const tryOpen = ref(false);
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            as-child
+                            :is-active="isTrashActive"
+                            tooltip="Trash"
+                        >
+                            <Link :href="'/trash'">
+                                <Trash2 />
+                                <span>Trash</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarGroup>
 
@@ -618,10 +638,7 @@ const tryOpen = ref(false);
                     Favourites
                 </button>
                 <SidebarMenu v-show="favouritesOpen">
-                    <SidebarMenuItem
-                        v-for="fav in favourites"
-                        :key="fav.id"
-                    >
+                    <SidebarMenuItem v-for="fav in favourites" :key="fav.id">
                         <SidebarMenuButton as-child :tooltip="fav.label">
                             <Link :href="fav.href">
                                 <span
@@ -679,7 +696,7 @@ const tryOpen = ref(false);
                             <DropdownMenuTrigger as-child>
                                 <button
                                     type="button"
-                                    class="absolute top-1.5 right-1.5 flex rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/team:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 hover:bg-sidebar-accent hover:text-foreground"
+                                    class="absolute top-1.5 right-1.5 flex rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/team:opacity-100 hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100 data-[state=open]:opacity-100"
                                     aria-label="Team menu"
                                     title="Team menu"
                                 >
@@ -775,7 +792,9 @@ const tryOpen = ref(false);
                                     as-child
                                     :is-active="isTeamViewsActive(team.key)"
                                 >
-                                    <Link :href="`/views?scope=team&team=${team.key}`">
+                                    <Link
+                                        :href="`/views?scope=team&team=${team.key}`"
+                                    >
                                         <Layers class="size-3.5" />
                                         <span>Views</span>
                                     </Link>
@@ -846,8 +865,14 @@ const tryOpen = ref(false);
                                 <span
                                     class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden"
                                 >
-                                    <span class="truncate text-[13px] font-medium">{{ currentUser.name }}</span>
-                                    <span class="truncate text-[11px] text-muted-foreground">{{ currentUser.email }}</span>
+                                    <span
+                                        class="truncate text-[13px] font-medium"
+                                        >{{ currentUser.name }}</span
+                                    >
+                                    <span
+                                        class="truncate text-[11px] text-muted-foreground"
+                                        >{{ currentUser.email }}</span
+                                    >
                                 </span>
                                 <ChevronUp
                                     class="ml-auto size-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden"
@@ -866,8 +891,16 @@ const tryOpen = ref(false);
                                     :size="28"
                                 />
                                 <div class="min-w-0">
-                                    <div class="truncate text-[13px] font-medium">{{ currentUser.name }}</div>
-                                    <div class="truncate text-[11.5px] text-muted-foreground">{{ currentUser.email }}</div>
+                                    <div
+                                        class="truncate text-[13px] font-medium"
+                                    >
+                                        {{ currentUser.name }}
+                                    </div>
+                                    <div
+                                        class="truncate text-[11.5px] text-muted-foreground"
+                                    >
+                                        {{ currentUser.email }}
+                                    </div>
                                 </div>
                             </div>
                             <DropdownMenuSeparator />

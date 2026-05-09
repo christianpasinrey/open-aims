@@ -12,16 +12,21 @@ import {
     Loader2,
     MoreHorizontal,
     Package,
+    PanelRightClose,
+    PanelRightOpen,
     Plus,
     Star,
+    Trash2,
     UserPlus,
 } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
+import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
+import RichEditor from '@/components/repo/RichEditor.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
     Dialog,
@@ -42,7 +47,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { useFavourites } from '@/composables/useFavourites';
-import { renderMarkdown } from '@/lib/markdown';
 import { startedProgressByState } from '@/lib/states';
 
 type Project = {
@@ -51,6 +55,7 @@ type Project = {
     slug: string;
     description: string | null;
     state: string | null;
+    priority: number;
     color: string | null;
     icon: string | null;
     start_date: string | null;
@@ -137,10 +142,6 @@ const STATE_LABELS: Record<string, string> = {
     completed: 'Completed',
     canceled: 'Canceled',
 };
-
-const descriptionHtml = computed<string>(() =>
-    renderMarkdown(props.project.description),
-);
 
 const TYPE_RANK: Record<string, number> = {
     triage: 0,
@@ -376,6 +377,21 @@ function setLead(userId: number | null) {
 
     patchProject({ lead_user_id: userId });
 }
+const PRIORITY_LABELS: Record<number, string> = {
+    0: 'No priority',
+    1: 'Urgent',
+    2: 'High',
+    3: 'Medium',
+    4: 'Low',
+};
+const PRIORITY_ORDER = [1, 2, 3, 4, 0];
+function setPriority(p: number) {
+    if ((props.project.priority ?? 0) === p) {
+        return;
+    }
+
+    patchProject({ priority: p });
+}
 function setStartDate(date: string) {
     patchProject({ start_date: date === '' ? null : date });
 }
@@ -439,27 +455,44 @@ function cancelName() {
 
 const editingDesc = ref<boolean>(false);
 const descDraft = ref<string>('');
-const descTextarea = ref<HTMLTextAreaElement | null>(null);
+const descSaving = ref<boolean>(false);
+const descEditorRef = ref<InstanceType<typeof RichEditor> | null>(null);
 
 function startEditDesc() {
     descDraft.value = props.project.description ?? '';
     editingDesc.value = true;
     nextTick(() => {
-        descTextarea.value?.focus();
+        descEditorRef.value?.focus();
     });
 }
 function commitDesc() {
-    editingDesc.value = false;
+    const next = descDraft.value.trim();
+    const original = (props.project.description ?? '').trim();
 
-    if ((descDraft.value ?? '') === (props.project.description ?? '')) {
+    if (next === original) {
+        editingDesc.value = false;
+
         return;
     }
 
-    patchProject({
-        description: descDraft.value === '' ? null : descDraft.value,
-    });
+    descSaving.value = true;
+    router.patch(
+        `/projects/${props.project.slug}`,
+        { description: next === '' ? null : descDraft.value },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                editingDesc.value = false;
+            },
+            onFinish: () => {
+                descSaving.value = false;
+            },
+        },
+    );
 }
 function cancelDesc() {
+    descDraft.value = props.project.description ?? '';
     editingDesc.value = false;
 }
 
@@ -623,6 +656,69 @@ function submitMilestone() {
 }
 
 // =================================================================
+// Delete project (soft-delete with cascade to issues + milestones)
+// =================================================================
+const deleteDialogOpen = ref<boolean>(false);
+const deleteSubmitting = ref<boolean>(false);
+
+function openDeleteDialog() {
+    deleteDialogOpen.value = true;
+}
+
+function confirmDelete() {
+    deleteSubmitting.value = true;
+    router.delete(`/projects/${props.project.slug}`, {
+        preserveScroll: false,
+        onSuccess: () => {
+            deleteDialogOpen.value = false;
+            toast.success(`Moved "${props.project.name}" to Trash`);
+        },
+        onError: () => {
+            toast.error('Could not delete project');
+        },
+        onFinish: () => {
+            deleteSubmitting.value = false;
+        },
+    });
+}
+
+// =================================================================
+// Right rail collapse (per-section + whole rail)
+// =================================================================
+const railCollapsed = ref<boolean>(false);
+const sectionCollapsed = ref<Record<string, boolean>>({
+    properties: false,
+    milestones: false,
+    progress: false,
+});
+
+const RAIL_KEY = 'aims:project-rail';
+function toggleRail() {
+    railCollapsed.value = !railCollapsed.value;
+    persistRailState();
+}
+function toggleSection(key: 'properties' | 'milestones' | 'progress') {
+    sectionCollapsed.value = {
+        ...sectionCollapsed.value,
+        [key]: !sectionCollapsed.value[key],
+    };
+    persistRailState();
+}
+function persistRailState() {
+    try {
+        window.localStorage.setItem(
+            RAIL_KEY,
+            JSON.stringify({
+                collapsed: railCollapsed.value,
+                sections: sectionCollapsed.value,
+            }),
+        );
+    } catch {
+        // ignore
+    }
+}
+
+// =================================================================
 // Mounted: load collapse state
 // =================================================================
 onMounted(() => {
@@ -636,6 +732,23 @@ onMounted(() => {
         if (raw) {
             const arr = JSON.parse(raw) as string[];
             collapsed.value = new Set(Array.isArray(arr) ? arr : []);
+        }
+
+        const railRaw = window.localStorage.getItem(RAIL_KEY);
+        if (railRaw) {
+            const parsed = JSON.parse(railRaw) as {
+                collapsed?: boolean;
+                sections?: Record<string, boolean>;
+            };
+            if (typeof parsed.collapsed === 'boolean') {
+                railCollapsed.value = parsed.collapsed;
+            }
+            if (parsed.sections) {
+                sectionCollapsed.value = {
+                    ...sectionCollapsed.value,
+                    ...parsed.sections,
+                };
+            }
         }
 
         loadMembers();
@@ -725,6 +838,22 @@ watch(
                 >
                     <Bell class="size-3.5" />
                 </button>
+                <button
+                    type="button"
+                    class="rounded-md p-1.5 hover:bg-accent hover:text-foreground"
+                    :aria-label="
+                        railCollapsed ? 'Show right rail' : 'Hide right rail'
+                    "
+                    :title="
+                        railCollapsed ? 'Show right rail' : 'Hide right rail'
+                    "
+                    @click="toggleRail"
+                >
+                    <component
+                        :is="railCollapsed ? PanelRightOpen : PanelRightClose"
+                        class="size-3.5"
+                    />
+                </button>
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <button
@@ -739,9 +868,13 @@ watch(
                         <DropdownMenuItem disabled>Duplicate</DropdownMenuItem>
                         <DropdownMenuItem disabled>Archive</DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem disabled class="text-rose-400"
-                            >Delete project</DropdownMenuItem
+                        <DropdownMenuItem
+                            class="text-rose-400 focus:text-rose-400"
+                            @select="openDeleteDialog"
                         >
+                            <Trash2 class="size-3.5" />
+                            Delete project
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -1052,32 +1185,54 @@ watch(
                         >
                             Description <ChevronDown class="size-3" />
                         </div>
-                        <div
-                            v-if="!editingDesc && descriptionHtml"
-                            class="markdown-body -m-2 cursor-text rounded-md p-2 transition-colors hover:bg-accent/30"
+                        <template v-if="editingDesc">
+                            <RichEditor
+                                ref="descEditorRef"
+                                v-model="descDraft"
+                                placeholder="Describe the project…"
+                                autofocus
+                                @blur="commitDesc"
+                                @submit="commitDesc"
+                                @cancel="cancelDesc"
+                            />
+                            <div
+                                class="pointer-events-none mt-2 flex items-center gap-3 text-[11px] text-muted-foreground/80"
+                            >
+                                <span>
+                                    <kbd class="font-mono">Ctrl</kbd>+<kbd
+                                        class="font-mono"
+                                        >Enter</kbd
+                                    >
+                                    to save
+                                </span>
+                                <span>
+                                    <kbd class="font-mono">Esc</kbd> to cancel
+                                </span>
+                                <span
+                                    v-if="descSaving"
+                                    class="ml-auto inline-flex items-center gap-1"
+                                >
+                                    <span
+                                        class="size-1.5 animate-pulse rounded-full bg-muted-foreground"
+                                    ></span>
+                                    Saving…
+                                </span>
+                            </div>
+                        </template>
+                        <MarkdownContent
+                            v-else-if="project.description"
+                            :source="project.description"
+                            class="cursor-text rounded-md transition-colors hover:bg-accent/30"
                             @click="startEditDesc"
-                            v-html="descriptionHtml"
-                        ></div>
+                        />
                         <button
-                            v-else-if="!editingDesc"
+                            v-else
                             type="button"
-                            class="w-full rounded-md border border-dashed border-border px-3 py-3 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+                            class="-mx-3 w-[calc(100%+1.5rem)] rounded-md px-3 py-2 text-left text-[14px] text-muted-foreground italic transition-colors hover:bg-accent/40"
                             @click="startEditDesc"
                         >
-                            Add description…
+                            Add a description…
                         </button>
-                        <textarea
-                            v-else
-                            ref="descTextarea"
-                            v-model="descDraft"
-                            rows="6"
-                            class="w-full rounded-md border border-input bg-transparent p-2 text-[13.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                            placeholder="Describe the project… (markdown supported)"
-                            @blur="commitDesc"
-                            @keydown.escape="cancelDesc"
-                            @keydown.meta.enter.prevent="commitDesc"
-                            @keydown.ctrl.enter.prevent="commitDesc"
-                        />
                     </section>
 
                     <!-- Milestones -->
@@ -1317,17 +1472,30 @@ watch(
 
             <!-- Right rail -->
             <aside
+                v-if="!railCollapsed"
                 class="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border bg-background/40 px-3 py-3 lg:block"
             >
                 <div class="space-y-2 text-[13px]">
                     <!-- ============== PROPERTIES ============== -->
-                    <section class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
                                 class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                                :aria-expanded="!sectionCollapsed.properties"
+                                @click="toggleSection('properties')"
                             >
-                                Properties <ChevronDown class="size-3" />
+                                Properties
+                                <component
+                                    :is="
+                                        sectionCollapsed.properties
+                                            ? ChevronRight
+                                            : ChevronDown
+                                    "
+                                    class="size-3"
+                                />
                             </button>
                             <button
                                 type="button"
@@ -1338,6 +1506,7 @@ watch(
                             </button>
                         </header>
                         <dl
+                            v-show="!sectionCollapsed.properties"
                             class="grid grid-cols-[80px_1fr] items-center gap-x-3 gap-y-2"
                         >
                             <!-- Status -->
@@ -1383,13 +1552,46 @@ watch(
                             <dt class="text-[12.5px] text-muted-foreground">
                                 Priority
                             </dt>
-                            <dd
-                                class="flex items-center gap-1.5 text-[13px] text-foreground"
-                            >
-                                <PriorityIcon :priority="0" />
-                                <span class="text-muted-foreground"
-                                    >No priority</span
-                                >
+                            <dd>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger as-child>
+                                        <button
+                                            type="button"
+                                            :class="[
+                                                '-mx-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] transition-colors hover:bg-accent/40',
+                                                project.priority === 0
+                                                    ? 'text-muted-foreground'
+                                                    : 'text-foreground',
+                                            ]"
+                                        >
+                                            <PriorityIcon
+                                                :priority="project.priority"
+                                            />
+                                            <span>{{
+                                                PRIORITY_LABELS[
+                                                    project.priority
+                                                ] ?? 'No priority'
+                                            }}</span>
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent class="w-44">
+                                        <DropdownMenuItem
+                                            v-for="p in PRIORITY_ORDER"
+                                            :key="p"
+                                            @select="setPriority(p)"
+                                        >
+                                            <span
+                                                class="flex items-center gap-2"
+                                            >
+                                                <PriorityIcon
+                                                    :priority="p"
+                                                    :size="14"
+                                                />
+                                                {{ PRIORITY_LABELS[p] }}
+                                            </span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </dd>
 
                             <!-- Lead -->
@@ -1660,13 +1862,25 @@ watch(
                     </section>
 
                     <!-- ============== MILESTONES ============== -->
-                    <section class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
                                 class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                                :aria-expanded="!sectionCollapsed.milestones"
+                                @click="toggleSection('milestones')"
                             >
-                                Milestones <ChevronDown class="size-3" />
+                                Milestones
+                                <component
+                                    :is="
+                                        sectionCollapsed.milestones
+                                            ? ChevronRight
+                                            : ChevronDown
+                                    "
+                                    class="size-3"
+                                />
                             </button>
                             <button
                                 type="button"
@@ -1680,7 +1894,10 @@ watch(
                         </header>
 
                         <ul
-                            v-if="project.milestones.length"
+                            v-if="
+                                project.milestones.length &&
+                                !sectionCollapsed.milestones
+                            "
                             class="space-y-1.5"
                         >
                             <li
@@ -1718,7 +1935,7 @@ watch(
                         </ul>
 
                         <p
-                            v-else
+                            v-else-if="!sectionCollapsed.milestones"
                             class="text-[12.5px] leading-[18px] text-muted-foreground"
                         >
                             Add milestones to organize work within your project
@@ -1727,284 +1944,298 @@ watch(
                     </section>
 
                     <!-- ============== PROGRESS ============== -->
-                    <section class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5">
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
                         <header class="mb-2 flex items-center justify-between">
                             <button
                                 type="button"
                                 class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                                :aria-expanded="!sectionCollapsed.progress"
+                                @click="toggleSection('progress')"
                             >
-                                Progress <ChevronDown class="size-3" />
+                                Progress
+                                <component
+                                    :is="
+                                        sectionCollapsed.progress
+                                            ? ChevronRight
+                                            : ChevronDown
+                                    "
+                                    class="size-3"
+                                />
                             </button>
                         </header>
 
-                        <!-- 3 stat cards -->
-                        <div class="mb-3 grid grid-cols-3 gap-2">
-                            <div
-                                class="rounded-md border border-border bg-card p-2"
-                            >
+                        <div v-show="!sectionCollapsed.progress">
+                            <!-- 3 stat cards -->
+                            <div class="mb-3 grid grid-cols-3 gap-2">
                                 <div
-                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                    class="rounded-md border border-border bg-card p-2"
                                 >
-                                    <span
-                                        class="size-1.5 rounded-sm bg-zinc-500"
-                                    ></span>
-                                    Scope
+                                    <div
+                                        class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                    >
+                                        <span
+                                            class="size-1.5 rounded-sm bg-zinc-500"
+                                        ></span>
+                                        Scope
+                                    </div>
+                                    <div
+                                        class="mt-1 text-[16px] font-semibold tabular-nums"
+                                    >
+                                        {{ progress.total }}
+                                    </div>
                                 </div>
                                 <div
-                                    class="mt-1 text-[16px] font-semibold tabular-nums"
+                                    class="rounded-md border border-border bg-card p-2"
                                 >
-                                    {{ progress.total }}
+                                    <div
+                                        class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                    >
+                                        <span
+                                            class="size-1.5 rounded-sm bg-amber-400"
+                                        ></span>
+                                        Started
+                                    </div>
+                                    <div
+                                        class="mt-1 text-[16px] font-semibold tabular-nums"
+                                    >
+                                        {{ progress.started }}
+                                    </div>
+                                </div>
+                                <div
+                                    class="rounded-md border border-border bg-card p-2"
+                                >
+                                    <div
+                                        class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                    >
+                                        <span
+                                            class="size-1.5 rounded-sm bg-indigo-500"
+                                        ></span>
+                                        Done
+                                    </div>
+                                    <div
+                                        class="mt-1 text-[16px] font-semibold tabular-nums"
+                                    >
+                                        {{ progress.completed }}
+                                    </div>
                                 </div>
                             </div>
-                            <div
-                                class="rounded-md border border-border bg-card p-2"
-                            >
-                                <div
-                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                                >
-                                    <span
-                                        class="size-1.5 rounded-sm bg-amber-400"
-                                    ></span>
-                                    Started
-                                </div>
-                                <div
-                                    class="mt-1 text-[16px] font-semibold tabular-nums"
-                                >
-                                    {{ progress.started }}
-                                </div>
-                            </div>
-                            <div
-                                class="rounded-md border border-border bg-card p-2"
-                            >
-                                <div
-                                    class="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                                >
-                                    <span
-                                        class="size-1.5 rounded-sm bg-indigo-500"
-                                    ></span>
-                                    Done
-                                </div>
-                                <div
-                                    class="mt-1 text-[16px] font-semibold tabular-nums"
-                                >
-                                    {{ progress.completed }}
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- Burndown chart -->
-                        <div
-                            class="relative h-[160px] rounded-md border border-border bg-card"
-                        >
-                            <svg
-                                viewBox="0 0 256 140"
-                                preserveAspectRatio="none"
-                                class="absolute inset-0 h-full w-full"
-                                aria-hidden="true"
-                            >
-                                <line
-                                    x1="12"
-                                    y1="18"
-                                    x2="244"
-                                    y2="18"
-                                    stroke="currentColor"
-                                    stroke-width="0.5"
-                                    class="text-border"
-                                />
-                                <line
-                                    x1="12"
-                                    y1="70"
-                                    x2="244"
-                                    y2="70"
-                                    stroke="currentColor"
-                                    stroke-width="0.5"
-                                    class="text-border"
-                                    stroke-dasharray="2 3"
-                                />
-                                <line
-                                    x1="12"
-                                    y1="122"
-                                    x2="244"
-                                    y2="122"
-                                    stroke="currentColor"
-                                    stroke-width="0.5"
-                                    class="text-border"
-                                />
-                                <polyline
-                                    :points="burndownIdealPoints"
-                                    fill="none"
-                                    stroke="#71717a"
-                                    stroke-width="1"
-                                    stroke-dasharray="3 3"
-                                />
-                                <polyline
-                                    :points="burndownActualPoints"
-                                    fill="none"
-                                    stroke="#6366f1"
-                                    stroke-width="1.5"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                />
-                            </svg>
+                            <!-- Burndown chart -->
                             <div
-                                class="pointer-events-none absolute inset-x-2 bottom-1 flex items-center justify-between text-[10px] text-muted-foreground tabular-nums"
+                                class="relative h-[160px] rounded-md border border-border bg-card"
                             >
-                                <span>{{
-                                    project.start_date
-                                        ? fmtShort(project.start_date)
-                                        : ''
-                                }}</span>
-                                <span>{{
-                                    project.target_date
-                                        ? fmtShort(project.target_date)
-                                        : ''
-                                }}</span>
+                                <svg
+                                    viewBox="0 0 256 140"
+                                    preserveAspectRatio="none"
+                                    class="absolute inset-0 h-full w-full"
+                                    aria-hidden="true"
+                                >
+                                    <line
+                                        x1="12"
+                                        y1="18"
+                                        x2="244"
+                                        y2="18"
+                                        stroke="currentColor"
+                                        stroke-width="0.5"
+                                        class="text-border"
+                                    />
+                                    <line
+                                        x1="12"
+                                        y1="70"
+                                        x2="244"
+                                        y2="70"
+                                        stroke="currentColor"
+                                        stroke-width="0.5"
+                                        class="text-border"
+                                        stroke-dasharray="2 3"
+                                    />
+                                    <line
+                                        x1="12"
+                                        y1="122"
+                                        x2="244"
+                                        y2="122"
+                                        stroke="currentColor"
+                                        stroke-width="0.5"
+                                        class="text-border"
+                                    />
+                                    <polyline
+                                        :points="burndownIdealPoints"
+                                        fill="none"
+                                        stroke="#71717a"
+                                        stroke-width="1"
+                                        stroke-dasharray="3 3"
+                                    />
+                                    <polyline
+                                        :points="burndownActualPoints"
+                                        fill="none"
+                                        stroke="#6366f1"
+                                        stroke-width="1.5"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                                <div
+                                    class="pointer-events-none absolute inset-x-2 bottom-1 flex items-center justify-between text-[10px] text-muted-foreground tabular-nums"
+                                >
+                                    <span>{{
+                                        project.start_date
+                                            ? fmtShort(project.start_date)
+                                            : ''
+                                    }}</span>
+                                    <span>{{
+                                        project.target_date
+                                            ? fmtShort(project.target_date)
+                                            : ''
+                                    }}</span>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Pill tabs -->
-                        <div class="mt-3 flex items-center gap-1">
-                            <button
-                                v-for="t in [
-                                    'assignees',
-                                    'labels',
-                                    'cycles',
-                                ] as const"
-                                :key="t"
-                                type="button"
-                                @click="progressTab = t"
-                                :class="[
-                                    'rounded-md px-2 py-1 text-[12px] capitalize transition-colors',
-                                    progressTab === t
-                                        ? 'bg-accent text-foreground'
-                                        : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-                                ]"
-                            >
-                                {{ t }}
-                            </button>
-                        </div>
+                            <!-- Pill tabs -->
+                            <div class="mt-3 flex items-center gap-1">
+                                <button
+                                    v-for="t in [
+                                        'assignees',
+                                        'labels',
+                                        'cycles',
+                                    ] as const"
+                                    :key="t"
+                                    type="button"
+                                    @click="progressTab = t"
+                                    :class="[
+                                        'rounded-md px-2 py-1 text-[12px] capitalize transition-colors',
+                                        progressTab === t
+                                            ? 'bg-accent text-foreground'
+                                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                                    ]"
+                                >
+                                    {{ t }}
+                                </button>
+                            </div>
 
-                        <div class="mt-2">
-                            <ul
-                                v-if="progressTab === 'assignees'"
-                                class="space-y-1.5"
-                            >
-                                <li
-                                    v-if="!assignees.length"
+                            <div class="mt-2">
+                                <ul
+                                    v-if="progressTab === 'assignees'"
+                                    class="space-y-1.5"
+                                >
+                                    <li
+                                        v-if="!assignees.length"
+                                        class="text-[12.5px] text-muted-foreground"
+                                    >
+                                        No assignees yet.
+                                    </li>
+                                    <li
+                                        v-for="(row, i) in assignees"
+                                        :key="row.user?.id ?? `none-${i}`"
+                                        class="flex items-center justify-between gap-2"
+                                    >
+                                        <div
+                                            class="flex min-w-0 items-center gap-1.5"
+                                        >
+                                            <Avatar
+                                                v-if="row.user"
+                                                :name="row.user.name"
+                                                :email="row.user.email"
+                                                :size="18"
+                                            />
+                                            <span
+                                                v-else
+                                                class="size-[18px] rounded-full border border-dashed border-border"
+                                            ></span>
+                                            <span
+                                                class="truncate text-[12.5px] text-foreground"
+                                            >
+                                                {{
+                                                    row.user
+                                                        ? row.user.name
+                                                        : 'Unassigned'
+                                                }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="flex shrink-0 items-center gap-1.5"
+                                        >
+                                            <span
+                                                class="text-[11px] text-muted-foreground tabular-nums"
+                                            >
+                                                {{ row.percent }}% of
+                                                {{ row.total }}
+                                            </span>
+                                            <svg
+                                                width="14"
+                                                height="14"
+                                                viewBox="0 0 14 14"
+                                                fill="none"
+                                            >
+                                                <circle
+                                                    cx="7"
+                                                    cy="7"
+                                                    r="5"
+                                                    stroke="#3f3f46"
+                                                    stroke-width="1.5"
+                                                    fill="none"
+                                                />
+                                                <circle
+                                                    cx="7"
+                                                    cy="7"
+                                                    r="5"
+                                                    fill="none"
+                                                    stroke-width="2"
+                                                    :stroke="
+                                                        donutStroke(row.percent)
+                                                    "
+                                                    :stroke-dasharray="`${donutC} ${donutC}`"
+                                                    :stroke-dashoffset="
+                                                        donutOffset(row.percent)
+                                                    "
+                                                    transform="rotate(-90 7 7)"
+                                                />
+                                            </svg>
+                                        </div>
+                                    </li>
+                                </ul>
+                                <p
+                                    v-else
                                     class="text-[12.5px] text-muted-foreground"
                                 >
-                                    No assignees yet.
-                                </li>
-                                <li
-                                    v-for="(row, i) in assignees"
-                                    :key="row.user?.id ?? `none-${i}`"
-                                    class="flex items-center justify-between gap-2"
-                                >
-                                    <div
-                                        class="flex min-w-0 items-center gap-1.5"
-                                    >
-                                        <Avatar
-                                            v-if="row.user"
-                                            :name="row.user.name"
-                                            :email="row.user.email"
-                                            :size="18"
-                                        />
-                                        <span
-                                            v-else
-                                            class="size-[18px] rounded-full border border-dashed border-border"
-                                        ></span>
-                                        <span
-                                            class="truncate text-[12.5px] text-foreground"
-                                        >
-                                            {{
-                                                row.user
-                                                    ? row.user.name
-                                                    : 'Unassigned'
-                                            }}
-                                        </span>
-                                    </div>
-                                    <div
-                                        class="flex shrink-0 items-center gap-1.5"
-                                    >
-                                        <span
-                                            class="text-[11px] text-muted-foreground tabular-nums"
-                                        >
-                                            {{ row.percent }}% of
-                                            {{ row.total }}
-                                        </span>
-                                        <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 14 14"
-                                            fill="none"
-                                        >
-                                            <circle
-                                                cx="7"
-                                                cy="7"
-                                                r="5"
-                                                stroke="#3f3f46"
-                                                stroke-width="1.5"
-                                                fill="none"
-                                            />
-                                            <circle
-                                                cx="7"
-                                                cy="7"
-                                                r="5"
-                                                fill="none"
-                                                stroke-width="2"
-                                                :stroke="
-                                                    donutStroke(row.percent)
-                                                "
-                                                :stroke-dasharray="`${donutC} ${donutC}`"
-                                                :stroke-dashoffset="
-                                                    donutOffset(row.percent)
-                                                "
-                                                transform="rotate(-90 7 7)"
-                                            />
-                                        </svg>
-                                    </div>
-                                </li>
-                            </ul>
-                            <p
-                                v-else
-                                class="text-[12.5px] text-muted-foreground"
-                            >
-                                Coming soon
-                            </p>
-                        </div>
+                                    Coming soon
+                                </p>
+                            </div>
 
-                        <div
-                            class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2"
-                        >
-                            <span class="text-[12px] text-muted-foreground"
-                                >{{ progress.percent }}% complete</span
+                            <div
+                                class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2"
                             >
-                            <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 14 14"
-                                fill="none"
-                            >
-                                <circle
-                                    cx="7"
-                                    cy="7"
-                                    r="5"
-                                    stroke="#3f3f46"
-                                    stroke-width="1.5"
+                                <span class="text-[12px] text-muted-foreground"
+                                    >{{ progress.percent }}% complete</span
+                                >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 14 14"
                                     fill="none"
-                                />
-                                <circle
-                                    cx="7"
-                                    cy="7"
-                                    r="5"
-                                    fill="none"
-                                    stroke-width="2"
-                                    :stroke="ringStroke"
-                                    :stroke-dasharray="`${ringC} ${ringC}`"
-                                    :stroke-dashoffset="ringDashOffset"
-                                    transform="rotate(-90 7 7)"
-                                />
-                            </svg>
+                                >
+                                    <circle
+                                        cx="7"
+                                        cy="7"
+                                        r="5"
+                                        stroke="#3f3f46"
+                                        stroke-width="1.5"
+                                        fill="none"
+                                    />
+                                    <circle
+                                        cx="7"
+                                        cy="7"
+                                        r="5"
+                                        fill="none"
+                                        stroke-width="2"
+                                        :stroke="ringStroke"
+                                        :stroke-dasharray="`${ringC} ${ringC}`"
+                                        :stroke-dashoffset="ringDashOffset"
+                                        transform="rotate(-90 7 7)"
+                                    />
+                                </svg>
+                            </div>
                         </div>
                     </section>
                 </div>
@@ -2091,6 +2322,43 @@ watch(
                         </button>
                     </DialogFooter>
                 </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Delete project confirm dialog -->
+        <Dialog v-model:open="deleteDialogOpen">
+            <DialogContent class="sm:max-w-[460px]">
+                <DialogHeader>
+                    <DialogTitle>Delete project?</DialogTitle>
+                    <DialogDescription>
+                        <strong class="text-foreground">{{
+                            project.name
+                        }}</strong>
+                        and all of its issues, milestones and activity will be
+                        moved to Trash. You can restore them later.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <DialogClose
+                        class="rounded-md px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                        Cancel
+                    </DialogClose>
+                    <button
+                        type="button"
+                        :disabled="deleteSubmitting"
+                        class="inline-flex items-center gap-1.5 rounded-md bg-rose-500/90 px-3 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                        @click="confirmDelete"
+                    >
+                        <Loader2
+                            v-if="deleteSubmitting"
+                            class="size-3.5 animate-spin"
+                            aria-hidden="true"
+                        />
+                        <Trash2 v-else class="size-3.5" aria-hidden="true" />
+                        {{ deleteSubmitting ? 'Deleting…' : 'Move to Trash' }}
+                    </button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     </div>

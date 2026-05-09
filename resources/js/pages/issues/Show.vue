@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, ChevronDown, Star } from 'lucide-vue-next';
-import { computed } from 'vue';
+import {
+    ArrowLeft,
+    ChevronDown,
+    ChevronRight,
+    PanelRightClose,
+    PanelRightOpen,
+    Star,
+} from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import { useFavourites } from '@/composables/useFavourites';
 
@@ -139,7 +146,12 @@ const activityFeed = computed<FeedItem[]>(() => {
         items.push({ kind: 'comment', id: c.id, at: c.created_at, comment: c });
     }
     for (const a of props.activities ?? []) {
-        items.push({ kind: 'activity', id: a.id, at: a.occurred_at, activity: a });
+        items.push({
+            kind: 'activity',
+            id: a.id,
+            at: a.occurred_at,
+            activity: a,
+        });
     }
     items.sort((x, y) => {
         const xt = x.at ? new Date(x.at).getTime() : 0;
@@ -211,6 +223,68 @@ function toggleStar() {
     });
 }
 
+// ─── Right rail collapse (per-section + whole rail) ─────────────────────
+const RAIL_KEY = 'aims:issue-rail';
+const railCollapsed = ref<boolean>(false);
+const sectionCollapsed = ref<Record<string, boolean>>({
+    properties: false,
+    labels: false,
+    project: false,
+    relations: false,
+});
+
+function toggleRail() {
+    railCollapsed.value = !railCollapsed.value;
+    persistRailState();
+}
+function toggleSection(key: 'properties' | 'labels' | 'project' | 'relations') {
+    sectionCollapsed.value = {
+        ...sectionCollapsed.value,
+        [key]: !sectionCollapsed.value[key],
+    };
+    persistRailState();
+}
+function persistRailState() {
+    try {
+        window.localStorage.setItem(
+            RAIL_KEY,
+            JSON.stringify({
+                collapsed: railCollapsed.value,
+                sections: sectionCollapsed.value,
+            }),
+        );
+    } catch {
+        // ignore
+    }
+}
+
+onMounted(() => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        const raw = window.localStorage.getItem(RAIL_KEY);
+        if (!raw) {
+            return;
+        }
+        const parsed = JSON.parse(raw) as {
+            collapsed?: boolean;
+            sections?: Record<string, boolean>;
+        };
+        if (typeof parsed.collapsed === 'boolean') {
+            railCollapsed.value = parsed.collapsed;
+        }
+        if (parsed.sections) {
+            sectionCollapsed.value = {
+                ...sectionCollapsed.value,
+                ...parsed.sections,
+            };
+        }
+    } catch {
+        // ignore
+    }
+});
+
 const isOverdue = computed<boolean>(() => {
     const iso = props.issue.due_date;
 
@@ -241,9 +315,22 @@ const isOverdue = computed<boolean>(() => {
             class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5"
         >
             <Link
-                :href="`/issues?team=${team.key}`"
+                :href="
+                    issue.project
+                        ? `/projects/${issue.project.slug}?tab=issues`
+                        : `/issues?team=${team.key}`
+                "
                 class="text-muted-foreground transition-colors hover:text-foreground"
-                aria-label="Back to issues"
+                :aria-label="
+                    issue.project
+                        ? `Back to ${issue.project.name}`
+                        : 'Back to issues'
+                "
+                :title="
+                    issue.project
+                        ? `Back to ${issue.project.name}`
+                        : 'Back to issues'
+                "
             >
                 <ArrowLeft class="size-4" />
             </Link>
@@ -269,9 +356,26 @@ const isOverdue = computed<boolean>(() => {
                 :title="isStarred ? 'Unfavourite' : 'Favourite'"
                 @click="toggleStar"
             >
-                <Star class="size-3.5" :fill="isStarred ? 'currentColor' : 'none'" />
+                <Star
+                    class="size-3.5"
+                    :fill="isStarred ? 'currentColor' : 'none'"
+                />
             </button>
 
+            <button
+                type="button"
+                class="ml-auto rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                :aria-label="
+                    railCollapsed ? 'Show right rail' : 'Hide right rail'
+                "
+                :title="railCollapsed ? 'Show right rail' : 'Hide right rail'"
+                @click="toggleRail"
+            >
+                <component
+                    :is="railCollapsed ? PanelRightOpen : PanelRightClose"
+                    class="size-3.5"
+                />
+            </button>
             <IssueActions
                 :identifier="issue.identifier"
                 :title="issue.title"
@@ -321,18 +425,26 @@ const isOverdue = computed<boolean>(() => {
                                     v-if="item.kind === 'comment'"
                                     class="my-1 rounded-md border border-border bg-card p-3"
                                 >
-                                    <div class="flex items-center gap-2 text-[12px]">
+                                    <div
+                                        class="flex items-center gap-2 text-[12px]"
+                                    >
                                         <Avatar
                                             v-if="item.comment.user"
                                             :name="item.comment.user.name"
                                             :email="item.comment.user.email"
                                             :size="20"
                                         />
-                                        <span class="font-medium text-foreground">{{
-                                            item.comment.user?.name ?? 'Unknown'
-                                        }}</span>
+                                        <span
+                                            class="font-medium text-foreground"
+                                            >{{
+                                                item.comment.user?.name ??
+                                                'Unknown'
+                                            }}</span
+                                        >
                                         <span class="text-muted-foreground">{{
-                                            relativeTime(item.comment.created_at)
+                                            relativeTime(
+                                                item.comment.created_at,
+                                            )
                                         }}</span>
                                     </div>
                                     <MarkdownContent
@@ -351,6 +463,7 @@ const isOverdue = computed<boolean>(() => {
             </div>
 
             <aside
+                v-if="!railCollapsed"
                 class="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border bg-background/40 px-3 py-3 lg:block"
             >
                 <div class="space-y-2">
@@ -361,11 +474,23 @@ const isOverdue = computed<boolean>(() => {
                         <button
                             type="button"
                             class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            :aria-expanded="!sectionCollapsed.properties"
+                            @click="toggleSection('properties')"
                         >
                             <span>Properties</span>
-                            <ChevronDown class="size-3 opacity-60" />
+                            <component
+                                :is="
+                                    sectionCollapsed.properties
+                                        ? ChevronRight
+                                        : ChevronDown
+                                "
+                                class="size-3 opacity-60"
+                            />
                         </button>
-                        <div class="mt-1.5 flex flex-col gap-0.5">
+                        <div
+                            v-show="!sectionCollapsed.properties"
+                            class="mt-1.5 flex flex-col gap-0.5"
+                        >
                             <StatusPicker
                                 :identifier="issue.identifier"
                                 :states="states"
@@ -405,11 +530,20 @@ const isOverdue = computed<boolean>(() => {
                         <button
                             type="button"
                             class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            :aria-expanded="!sectionCollapsed.labels"
+                            @click="toggleSection('labels')"
                         >
                             <span>Labels</span>
-                            <ChevronDown class="size-3 opacity-60" />
+                            <component
+                                :is="
+                                    sectionCollapsed.labels
+                                        ? ChevronRight
+                                        : ChevronDown
+                                "
+                                class="size-3 opacity-60"
+                            />
                         </button>
-                        <div class="mt-1.5">
+                        <div v-show="!sectionCollapsed.labels" class="mt-1.5">
                             <LabelsPicker
                                 :identifier="issue.identifier"
                                 :labels="labels"
@@ -425,11 +559,20 @@ const isOverdue = computed<boolean>(() => {
                         <button
                             type="button"
                             class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            :aria-expanded="!sectionCollapsed.project"
+                            @click="toggleSection('project')"
                         >
                             <span>Project</span>
-                            <ChevronDown class="size-3 opacity-60" />
+                            <component
+                                :is="
+                                    sectionCollapsed.project
+                                        ? ChevronRight
+                                        : ChevronDown
+                                "
+                                class="size-3 opacity-60"
+                            />
                         </button>
-                        <div class="mt-1.5">
+                        <div v-show="!sectionCollapsed.project" class="mt-1.5">
                             <ProjectPicker
                                 :identifier="issue.identifier"
                                 :projects="projects"
@@ -452,12 +595,24 @@ const isOverdue = computed<boolean>(() => {
                         <button
                             type="button"
                             class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            :aria-expanded="!sectionCollapsed.relations"
+                            @click="toggleSection('relations')"
                         >
                             <span>Relations</span>
-                            <ChevronDown class="size-3 opacity-60" />
+                            <component
+                                :is="
+                                    sectionCollapsed.relations
+                                        ? ChevronRight
+                                        : ChevronDown
+                                "
+                                class="size-3 opacity-60"
+                            />
                         </button>
 
-                        <div class="mt-2 space-y-3">
+                        <div
+                            v-show="!sectionCollapsed.relations"
+                            class="mt-2 space-y-3"
+                        >
                             <div v-if="issue.parent">
                                 <div
                                     class="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"

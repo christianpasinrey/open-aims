@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Http\Controllers;
 
+use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectMilestone;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -94,6 +96,7 @@ final class ProjectWriteController
             'description' => 'sometimes|nullable|string',
             'lead_user_id' => 'sometimes|nullable|integer|exists:users,id',
             'state' => 'sometimes|in:backlog,planned,started,paused,completed,canceled',
+            'priority' => 'sometimes|integer|in:0,1,2,3,4',
             'color' => 'sometimes|string|max:9',
             'icon' => 'sometimes|nullable|string|max:64',
             'start_date' => 'sometimes|nullable|date',
@@ -148,11 +151,98 @@ final class ProjectWriteController
         return back();
     }
 
+    /**
+     * Soft-delete a project together with its issues and milestones.
+     *
+     * Items are stamped with the same deleted_at so we can restore the
+     * exact set the user trashed, even if other items were soft-deleted
+     * independently later.
+     */
+    public function destroy(string $slug): RedirectResponse
+    {
+        $project = $this->resolveProject($slug);
+        $now = now();
+
+        DB::transaction(function () use ($project, $now): void {
+            Issue::query()
+                ->where('project_id', $project->id)
+                ->whereNull('deleted_at')
+                ->update(['deleted_at' => $now]);
+
+            ProjectMilestone::query()
+                ->where('project_id', $project->id)
+                ->whereNull('deleted_at')
+                ->update(['deleted_at' => $now]);
+
+            $project->deleted_at = $now;
+            $project->save();
+        });
+
+        return redirect()->route('projects.index');
+    }
+
+    public function restore(string $slug): RedirectResponse
+    {
+        $project = $this->resolveTrashedProject($slug);
+
+        if ($project->deleted_at === null) {
+            return redirect()->route('projects.show', ['slug' => $slug]);
+        }
+
+        $deletedAt = Carbon::parse($project->deleted_at);
+        // Match the cascade we did at delete-time. ±1 second tolerance covers
+        // the (tiny) window where update() and save() may differ by ms.
+        $from = $deletedAt->copy()->subSecond();
+        $to = $deletedAt->copy()->addSecond();
+
+        DB::transaction(function () use ($project, $from, $to): void {
+            Issue::query()
+                ->withoutGlobalScopes()
+                ->where('project_id', $project->id)
+                ->whereBetween('deleted_at', [$from, $to])
+                ->update(['deleted_at' => null]);
+
+            ProjectMilestone::query()
+                ->where('project_id', $project->id)
+                ->whereBetween('deleted_at', [$from, $to])
+                ->update(['deleted_at' => null]);
+
+            $project->deleted_at = null;
+            $project->save();
+        });
+
+        return redirect()->route('projects.show', ['slug' => $slug]);
+    }
+
+    public function forceDestroy(string $slug): RedirectResponse
+    {
+        $project = $this->resolveTrashedProject($slug);
+        $project->forceDelete();
+
+        return redirect()->route('trash.index');
+    }
+
     private function resolveProject(string $slug): Project
     {
         $workspace = $this->workspace();
 
         $project = Project::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('slug', $slug)
+            ->first();
+        if ($project === null) {
+            throw new NotFoundHttpException('Project not found.');
+        }
+
+        return $project;
+    }
+
+    private function resolveTrashedProject(string $slug): Project
+    {
+        $workspace = $this->workspace();
+
+        $project = Project::query()
+            ->withTrashed()
             ->where('workspace_id', $workspace->id)
             ->where('slug', $slug)
             ->first();

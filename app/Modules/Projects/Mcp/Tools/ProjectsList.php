@@ -98,8 +98,12 @@ class ProjectsList extends Tool
 
     private function resolveUser(string $value, int $currentUserId): ?int
     {
-        if ($value === 'me') return $currentUserId;
-        if (is_numeric($value)) return (int) $value;
+        if ($value === 'me') {
+            return $currentUserId;
+        }
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
         $id = User::query()->where('email', $value)->value('id');
 
         return $id !== null ? (int) $id : null;
