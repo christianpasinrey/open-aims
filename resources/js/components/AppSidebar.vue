@@ -14,8 +14,6 @@ import {
     Search,
     PenSquare,
     Settings,
-    Sparkles,
-    UserPlus,
     UserCircle,
     KeyRound,
     SunMoon,
@@ -353,10 +351,6 @@ function switchTo(slug: string) {
 function logout() {
     router.post('/logout');
 }
-
-// ----- Footer dialogs -----
-const inviteOpen = ref(false);
-const tryOpen = ref(false);
 </script>
 
 <template>
@@ -828,37 +822,8 @@ const tryOpen = ref(false);
         </SidebarContent>
 
         <SidebarFooter>
-            <SidebarMenu>
-                <SidebarMenuItem>
-                    <SidebarMenuButton tooltip="Try" @click="tryOpen = true">
-                        <Sparkles />
-                        <span>Try</span>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                    <SidebarMenuButton
-                        tooltip="Invite people"
-                        @click="inviteOpen = true"
-                    >
-                        <UserPlus />
-                        <span>Invite people</span>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-            </SidebarMenu>
-            <a
-                href="https://github.com/repo-lab"
-                target="_blank"
-                rel="noreferrer"
-                class="mx-2 mt-2 block rounded-md border border-sidebar-border bg-card/50 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground transition-colors group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-foreground"
-            >
-                <span class="block font-medium text-foreground"
-                    >What&rsquo;s new</span
-                >
-                repo-lab Agent MCP support
-            </a>
-
             <!-- User menu — bottom of the sidebar -->
-            <SidebarMenu v-if="currentUser" class="mt-2">
+            <SidebarMenu v-if="currentUser">
                 <SidebarMenuItem>
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
@@ -1099,49 +1064,6 @@ const tryOpen = ref(false);
             </DialogContent>
         </Dialog>
 
-        <!-- Invite dialog (placeholder) -->
-        <Dialog v-model:open="inviteOpen">
-            <DialogContent class="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Invite people</DialogTitle>
-                    <DialogDescription>
-                        Invitations aren&rsquo;t wired up yet. Coming soon.
-                    </DialogDescription>
-                </DialogHeader>
-                <div class="grid gap-2">
-                    <Label for="invite-email">Email address</Label>
-                    <Input
-                        id="invite-email"
-                        type="email"
-                        placeholder="teammate@company.com"
-                        disabled
-                    />
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" @click="inviteOpen = false"
-                        >Close</Button
-                    >
-                    <Button disabled>Send invite</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
-        <!-- Try dialog (placeholder) -->
-        <Dialog v-model:open="tryOpen">
-            <DialogContent class="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Try AIMS</DialogTitle>
-                    <DialogDescription>
-                        Premium features will land here. Stay tuned.
-                    </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                    <Button variant="ghost" @click="tryOpen = false"
-                        >Close</Button
-                    >
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
     </Sidebar>
     <slot />
 </template>
