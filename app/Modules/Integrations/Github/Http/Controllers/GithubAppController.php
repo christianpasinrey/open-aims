@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Integrations\Github\Http\Controllers;
 
 use App\Modules\Integrations\Github\GithubAppService;
+use App\Modules\Integrations\Github\GithubEventIngester;
 use App\Modules\Integrations\Github\GithubWebhookHandler;
 use App\Modules\Integrations\Github\LinkPullRequestAction;
 use App\Modules\Integrations\Github\Models\GithubInstallation;
@@ -28,6 +29,7 @@ final class GithubAppController
         private readonly GithubAppService $github,
         private readonly GithubWebhookHandler $webhook,
         private readonly LinkPullRequestAction $linkPr,
+        private readonly GithubEventIngester $ingester,
     ) {}
 
     public function install(Request $request): RedirectResponse
@@ -126,10 +128,18 @@ final class GithubAppController
             ]);
         }
 
-        $linked = 0;
+        $totals = [
+            'repos_synced' => 0,
+            'branches_synced' => 0,
+            'pulls_synced' => 0,
+            'issues_linked' => 0,
+        ];
         foreach ($installations as $installation) {
             try {
-                $linked += $this->syncInstallation($installation);
+                $result = $this->syncInstallation($installation);
+                foreach ($totals as $key => $_) {
+                    $totals[$key] += $result[$key] ?? 0;
+                }
             } catch (\Throwable $e) {
                 Log::warning('github-app: sync failed', [
                     'installation_id' => $installation->installation_id,
@@ -138,7 +148,15 @@ final class GithubAppController
             }
         }
 
-        return redirect('/workspace/github?status=synced&linked='.$linked);
+        $query = http_build_query([
+            'status' => 'synced',
+            'linked' => $totals['issues_linked'],
+            'branches' => $totals['branches_synced'],
+            'pulls' => $totals['pulls_synced'],
+            'repos' => $totals['repos_synced'],
+        ]);
+
+        return redirect('/workspace/github?'.$query);
     }
 
     /**
@@ -255,35 +273,64 @@ final class GithubAppController
     }
 
     /**
-     * Pull every open PR in every repo the installation can see, then
-     * run the link action against each. Returns the number of links
-     * inserted/updated.
+     * Full backfill: for every repo the installation can see, write a
+     * `github_repos` row, then enumerate branches + PRs from the REST
+     * API and persist them to `github_branches` /
+     * `github_pull_requests` via the ingester helpers. Finally, run
+     * `LinkPullRequestAction` so any matched issues get linked the
+     * same way as on a webhook delivery.
      *
      * Also opportunistically refreshes the installation row's metadata
      * (account_login / type / repository_selection) — useful when the
      * row was created before the App's private key was available, so
      * the original metadata fetch failed and got persisted as 'unknown'.
+     *
+     * @return array{repos_synced:int, branches_synced:int, pulls_synced:int, issues_linked:int}
      */
-    private function syncInstallation(GithubInstallation $installation): int
+    private function syncInstallation(GithubInstallation $installation): array
     {
         $this->refreshInstallationMeta($installation);
 
-        $repos = $this->github->listRepos((int) $installation->installation_id);
-        $linked = 0;
+        $reposSynced = 0;
+        $branchesSynced = 0;
+        $pullsSynced = 0;
+        $issuesLinked = 0;
 
-        foreach ($repos as $repo) {
-            $owner = (string) ($repo['owner']['login'] ?? '');
-            $name = (string) ($repo['name'] ?? '');
+        $repos = $this->github->listRepos((int) $installation->installation_id);
+
+        foreach ($repos as $repoData) {
+            $owner = (string) ($repoData['owner']['login'] ?? '');
+            $name = (string) ($repoData['name'] ?? '');
             if ($owner === '' || $name === '') {
                 continue;
             }
+
+            $repoModel = $this->ingester->upsertRepoFromApi($installation, $repoData);
+            if ($repoModel === null) {
+                continue;
+            }
+            $reposSynced++;
+
+            $branches = $this->github->listBranches((int) $installation->installation_id, $owner, $name);
+            foreach ($branches as $branchData) {
+                $this->ingester->upsertBranchFromApi($repoModel, $branchData);
+                $branchesSynced++;
+            }
+
             $pulls = $this->github->listOpenPulls((int) $installation->installation_id, $owner, $name);
             foreach ($pulls as $pull) {
-                $linked += ($this->linkPr)($installation, $pull);
+                $this->ingester->upsertPullRequestFromApi($repoModel, $pull);
+                $pullsSynced++;
+                $issuesLinked += ($this->linkPr)($installation, $pull);
             }
         }
 
-        return $linked;
+        return [
+            'repos_synced' => $reposSynced,
+            'branches_synced' => $branchesSynced,
+            'pulls_synced' => $pullsSynced,
+            'issues_linked' => $issuesLinked,
+        ];
     }
 
     private function refreshInstallationMeta(GithubInstallation $installation): void
