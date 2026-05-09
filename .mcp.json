@@ -2,7 +2,7 @@
   "mcpServers": {
     "aims": {
       "type": "http",
-      "url": ""
+      "url": "https://<your-domain>/mcp"
     }
   }
 }
