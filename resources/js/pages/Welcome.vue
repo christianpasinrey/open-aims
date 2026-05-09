@@ -29,13 +29,6 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
         <section
             class="flex flex-1 flex-col items-center justify-center px-6 pb-24 text-center"
         >
-            <span
-                class="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[12px] text-muted-foreground"
-            >
-                <span class="size-1.5 rounded-full bg-brand"></span>
-                IMS &middot; AIMS &middot; Advanced Issue Management System
-            </span>
-
             <h1
                 class="max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl"
             >
