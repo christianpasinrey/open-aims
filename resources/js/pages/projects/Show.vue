@@ -26,6 +26,7 @@ import {
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
+import GithubLinksPanel from '@/components/repo/github/GithubLinksPanel.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
@@ -126,6 +127,36 @@ type AssigneeStat = {
 };
 type WorkspaceMember = { id: number; name: string; email: string };
 
+type LinkedBranch = {
+    id: number;
+    name: string;
+    head_sha: string | null;
+    repo_full_name: string;
+    html_url: string | null;
+    last_pushed_at: string | null;
+    link_id: number;
+    auto: boolean;
+    linked_at: string | null;
+};
+type LinkedPullRequest = {
+    id: number;
+    number: number;
+    title: string;
+    state: string;
+    merged: boolean;
+    head_branch_name: string | null;
+    html_url: string | null;
+    link_id: number;
+    auto: boolean;
+    linked_at: string | null;
+};
+type AvailableGithubSource = {
+    kind: 'branch' | 'pull_request';
+    id: number;
+    label: string;
+    sublabel: string;
+};
+
 const props = defineProps<{
     project: Project;
     issues: Issue[];
@@ -151,6 +182,9 @@ const props = defineProps<{
         occurred_at: string | null;
         actor: { id: number; name: string; email: string } | null;
     }>;
+    linked_branches?: LinkedBranch[];
+    linked_pull_requests?: LinkedPullRequest[];
+    available_github_sources?: AvailableGithubSource[];
     tab: 'overview' | 'activity' | 'issues';
 }>();
 
@@ -933,6 +967,7 @@ function confirmDelete() {
 const railCollapsed = ref<boolean>(false);
 const sectionCollapsed = ref<Record<string, boolean>>({
     properties: false,
+    github: false,
     milestones: false,
     progress: false,
 });
@@ -942,7 +977,9 @@ function toggleRail() {
     railCollapsed.value = !railCollapsed.value;
     persistRailState();
 }
-function toggleSection(key: 'properties' | 'milestones' | 'progress') {
+function toggleSection(
+    key: 'properties' | 'github' | 'milestones' | 'progress',
+) {
     sectionCollapsed.value = {
         ...sectionCollapsed.value,
         [key]: !sectionCollapsed.value[key],
@@ -2372,6 +2409,39 @@ watch(
                                 </DropdownMenu>
                             </dd>
                         </dl>
+                    </section>
+
+                    <!-- ============== LINKED BRANCHES & PRs ============== -->
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
+                        <header class="mb-2 flex items-center justify-between">
+                            <button
+                                type="button"
+                                class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                                :aria-expanded="!sectionCollapsed.github"
+                                @click="toggleSection('github')"
+                            >
+                                Linked branches &amp; PRs
+                                <component
+                                    :is="
+                                        sectionCollapsed.github
+                                            ? ChevronRight
+                                            : ChevronDown
+                                    "
+                                    class="size-3"
+                                />
+                            </button>
+                        </header>
+                        <div v-show="!sectionCollapsed.github">
+                            <GithubLinksPanel
+                                linkable-type="project"
+                                :linkable-id="project.id"
+                                :branches="linked_branches ?? []"
+                                :pull-requests="linked_pull_requests ?? []"
+                                :available="available_github_sources ?? []"
+                            />
+                        </div>
                     </section>
 
                     <!-- ============== MILESTONES ============== -->

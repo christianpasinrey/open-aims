@@ -16,6 +16,7 @@ import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
 import CyclePicker from '@/components/repo/issues/CyclePicker.vue';
 import DueDatePicker from '@/components/repo/issues/DueDatePicker.vue';
 import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
+import GithubLinksPanel from '@/components/repo/github/GithubLinksPanel.vue';
 import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
 import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
 import IssueActions from '@/components/repo/issues/IssueActions.vue';
@@ -82,7 +83,7 @@ type Issue = {
     created_at: string | null;
     updated_at: string | null;
 };
-type LinkedPullRequest = {
+type LegacyLinkedPullRequest = {
     id: number;
     number: number;
     title: string;
@@ -93,6 +94,35 @@ type LinkedPullRequest = {
     opened_at: string | null;
     closed_at: string | null;
     merged_at: string | null;
+};
+type LinkedBranch = {
+    id: number;
+    name: string;
+    head_sha: string | null;
+    repo_full_name: string;
+    html_url: string | null;
+    last_pushed_at: string | null;
+    link_id: number;
+    auto: boolean;
+    linked_at: string | null;
+};
+type LinkedPullRequest = {
+    id: number;
+    number: number;
+    title: string;
+    state: string;
+    merged: boolean;
+    head_branch_name: string | null;
+    html_url: string | null;
+    link_id: number;
+    auto: boolean;
+    linked_at: string | null;
+};
+type AvailableGithubSource = {
+    kind: 'branch' | 'pull_request';
+    id: number;
+    label: string;
+    sublabel: string;
 };
 type Comment = {
     id: number;
@@ -131,7 +161,10 @@ const props = defineProps<{
     labels: Label[];
     projects: Project[];
     priorities: Record<string, string>;
+    legacy_linked_pull_requests?: LegacyLinkedPullRequest[];
+    linked_branches?: LinkedBranch[];
     linked_pull_requests?: LinkedPullRequest[];
+    available_github_sources?: AvailableGithubSource[];
     activities?: Activity[];
     relations?: Relations;
 }>();
@@ -230,6 +263,7 @@ const sectionCollapsed = ref<Record<string, boolean>>({
     properties: false,
     labels: false,
     project: false,
+    github: false,
     relations: false,
 });
 
@@ -237,7 +271,9 @@ function toggleRail() {
     railCollapsed.value = !railCollapsed.value;
     persistRailState();
 }
-function toggleSection(key: 'properties' | 'labels' | 'project' | 'relations') {
+function toggleSection(
+    key: 'properties' | 'labels' | 'project' | 'github' | 'relations',
+) {
     sectionCollapsed.value = {
         ...sectionCollapsed.value,
         [key]: !sectionCollapsed.value[key],
@@ -581,13 +617,44 @@ const isOverdue = computed<boolean>(() => {
                         </div>
                     </section>
 
+                    <!-- Linked branches & PRs -->
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            :aria-expanded="!sectionCollapsed.github"
+                            @click="toggleSection('github')"
+                        >
+                            <span>Linked branches &amp; PRs</span>
+                            <component
+                                :is="
+                                    sectionCollapsed.github
+                                        ? ChevronRight
+                                        : ChevronDown
+                                "
+                                class="size-3 opacity-60"
+                            />
+                        </button>
+                        <div v-show="!sectionCollapsed.github" class="mt-1.5">
+                            <GithubLinksPanel
+                                linkable-type="issue"
+                                :linkable-id="issue.id"
+                                :branches="linked_branches ?? []"
+                                :pull-requests="linked_pull_requests ?? []"
+                                :available="available_github_sources ?? []"
+                            />
+                        </div>
+                    </section>
+
                     <!-- Relations -->
                     <section
                         v-if="
                             issue.parent ||
                             issue.children.length ||
-                            (linked_pull_requests &&
-                                linked_pull_requests.length) ||
+                            (legacy_linked_pull_requests &&
+                                legacy_linked_pull_requests.length) ||
                             issue.git_branch_name
                         "
                         class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
@@ -670,7 +737,7 @@ const isOverdue = computed<boolean>(() => {
                             </div>
 
                             <LinkedPullRequests
-                                :pull-requests="linked_pull_requests ?? []"
+                                :pull-requests="legacy_linked_pull_requests ?? []"
                                 :branch-name="issue.git_branch_name"
                             />
                         </div>
