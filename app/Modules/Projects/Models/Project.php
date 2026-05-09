@@ -6,6 +6,7 @@ namespace App\Modules\Projects\Models;
 
 use App\Core\Concerns\BelongsToWorkspace;
 use App\Models\User;
+use App\Modules\Integrations\Github\Models\GithubLink;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Enums\ProjectState;
 use App\Modules\Teams\Models\Label;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
@@ -84,5 +86,13 @@ class Project extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(ProjectActivity::class)->orderBy('occurred_at');
+    }
+
+    /**
+     * @return MorphMany<GithubLink>
+     */
+    public function githubLinks(): MorphMany
+    {
+        return $this->morphMany(GithubLink::class, 'linkable');
     }
 }

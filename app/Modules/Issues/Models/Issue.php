@@ -7,6 +7,7 @@ namespace App\Modules\Issues\Models;
 use App\Core\Concerns\BelongsToWorkspace;
 use App\Models\User;
 use App\Modules\Cycles\Models\Cycle;
+use App\Modules\Integrations\Github\Models\GithubLink;
 use App\Modules\Issues\Enums\IssuePriority;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Label;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Issue extends Model
@@ -121,6 +123,14 @@ class Issue extends Model
     public function resources(): HasMany
     {
         return $this->hasMany(IssueResource::class)->latest();
+    }
+
+    /**
+     * @return MorphMany<GithubLink>
+     */
+    public function githubLinks(): MorphMany
+    {
+        return $this->morphMany(GithubLink::class, 'linkable');
     }
 
     public function identifier(): string

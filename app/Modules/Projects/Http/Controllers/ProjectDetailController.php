@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Projects\Http\Controllers;
 
 use App\Models\User;
+use App\Modules\Integrations\Github\Models\GithubBranch;
+use App\Modules\Integrations\Github\Models\GithubInstallation;
+use App\Modules\Integrations\Github\Models\GithubLink;
+use App\Modules\Integrations\Github\Models\GithubPullRequest;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectActivity;
@@ -169,6 +173,10 @@ final class ProjectDetailController
             ->first();
         [$latestPlan, $latestPlanContent, $planTooLarge] = $this->buildLatestPlan($latestPlanResource);
 
+        // Polymorphic GitHub links + picker pool.
+        $polymorphic = $this->loadPolymorphicLinks($project);
+        $availableSources = $this->loadAvailableSources($workspace);
+
         return Inertia::render('projects/Show', [
             'tab' => $tab,
             'progress' => [
@@ -285,6 +293,9 @@ final class ProjectDetailController
                 ])->all(),
                 'updated_at' => $i->updated_at?->toIso8601String(),
             ])->all(),
+            'linked_branches' => $polymorphic['linked_branches'],
+            'linked_pull_requests' => $polymorphic['linked_pull_requests'],
+            'available_github_sources' => $availableSources,
         ]);
     }
 
@@ -341,5 +352,140 @@ final class ProjectDetailController
         ];
 
         return [$summary, $fullContent, $tooLarge];
+    }
+
+    /**
+     * @return array{
+     *   linked_branches: list<array<string,mixed>>,
+     *   linked_pull_requests: list<array<string,mixed>>,
+     * }
+     */
+    private function loadPolymorphicLinks(Project $project): array
+    {
+        /** @var \Illuminate\Support\Collection<int,GithubLink> $links */
+        $links = $project->githubLinks()->orderByDesc('created_at')->get();
+
+        $branchIds = $links->where('source_type', 'branch')->pluck('source_id')->all();
+        $prIds = $links->where('source_type', 'pull_request')->pluck('source_id')->all();
+
+        /** @var \Illuminate\Support\Collection<int,GithubBranch> $branches */
+        $branches = $branchIds === []
+            ? collect()
+            : GithubBranch::query()->with('repo:id,full_name')->whereIn('id', $branchIds)->get()->keyBy('id');
+        /** @var \Illuminate\Support\Collection<int,GithubPullRequest> $prs */
+        $prs = $prIds === []
+            ? collect()
+            : GithubPullRequest::query()->whereIn('id', $prIds)->get()->keyBy('id');
+
+        $linkedBranches = $links
+            ->where('source_type', 'branch')
+            ->map(static function (GithubLink $link) use ($branches): ?array {
+                $b = $branches->get($link->source_id);
+                if (! $b instanceof GithubBranch) {
+                    return null;
+                }
+                $repoName = $b->repo?->full_name ?? '';
+                $url = $repoName !== ''
+                    ? "https://github.com/{$repoName}/tree/".rawurlencode($b->name)
+                    : null;
+
+                return [
+                    'id' => $b->id,
+                    'name' => $b->name,
+                    'head_sha' => $b->head_sha,
+                    'repo_full_name' => $repoName,
+                    'html_url' => $url,
+                    'last_pushed_at' => $b->last_pushed_at?->toIso8601String(),
+                    'link_id' => $link->id,
+                    'auto' => (bool) $link->auto,
+                    'linked_at' => $link->created_at?->toIso8601String(),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        $linkedPullRequests = $links
+            ->where('source_type', 'pull_request')
+            ->map(static function (GithubLink $link) use ($prs): ?array {
+                $pr = $prs->get($link->source_id);
+                if (! $pr instanceof GithubPullRequest) {
+                    return null;
+                }
+
+                return [
+                    'id' => $pr->id,
+                    'number' => $pr->number,
+                    'title' => $pr->title,
+                    'state' => $pr->state,
+                    'merged' => (bool) $pr->merged,
+                    'head_branch_name' => $pr->head_branch_name,
+                    'html_url' => $pr->html_url,
+                    'link_id' => $link->id,
+                    'auto' => (bool) $link->auto,
+                    'linked_at' => $link->created_at?->toIso8601String(),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        return [
+            'linked_branches' => $linkedBranches,
+            'linked_pull_requests' => $linkedPullRequests,
+        ];
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function loadAvailableSources(Workspace $workspace): array
+    {
+        $installationIds = GithubInstallation::query()
+            ->where('workspace_id', $workspace->id)
+            ->pluck('id');
+        if ($installationIds->isEmpty()) {
+            return [];
+        }
+
+        /** @var \Illuminate\Support\Collection<int,GithubBranch> $branches */
+        $branches = GithubBranch::query()
+            ->with('repo:id,full_name')
+            ->whereHas('repo', static function ($q) use ($installationIds): void {
+                $q->whereIn('installation_id', $installationIds);
+            })
+            ->orderByDesc('last_pushed_at')
+            ->limit(100)
+            ->get();
+
+        /** @var \Illuminate\Support\Collection<int,GithubPullRequest> $prs */
+        $prs = GithubPullRequest::query()
+            ->with('repo:id,full_name')
+            ->whereHas('repo', static function ($q) use ($installationIds): void {
+                $q->whereIn('installation_id', $installationIds);
+            })
+            ->orderByDesc('opened_at')
+            ->limit(100)
+            ->get();
+
+        $items = [];
+        foreach ($branches as $b) {
+            $items[] = [
+                'kind' => 'branch',
+                'id' => $b->id,
+                'label' => $b->name,
+                'sublabel' => $b->repo?->full_name ?? '',
+            ];
+        }
+        foreach ($prs as $pr) {
+            $items[] = [
+                'kind' => 'pull_request',
+                'id' => $pr->id,
+                'label' => '#'.$pr->number.' '.$pr->title,
+                'sublabel' => ($pr->repo?->full_name ?? '').' · '.($pr->head_branch_name ?? ''),
+            ];
+        }
+
+        return $items;
     }
 }

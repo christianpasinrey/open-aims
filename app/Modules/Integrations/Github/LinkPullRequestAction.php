@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Integrations\Github;
 
 use App\Modules\Integrations\Github\Models\GithubInstallation;
+use App\Modules\Integrations\Github\Models\GithubLink;
 use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
+use App\Modules\Integrations\Github\Models\GithubPullRequest;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Issues\Models\IssueActivity;
 use App\Modules\Teams\Models\Team;
@@ -86,6 +88,33 @@ final class LinkPullRequestAction
                     ],
                     'occurred_at' => now(),
                 ]);
+            }
+
+            // Mirror the link into the polymorphic `github_links` table so
+            // the picker UI sees auto-matched rows alongside manual ones.
+            // The new ingester writes a GithubPullRequest row before this
+            // action runs, so we look it up by node_id; if it's missing for
+            // any defensive reason, we just skip the mirror write — the
+            // legacy row above is still authoritative.
+            $nodeId = (string) ($pull['node_id'] ?? '');
+            if ($nodeId !== '') {
+                $prRow = GithubPullRequest::query()
+                    ->where('node_id', $nodeId)
+                    ->first();
+                if ($prRow !== null) {
+                    GithubLink::query()->firstOrCreate(
+                        [
+                            'source_type' => 'pull_request',
+                            'source_id' => $prRow->id,
+                            'linkable_type' => Issue::class,
+                            'linkable_id' => $issue->id,
+                        ],
+                        [
+                            'auto' => true,
+                            'linked_by_user_id' => null,
+                        ],
+                    );
+                }
             }
 
             // Detect first transition into 'merged' and react: write a

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Integrations\Github\Http\Controllers\GithubAppController;
 use App\Modules\Integrations\Github\Http\Controllers\GithubIntegrationSettingsController;
+use App\Modules\Integrations\Github\Http\Controllers\GithubLinkController;
 use Illuminate\Support\Facades\Route;
 
 // Webhook — no auth, signature-verified inside the handler. CSRF is
@@ -29,4 +30,13 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     // Back-compat: old links still redirect to the new home.
     Route::redirect('settings/github', '/workspace/github')
         ->name('settings.github');
+
+    // Polymorphic GitHub links — manual create / remove from the issue
+    // and project right-rail picker. Auto-links written by
+    // LinkPullRequestAction reuse the same table but skip these endpoints.
+    Route::post('github-links', [GithubLinkController::class, 'store'])
+        ->name('github-links.store');
+    Route::delete('github-links/{id}', [GithubLinkController::class, 'destroy'])
+        ->whereNumber('id')
+        ->name('github-links.destroy');
 });
