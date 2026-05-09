@@ -75,4 +75,9 @@ class Project extends Model
     {
         return $this->hasMany(Issue::class);
     }
+
+    public function resources(): HasMany
+    {
+        return $this->hasMany(ProjectResource::class)->latest();
+    }
 }

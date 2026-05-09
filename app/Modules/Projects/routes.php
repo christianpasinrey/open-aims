@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Projects\Http\Controllers\ProjectDetailController;
 use App\Modules\Projects\Http\Controllers\ProjectListController;
 use App\Modules\Projects\Http\Controllers\ProjectPreviewController;
+use App\Modules\Projects\Http\Controllers\ProjectResourceController;
 use App\Modules\Projects\Http\Controllers\ProjectWriteController;
 use App\Modules\Projects\Http\Controllers\TrashController;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +31,11 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::delete('projects/{slug}/labels/{labelId}', [ProjectWriteController::class, 'detachLabel'])
         ->whereNumber('labelId')
         ->name('projects.labels.detach');
+    Route::post('projects/{slug}/resources', [ProjectResourceController::class, 'store'])
+        ->name('projects.resources.store');
+    Route::delete('projects/{slug}/resources/{id}', [ProjectResourceController::class, 'destroy'])
+        ->whereNumber('id')
+        ->name('projects.resources.destroy');
 
     Route::get('trash', [TrashController::class, 'index'])->name('trash.index');
 });

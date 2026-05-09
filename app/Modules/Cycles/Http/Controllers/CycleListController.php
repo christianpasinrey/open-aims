@@ -12,6 +12,7 @@ use App\Modules\Workspaces\Models\Workspace;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -62,7 +63,7 @@ final class CycleListController
         $issuesByCycle = $issues->groupBy('cycle_id');
 
         $cyclesPayload = $cycles->map(function (Cycle $c) use ($issuesByCycle, $stateTypeById, $now): array {
-            /** @var \Illuminate\Support\Collection<int,Issue> $bucket */
+            /** @var Collection<int,Issue> $bucket */
             $bucket = $issuesByCycle->get($c->id, collect());
 
             $scope = $bucket->count();
@@ -142,7 +143,7 @@ final class CycleListController
     /**
      * Build a daily burndown series for a single cycle.
      *
-     * @param  \Illuminate\Support\Collection<int,Issue>  $bucket
+     * @param  Collection<int,Issue>  $bucket
      * @param  array<int,string>  $stateTypeById
      * @return array{points:list<array{date:string,scope:int,started:int,completed:int}>,ideal:list<array{date:string,value:float}>}
      */

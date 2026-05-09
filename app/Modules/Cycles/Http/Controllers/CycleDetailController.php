@@ -51,6 +51,7 @@ final class CycleDetailController
         $cycle = Cycle::query()
             ->where('team_id', $team->id)
             ->where('number', $number)
+            ->with(['resources.media', 'resources.creator:id,name,email'])
             ->first();
 
         if ($cycle === null) {
@@ -244,6 +245,26 @@ final class CycleDetailController
                 'completed_at' => $cycle->completed_at?->toIso8601String(),
                 'status' => $status,
                 'weekdays_left' => $weekdaysLeft,
+                'resources' => $cycle->resources->map(function ($r): array {
+                    $media = $r->getFirstMedia('attachment');
+
+                    return [
+                        'id' => $r->id,
+                        'type' => $r->type,
+                        'name' => $r->name,
+                        'url' => $r->type === 'link'
+                            ? $r->url
+                            : ($media?->getFullUrl() ?? null),
+                        'mime_type' => $media?->mime_type,
+                        'size' => $media ? (int) $media->size : null,
+                        'created_at' => $r->created_at?->toIso8601String(),
+                        'creator' => $r->creator ? [
+                            'id' => $r->creator->id,
+                            'name' => $r->creator->name,
+                            'email' => $r->creator->email,
+                        ] : null,
+                    ];
+                })->all(),
             ],
             'progress' => [
                 'total' => $totalIssues,

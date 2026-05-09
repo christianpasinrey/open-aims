@@ -38,6 +38,8 @@ final class ProjectDetailController
                 'milestones',
                 'teams:id,name,key,color',
                 'labels:id,team_id,name,color',
+                'resources.media',
+                'resources.creator:id,name,email',
             ])
             ->first();
 
@@ -206,6 +208,26 @@ final class ProjectDetailController
                     'key' => $t->key,
                     'color' => $t->color,
                 ])->all(),
+                'resources' => $project->resources->map(function ($r): array {
+                    $media = $r->getFirstMedia('attachment');
+
+                    return [
+                        'id' => $r->id,
+                        'type' => $r->type,
+                        'name' => $r->name,
+                        'url' => $r->type === 'link'
+                            ? $r->url
+                            : ($media?->getFullUrl() ?? null),
+                        'mime_type' => $media?->mime_type,
+                        'size' => $media ? (int) $media->size : null,
+                        'created_at' => $r->created_at?->toIso8601String(),
+                        'creator' => $r->creator ? [
+                            'id' => $r->creator->id,
+                            'name' => $r->creator->name,
+                            'email' => $r->creator->email,
+                        ] : null,
+                    ];
+                })->all(),
             ],
             'issues' => $issues->map(fn (Issue $i): array => [
                 'id' => $i->id,

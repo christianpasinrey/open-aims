@@ -41,4 +41,9 @@ class Cycle extends Model
     {
         return $this->hasMany(Issue::class, 'cycle_id');
     }
+
+    public function resources(): HasMany
+    {
+        return $this->hasMany(CycleResource::class)->latest();
+    }
 }
