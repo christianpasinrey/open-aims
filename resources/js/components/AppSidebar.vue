@@ -25,6 +25,7 @@ import {
     Check,
     Plus,
     MoreHorizontal,
+    Tag as TagIcon,
     Target,
     Trash2,
     Layers,
@@ -725,6 +726,15 @@ const tryOpen = ref(false);
                                     >
                                         <Users class="mr-2 size-3.5" />
                                         Members
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem as-child>
+                                    <Link
+                                        :href="`/teams/${team.key}/labels`"
+                                        class="flex w-full cursor-pointer items-center"
+                                    >
+                                        <TagIcon class="mr-2 size-3.5" />
+                                        Labels
                                     </Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>

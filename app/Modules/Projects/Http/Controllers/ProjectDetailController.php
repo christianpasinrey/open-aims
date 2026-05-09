@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Http\Controllers;
 
+use App\Models\User;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
+use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -34,6 +37,7 @@ final class ProjectDetailController
                 'members.user:id,name,email',
                 'milestones',
                 'teams:id,name,key,color',
+                'labels:id,team_id,name,color',
             ])
             ->first();
 
@@ -101,6 +105,49 @@ final class ProjectDetailController
         }, array_values($assigneeBuckets));
         usort($assignees, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
 
+        // Attached labels — shown as chips in the right rail.
+        $attachedLabels = $project->labels->map(fn (Label $l): array => [
+            'id' => $l->id,
+            'name' => $l->name,
+            'color' => $l->color,
+        ])->values()->all();
+
+        // Pool for the label picker: every label belonging to one of the
+        // project's teams that is not already attached.
+        $teamIds = $project->teams->pluck('id');
+        $attachedLabelIds = $project->labels->pluck('id')->all();
+        $availableLabels = Label::query()
+            ->whereIn('team_id', $teamIds)
+            ->whereNotIn('id', $attachedLabelIds)
+            ->orderBy('name')
+            ->get(['id', 'team_id', 'name', 'color'])
+            ->map(static fn (Label $l): array => [
+                'id' => $l->id,
+                'name' => $l->name,
+                'color' => $l->color,
+            ])
+            ->values()
+            ->all();
+
+        // Pool for the member picker: workspace members who are not already
+        // attached as ProjectMember.
+        $existingMemberIds = $project->members->pluck('user_id')->all();
+        $eligibleMemberIds = WorkspaceMember::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereNotIn('user_id', $existingMemberIds)
+            ->pluck('user_id')
+            ->all();
+        $availableMembers = User::query()
+            ->whereIn('id', $eligibleMemberIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->map(static fn (User $u): array => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+            ])
+            ->all();
+
         return Inertia::render('projects/Show', [
             'tab' => $tab,
             'progress' => [
@@ -110,7 +157,9 @@ final class ProjectDetailController
                 'percent' => $progress,
             ],
             'assignees' => $assignees,
-            'labels' => [],
+            'labels' => $attachedLabels,
+            'available_labels' => $availableLabels,
+            'available_members' => $availableMembers,
             'states' => $statePositions->values()->map(static fn ($s): array => [
                 'id' => $s->id,
                 'name' => $s->name,

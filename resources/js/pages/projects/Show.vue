@@ -123,6 +123,12 @@ const props = defineProps<{
     };
     assignees: AssigneeStat[];
     labels: Array<{ id: number; name: string; color?: string | null }>;
+    available_labels: Array<{
+        id: number;
+        name: string;
+        color?: string | null;
+    }>;
+    available_members: WorkspaceMember[];
     tab: 'overview' | 'activity' | 'issues';
 }>();
 
@@ -391,6 +397,114 @@ function setPriority(p: number) {
     }
 
     patchProject({ priority: p });
+}
+
+// =================================================================
+// Members: attach / detach
+// =================================================================
+function attachMember(userId: number) {
+    router.post(
+        `/projects/${props.project.slug}/members`,
+        { user_id: userId },
+        { preserveScroll: true },
+    );
+}
+function detachMember(userId: number) {
+    router.delete(`/projects/${props.project.slug}/members/${userId}`, {
+        preserveScroll: true,
+    });
+}
+
+// =================================================================
+// Labels: attach / detach + quick-create
+// =================================================================
+function attachLabel(labelId: number) {
+    router.post(
+        `/projects/${props.project.slug}/labels`,
+        { label_id: labelId },
+        { preserveScroll: true },
+    );
+}
+function detachLabel(labelId: number) {
+    router.delete(`/projects/${props.project.slug}/labels/${labelId}`, {
+        preserveScroll: true,
+    });
+}
+
+const labelQuery = ref<string>('');
+const labelCreating = ref<boolean>(false);
+const labelMenuOpen = ref<boolean>(false);
+
+const filteredAvailableLabels = computed(() => {
+    const q = labelQuery.value.trim().toLowerCase();
+    if (!q) {
+        return props.available_labels;
+    }
+    return props.available_labels.filter((l) =>
+        l.name.toLowerCase().includes(q),
+    );
+});
+const exactLabelMatch = computed(() => {
+    const q = labelQuery.value.trim().toLowerCase();
+    if (!q) {
+        return false;
+    }
+    return [...props.available_labels, ...props.labels].some(
+        (l) => l.name.toLowerCase() === q,
+    );
+});
+
+async function quickCreateLabel() {
+    const name = labelQuery.value.trim();
+    const teamKey = props.project.teams[0]?.key;
+    if (!name || !teamKey || labelCreating.value) {
+        return;
+    }
+
+    labelCreating.value = true;
+    try {
+        const res = await fetch(`/teams/${teamKey}/labels`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN':
+                    (
+                        document.querySelector(
+                            'meta[name="csrf-token"]',
+                        ) as HTMLMetaElement | null
+                    )?.content ?? '',
+            },
+            body: JSON.stringify({ name }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            toast.error(
+                (err?.message as string | undefined) ??
+                    'Could not create label',
+            );
+            return;
+        }
+        const created = (await res.json()) as { id: number; name: string };
+        labelQuery.value = '';
+        // Attach right away — server reload via Inertia will refresh the list.
+        router.post(
+            `/projects/${props.project.slug}/labels`,
+            { label_id: created.id },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success(`Created and attached "${created.name}"`);
+                },
+            },
+        );
+    } catch {
+        toast.error('Could not create label');
+    } finally {
+        labelCreating.value = false;
+    }
 }
 function setStartDate(date: string) {
     patchProject({ start_date: date === '' ? null : date });
@@ -1672,37 +1786,122 @@ watch(
                                 Members
                             </dt>
                             <dd>
-                                <div
-                                    v-if="project.members.length"
-                                    class="flex items-center -space-x-1"
-                                >
-                                    <span
-                                        v-for="m in project.members.slice(0, 5)"
-                                        :key="m.id"
-                                        class="ring-2 ring-[hsl(var(--background))]"
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="-mx-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[12.5px] transition-colors hover:bg-accent/40"
+                                        >
+                                            <template
+                                                v-if="project.members.length"
+                                            >
+                                                <span
+                                                    class="flex items-center -space-x-1"
+                                                >
+                                                    <span
+                                                        v-for="m in project.members.slice(
+                                                            0,
+                                                            5,
+                                                        )"
+                                                        :key="m.id"
+                                                        class="ring-2 ring-[hsl(var(--background))]"
+                                                    >
+                                                        <Avatar
+                                                            :name="m.name"
+                                                            :email="m.email"
+                                                            :size="18"
+                                                        />
+                                                    </span>
+                                                </span>
+                                                <span
+                                                    v-if="
+                                                        project.members.length >
+                                                        5
+                                                    "
+                                                    class="text-[11px] text-muted-foreground tabular-nums"
+                                                    >+{{
+                                                        project.members.length -
+                                                        5
+                                                    }}</span
+                                                >
+                                            </template>
+                                            <template v-else>
+                                                <UserPlus
+                                                    class="size-3.5 text-muted-foreground"
+                                                />
+                                                <span
+                                                    class="text-muted-foreground"
+                                                    >Add members</span
+                                                >
+                                            </template>
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                        class="max-h-72 w-60 overflow-y-auto"
                                     >
-                                        <Avatar
-                                            :name="m.name"
-                                            :email="m.email"
-                                            :size="18"
-                                        />
-                                    </span>
-                                    <span
-                                        v-if="project.members.length > 5"
-                                        class="ml-1 text-[11px] text-muted-foreground tabular-nums"
-                                        >+{{ project.members.length - 5 }}</span
-                                    >
-                                </div>
-                                <button
-                                    v-else
-                                    type="button"
-                                    disabled
-                                    class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground opacity-60"
-                                    title="TODO: members edit endpoint not implemented yet"
-                                >
-                                    <UserPlus class="size-3.5" />
-                                    Add members
-                                </button>
+                                        <DropdownMenuLabel
+                                            >Project members</DropdownMenuLabel
+                                        >
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            v-for="m in project.members"
+                                            :key="`pm-${m.id}`"
+                                            @select="detachMember(m.id)"
+                                        >
+                                            <span
+                                                class="flex min-w-0 flex-1 items-center gap-2"
+                                            >
+                                                <Avatar
+                                                    :name="m.name"
+                                                    :email="m.email"
+                                                    :size="14"
+                                                />
+                                                <span class="truncate">{{
+                                                    m.name
+                                                }}</span>
+                                            </span>
+                                            <span
+                                                class="ml-2 text-[11px] text-muted-foreground"
+                                                >Remove</span
+                                            >
+                                        </DropdownMenuItem>
+                                        <template
+                                            v-if="
+                                                available_members &&
+                                                available_members.length
+                                            "
+                                        >
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuLabel
+                                                >Add member</DropdownMenuLabel
+                                            >
+                                            <DropdownMenuItem
+                                                v-for="u in available_members"
+                                                :key="`am-${u.id}`"
+                                                @select="attachMember(u.id)"
+                                            >
+                                                <span
+                                                    class="flex min-w-0 items-center gap-2"
+                                                >
+                                                    <Avatar
+                                                        :name="u.name"
+                                                        :email="u.email"
+                                                        :size="14"
+                                                    />
+                                                    <span class="truncate">{{
+                                                        u.name
+                                                    }}</span>
+                                                </span>
+                                            </DropdownMenuItem>
+                                        </template>
+                                        <DropdownMenuItem
+                                            v-else-if="!project.members.length"
+                                            disabled
+                                        >
+                                            No workspace members
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </dd>
 
                             <!-- Dates: 📅 start → 🚩 target -->
@@ -1837,26 +2036,114 @@ watch(
                                 Labels
                             </dt>
                             <dd>
-                                <div
-                                    v-if="labels.length"
-                                    class="flex flex-wrap gap-1"
-                                >
-                                    <LabelBadge
-                                        v-for="l in labels"
-                                        :key="l.id"
-                                        :name="l.name"
-                                        :color="l.color"
-                                    />
-                                </div>
-                                <button
-                                    v-else
-                                    type="button"
-                                    disabled
-                                    class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground opacity-60"
-                                >
-                                    <Plus class="size-3.5" />
-                                    Add label
-                                </button>
+                                <DropdownMenu v-model:open="labelMenuOpen">
+                                    <DropdownMenuTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="-mx-1 flex w-full flex-wrap items-center gap-1 rounded-md px-1 py-0.5 text-left text-[12.5px] transition-colors hover:bg-accent/40"
+                                        >
+                                            <template v-if="labels.length">
+                                                <LabelBadge
+                                                    v-for="l in labels"
+                                                    :key="l.id"
+                                                    :name="l.name"
+                                                    :color="l.color"
+                                                />
+                                            </template>
+                                            <template v-else>
+                                                <Plus
+                                                    class="size-3.5 text-muted-foreground"
+                                                />
+                                                <span
+                                                    class="text-muted-foreground"
+                                                    >Add label</span
+                                                >
+                                            </template>
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent class="w-64 p-0">
+                                        <div class="border-b border-border p-2">
+                                            <Input
+                                                v-model="labelQuery"
+                                                placeholder="Search or create…"
+                                                class="h-7 text-[12.5px]"
+                                                @keydown.enter.prevent="
+                                                    quickCreateLabel
+                                                "
+                                            />
+                                        </div>
+                                        <div
+                                            class="max-h-72 overflow-y-auto py-1"
+                                        >
+                                            <button
+                                                v-for="l in labels"
+                                                :key="`pl-${l.id}`"
+                                                type="button"
+                                                class="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[12.5px] hover:bg-accent"
+                                                @click="detachLabel(l.id)"
+                                            >
+                                                <LabelBadge
+                                                    :name="l.name"
+                                                    :color="l.color"
+                                                />
+                                                <span
+                                                    class="text-[11px] text-muted-foreground"
+                                                    >Remove</span
+                                                >
+                                            </button>
+                                            <div
+                                                v-if="labels.length"
+                                                class="my-1 border-b border-border"
+                                            />
+                                            <button
+                                                v-for="l in filteredAvailableLabels"
+                                                :key="`al-${l.id}`"
+                                                type="button"
+                                                class="flex w-full items-center gap-2 px-2 py-1 text-left text-[12.5px] hover:bg-accent"
+                                                @click="attachLabel(l.id)"
+                                            >
+                                                <LabelBadge
+                                                    :name="l.name"
+                                                    :color="l.color"
+                                                />
+                                            </button>
+                                            <button
+                                                v-if="
+                                                    labelQuery.trim() &&
+                                                    !exactLabelMatch
+                                                "
+                                                type="button"
+                                                :disabled="
+                                                    labelCreating ||
+                                                    !project.teams.length
+                                                "
+                                                class="flex w-full items-center gap-2 border-t border-border px-2 py-1.5 text-left text-[12.5px] text-foreground hover:bg-accent disabled:opacity-50"
+                                                @click="quickCreateLabel"
+                                            >
+                                                <Plus class="size-3.5" />
+                                                <span>
+                                                    Create label
+                                                    <span class="font-medium"
+                                                        >“{{
+                                                            labelQuery.trim()
+                                                        }}”</span
+                                                    >
+                                                </span>
+                                            </button>
+                                            <p
+                                                v-if="
+                                                    !labels.length &&
+                                                    !filteredAvailableLabels.length &&
+                                                    !labelQuery.trim()
+                                                "
+                                                class="px-2 py-2 text-[12px] text-muted-foreground"
+                                            >
+                                                No labels yet — type a name to
+                                                create one.
+                                            </p>
+                                        </div>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </dd>
                         </dl>
                     </section>

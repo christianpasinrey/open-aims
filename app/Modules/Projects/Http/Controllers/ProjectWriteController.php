@@ -6,9 +6,12 @@ namespace App\Modules\Projects\Http\Controllers;
 
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectMember;
 use App\Modules\Projects\Models\ProjectMilestone;
+use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
+use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -220,6 +223,81 @@ final class ProjectWriteController
         $project->forceDelete();
 
         return redirect()->route('trash.index');
+    }
+
+    /**
+     * Attach a workspace member to the project (role: contributor by default).
+     */
+    public function attachMember(Request $request, string $slug): RedirectResponse
+    {
+        $project = $this->resolveProject($slug);
+        $workspace = $this->workspace();
+
+        $data = $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+            'role' => 'sometimes|in:lead,contributor',
+        ]);
+
+        $isMember = WorkspaceMember::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('user_id', $data['user_id'])
+            ->exists();
+        if (! $isMember) {
+            abort(403, 'User is not a member of this workspace.');
+        }
+
+        ProjectMember::query()->firstOrCreate(
+            ['project_id' => $project->id, 'user_id' => $data['user_id']],
+            ['role' => $data['role'] ?? 'contributor'],
+        );
+
+        return back();
+    }
+
+    public function detachMember(string $slug, int $userId): RedirectResponse
+    {
+        $project = $this->resolveProject($slug);
+
+        ProjectMember::query()
+            ->where('project_id', $project->id)
+            ->where('user_id', $userId)
+            ->delete();
+
+        return back();
+    }
+
+    /**
+     * Attach a team-scoped label to the project. The label must belong to one
+     * of the teams the project is associated with.
+     */
+    public function attachLabel(Request $request, string $slug): RedirectResponse
+    {
+        $project = $this->resolveProject($slug);
+
+        $data = $request->validate([
+            'label_id' => 'required|integer|exists:labels,id',
+        ]);
+
+        $teamIds = $project->teams()->pluck('teams.id');
+        $belongsToProjectTeam = Label::query()
+            ->where('id', $data['label_id'])
+            ->whereIn('team_id', $teamIds)
+            ->exists();
+        if (! $belongsToProjectTeam) {
+            abort(403, 'Label does not belong to one of the project teams.');
+        }
+
+        $project->labels()->syncWithoutDetaching([$data['label_id']]);
+
+        return back();
+    }
+
+    public function detachLabel(string $slug, int $labelId): RedirectResponse
+    {
+        $project = $this->resolveProject($slug);
+        $project->labels()->detach($labelId);
+
+        return back();
     }
 
     private function resolveProject(string $slug): Project

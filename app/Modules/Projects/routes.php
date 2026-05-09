@@ -20,6 +20,16 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::delete('projects/{slug}/force', [ProjectWriteController::class, 'forceDestroy'])->name('projects.force-destroy');
     Route::post('projects/{slug}/milestones', [ProjectWriteController::class, 'storeMilestone'])
         ->name('projects.milestones.store');
+    Route::post('projects/{slug}/members', [ProjectWriteController::class, 'attachMember'])
+        ->name('projects.members.attach');
+    Route::delete('projects/{slug}/members/{userId}', [ProjectWriteController::class, 'detachMember'])
+        ->whereNumber('userId')
+        ->name('projects.members.detach');
+    Route::post('projects/{slug}/labels', [ProjectWriteController::class, 'attachLabel'])
+        ->name('projects.labels.attach');
+    Route::delete('projects/{slug}/labels/{labelId}', [ProjectWriteController::class, 'detachLabel'])
+        ->whereNumber('labelId')
+        ->name('projects.labels.detach');
 
     Route::get('trash', [TrashController::class, 'index'])->name('trash.index');
 });

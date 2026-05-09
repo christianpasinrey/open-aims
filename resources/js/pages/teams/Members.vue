@@ -66,6 +66,12 @@ const filtered = computed<Member[]>(() => {
             }}</span>
             <div class="ml-auto flex items-center gap-2">
                 <Link
+                    :href="`/teams/${team.key}/labels`"
+                    class="rounded-md px-2.5 py-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                    Labels
+                </Link>
+                <Link
                     :href="`/teams/${team.key}/settings`"
                     class="rounded-md px-2.5 py-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >

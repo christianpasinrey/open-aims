@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { Check, Plus } from 'lucide-vue-next';
+import { Check, Loader2, Plus } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import {
     DropdownMenu,
@@ -20,6 +21,7 @@ const props = defineProps<{
 
 const open = ref(false);
 const query = ref('');
+const creating = ref(false);
 const localSelection = ref<Set<number>>(
     new Set((props.current ?? []).map((l) => l.id)),
 );
@@ -48,6 +50,18 @@ const filtered = computed(() => {
     return (props.labels ?? []).filter((l) => l.name.toLowerCase().includes(q));
 });
 
+const exactMatch = computed<boolean>(() => {
+    const q = query.value.trim().toLowerCase();
+    if (!q) {
+        return false;
+    }
+    return (props.labels ?? []).some((l) => l.name.toLowerCase() === q);
+});
+
+const teamKey = computed<string>(() =>
+    (props.identifier.split('-')[0] ?? '').toUpperCase(),
+);
+
 function toggle(id: number): void {
     const next = new Set(localSelection.value);
 
@@ -63,6 +77,48 @@ function toggle(id: number): void {
         { labels: [...next] },
         { preserveScroll: true },
     );
+}
+
+async function quickCreate(): Promise<void> {
+    const name = query.value.trim();
+    if (!name || !teamKey.value || creating.value) {
+        return;
+    }
+
+    creating.value = true;
+    try {
+        const res = await fetch(`/teams/${teamKey.value}/labels`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN':
+                    (
+                        document.querySelector(
+                            'meta[name="csrf-token"]',
+                        ) as HTMLMetaElement | null
+                    )?.content ?? '',
+            },
+            body: JSON.stringify({ name }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            toast.error(
+                (err?.message as string | undefined) ??
+                    'Could not create label',
+            );
+            return;
+        }
+        const created = (await res.json()) as { id: number; name: string };
+        query.value = '';
+        toggle(created.id);
+    } catch {
+        toast.error('Could not create label');
+    } finally {
+        creating.value = false;
+    }
 }
 </script>
 
@@ -126,8 +182,27 @@ function toggle(id: number): void {
                             class="size-3.5 text-foreground"
                         />
                     </DropdownMenuItem>
+                    <button
+                        v-if="query.trim() && !exactMatch && teamKey"
+                        type="button"
+                        :disabled="creating"
+                        class="mt-1 flex w-full items-center gap-2 border-t border-border px-2 py-1.5 text-left text-[12.5px] text-foreground hover:bg-accent disabled:opacity-50"
+                        @click="quickCreate"
+                    >
+                        <Loader2
+                            v-if="creating"
+                            class="size-3.5 animate-spin"
+                        />
+                        <Plus v-else class="size-3.5" />
+                        <span>
+                            Create label
+                            <span class="font-medium"
+                                >“{{ query.trim() }}”</span
+                            >
+                        </span>
+                    </button>
                     <div
-                        v-if="filtered.length === 0"
+                        v-else-if="filtered.length === 0"
                         class="px-2 py-1.5 text-xs text-muted-foreground"
                     >
                         No labels
