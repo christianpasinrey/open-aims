@@ -44,6 +44,12 @@ return [
     'github_app' => [
         'app_id' => env('GITHUB_APP_ID'),
         'app_name' => env('GITHUB_APP_NAME'),
+        // Used for the user-to-server OAuth flow when a workspace owner
+        // connects the App to their workspace. Distinct from
+        // `services.github.client_id/secret`, which are the OAuth App
+        // credentials behind "Sign in with GitHub".
+        'client_id' => env('GITHUB_APP_CLIENT_ID'),
+        'client_secret' => env('GITHUB_APP_CLIENT_SECRET'),
         'webhook_secret' => env('GITHUB_APP_WEBHOOK_SECRET'),
         'private_key_path' => env('GITHUB_APP_PRIVATE_KEY_PATH', 'storage/keys/github-app.pem'),
         'install_url' => env('GITHUB_APP_INSTALL_URL'),
