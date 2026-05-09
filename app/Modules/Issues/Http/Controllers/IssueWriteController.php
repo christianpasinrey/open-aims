@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Issues\Http\Controllers;
 
+use App\Models\User;
+use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Models\IssueActivity;
+use App\Modules\Projects\Models\Project;
+use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
@@ -12,6 +17,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+/**
+ * @phpstan-type ActivityPayload array<string,mixed>|null
+ */
 
 /**
  * Mutations on issues from the repo-style UI: create + partial update.
@@ -62,7 +71,7 @@ final class IssueWriteController
             $next = ((int) $team->issue_counter) + 1;
             $team->update(['issue_counter' => $next]);
 
-            return Issue::create([
+            $issue = Issue::create([
                 'workspace_id' => $workspace->id,
                 'team_id' => $team->id,
                 'project_id' => $data['project_id'] ?? null,
@@ -75,6 +84,16 @@ final class IssueWriteController
                 'assignee_user_id' => $data['assignee_user_id'] ?? null,
                 'creator_user_id' => $user->getKey(),
             ]);
+
+            IssueActivity::create([
+                'issue_id' => $issue->id,
+                'actor_user_id' => $user->getKey(),
+                'kind' => 'created',
+                'payload' => null,
+                'occurred_at' => now(),
+            ]);
+
+            return $issue;
         });
 
         return redirect()->route('issues.show', [
@@ -103,6 +122,20 @@ final class IssueWriteController
         $labels = $data['labels'] ?? null;
         unset($data['labels']);
 
+        // Capture before-state for diffing, before any mutation runs.
+        $before = [
+            'title' => $issue->title,
+            'description' => $issue->description,
+            'workflow_state_id' => $issue->workflow_state_id,
+            'priority' => (int) ($issue->priority?->value ?? 0),
+            'assignee_user_id' => $issue->assignee_user_id,
+            'project_id' => $issue->project_id,
+            'cycle_id' => $issue->cycle_id,
+            'estimate' => $issue->estimate,
+            'due_date' => $issue->due_date?->toDateString(),
+        ];
+        $beforeLabelIds = $issue->labels()->pluck('labels.id')->all();
+
         if (array_key_exists('workflow_state_id', $data)) {
             $newState = WorkflowState::query()->find($data['workflow_state_id']);
             if ($newState === null || (int) $newState->team_id !== (int) $issue->team_id) {
@@ -119,11 +152,20 @@ final class IssueWriteController
             }
         }
 
-        $issue->fill($data)->save();
+        DB::transaction(function () use ($issue, $data, $labels, $before, $beforeLabelIds, $request): void {
+            $issue->fill($data)->save();
 
-        if (is_array($labels)) {
-            $issue->labels()->sync($labels);
-        }
+            if (is_array($labels)) {
+                $issue->labels()->sync($labels);
+            }
+
+            $this->recordIssueChanges(
+                $issue->fresh(['labels']),
+                $before,
+                $beforeLabelIds,
+                $request->user()?->getKey(),
+            );
+        });
 
         return back();
     }
@@ -132,6 +174,14 @@ final class IssueWriteController
     {
         $issue = $this->resolveIssue($identifier);
         $issue->forceFill(['archived_at' => now()])->save();
+
+        IssueActivity::create([
+            'issue_id' => $issue->id,
+            'actor_user_id' => $request->user()?->getKey(),
+            'kind' => 'archived',
+            'payload' => null,
+            'occurred_at' => now(),
+        ]);
 
         return redirect()->route('issues.index', [
             'team' => $issue->team()->value('key'),
@@ -143,6 +193,14 @@ final class IssueWriteController
         $issue = $this->resolveIssue($identifier);
         $issue->forceFill(['archived_at' => null])->save();
 
+        IssueActivity::create([
+            'issue_id' => $issue->id,
+            'actor_user_id' => $request->user()?->getKey(),
+            'kind' => 'unarchived',
+            'payload' => null,
+            'occurred_at' => now(),
+        ]);
+
         return back();
     }
 
@@ -153,6 +211,202 @@ final class IssueWriteController
         $issue->delete();
 
         return redirect()->route('issues.index', ['team' => $teamKey]);
+    }
+
+    /**
+     * Diff before/after of an issue update and emit one IssueActivity row
+     * per significant change. Payload shapes match what
+     * resources/js/components/repo/issues/IssueActivityRow.vue already
+     * knows how to render — keep them in sync if you add new kinds.
+     *
+     * @param  array<string,mixed>  $before
+     * @param  list<int>  $beforeLabelIds
+     */
+    private function recordIssueChanges(
+        Issue $issue,
+        array $before,
+        array $beforeLabelIds,
+        ?int $actorId,
+    ): void {
+        $now = now();
+        $base = [
+            'issue_id' => $issue->id,
+            'actor_user_id' => $actorId,
+            'occurred_at' => $now,
+        ];
+
+        if ($before['title'] !== $issue->title) {
+            IssueActivity::create($base + [
+                'kind' => 'title_changed',
+                'payload' => ['from' => $before['title'], 'to' => $issue->title],
+            ]);
+        }
+
+        if (($before['description'] ?? null) !== $issue->description) {
+            IssueActivity::create($base + [
+                'kind' => 'description_changed',
+                'payload' => null,
+            ]);
+        }
+
+        if ((int) $before['workflow_state_id'] !== (int) $issue->workflow_state_id) {
+            $fromState = WorkflowState::query()->find($before['workflow_state_id']);
+            $toState = $issue->workflowState ?? WorkflowState::query()->find($issue->workflow_state_id);
+            IssueActivity::create($base + [
+                'kind' => 'status_changed',
+                'payload' => [
+                    'from' => $fromState ? [
+                        'id' => $fromState->id,
+                        'name' => $fromState->name,
+                        'type' => $fromState->type,
+                        'color' => $fromState->color,
+                    ] : null,
+                    'to' => $toState ? [
+                        'id' => $toState->id,
+                        'name' => $toState->name,
+                        'type' => $toState->type,
+                        'color' => $toState->color,
+                    ] : null,
+                ],
+            ]);
+        }
+
+        $newPriority = (int) ($issue->priority?->value ?? 0);
+        if ((int) $before['priority'] !== $newPriority) {
+            $labels = [
+                0 => 'No priority',
+                1 => 'Urgent',
+                2 => 'High',
+                3 => 'Medium',
+                4 => 'Low',
+            ];
+            IssueActivity::create($base + [
+                'kind' => 'priority_changed',
+                'payload' => [
+                    'from' => (int) $before['priority'],
+                    'from_label' => $labels[(int) $before['priority']] ?? '—',
+                    'to' => $newPriority,
+                    'to_label' => $labels[$newPriority] ?? '—',
+                ],
+            ]);
+        }
+
+        $beforeAssignee = $before['assignee_user_id'];
+        $afterAssignee = $issue->assignee_user_id;
+        if ($beforeAssignee !== $afterAssignee) {
+            if ($afterAssignee === null) {
+                IssueActivity::create($base + [
+                    'kind' => 'unassigned',
+                    'payload' => null,
+                ]);
+            } else {
+                $user = User::query()->find($afterAssignee);
+                IssueActivity::create($base + [
+                    'kind' => 'assigned',
+                    'payload' => [
+                        'user_id' => $afterAssignee,
+                        'user_name' => $user?->name,
+                    ],
+                ]);
+            }
+        }
+
+        if ($before['project_id'] !== $issue->project_id) {
+            if ($issue->project_id === null) {
+                IssueActivity::create($base + [
+                    'kind' => 'project_unset',
+                    'payload' => null,
+                ]);
+            } else {
+                $project = Project::query()->find($issue->project_id);
+                IssueActivity::create($base + [
+                    'kind' => 'project_set',
+                    'payload' => [
+                        'project_id' => $issue->project_id,
+                        'project_name' => $project?->name,
+                        'project_slug' => $project?->slug,
+                    ],
+                ]);
+            }
+        }
+
+        if ($before['cycle_id'] !== $issue->cycle_id) {
+            if ($issue->cycle_id === null) {
+                IssueActivity::create($base + [
+                    'kind' => 'cycle_unset',
+                    'payload' => null,
+                ]);
+            } else {
+                $cycle = Cycle::query()->find($issue->cycle_id);
+                IssueActivity::create($base + [
+                    'kind' => 'cycle_set',
+                    'payload' => [
+                        'cycle_id' => $issue->cycle_id,
+                        'cycle_name' => $cycle?->name,
+                        'cycle_number' => $cycle?->number,
+                    ],
+                ]);
+            }
+        }
+
+        $beforeDue = $before['due_date'];
+        $afterDue = $issue->due_date?->toDateString();
+        if ($beforeDue !== $afterDue) {
+            IssueActivity::create($base + [
+                'kind' => 'due_date_changed',
+                'payload' => ['from' => $beforeDue, 'to' => $afterDue],
+            ]);
+        }
+
+        if ((float) ($before['estimate'] ?? 0) !== (float) ($issue->estimate ?? 0)) {
+            IssueActivity::create($base + [
+                'kind' => 'estimate_changed',
+                'payload' => [
+                    'from' => $before['estimate'],
+                    'to' => $issue->estimate,
+                ],
+            ]);
+        }
+
+        $afterLabelIds = $issue->labels->pluck('id')->all();
+        $added = array_values(array_diff($afterLabelIds, $beforeLabelIds));
+        $removed = array_values(array_diff($beforeLabelIds, $afterLabelIds));
+        if ($added !== [] || $removed !== []) {
+            $allIds = array_unique(array_merge($added, $removed));
+            $labelsById = Label::query()
+                ->whereIn('id', $allIds)
+                ->get(['id', 'name', 'color'])
+                ->keyBy('id');
+
+            foreach ($added as $id) {
+                $l = $labelsById->get($id);
+                if ($l === null) {
+                    continue;
+                }
+                IssueActivity::create($base + [
+                    'kind' => 'label_added',
+                    'payload' => [
+                        'label_id' => $id,
+                        'label_name' => $l->name,
+                        'label_color' => $l->color,
+                    ],
+                ]);
+            }
+            foreach ($removed as $id) {
+                $l = $labelsById->get($id);
+                if ($l === null) {
+                    continue;
+                }
+                IssueActivity::create($base + [
+                    'kind' => 'label_removed',
+                    'payload' => [
+                        'label_id' => $id,
+                        'label_name' => $l->name,
+                        'label_color' => $l->color,
+                    ],
+                ]);
+            }
+        }
     }
 
     private function resolveIssue(string $identifier): Issue

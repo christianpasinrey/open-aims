@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Projects\Http\Controllers;
 
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectActivity;
 use App\Modules\Projects\Models\ProjectResource;
 use App\Modules\Workspaces\Models\Workspace;
 use Illuminate\Http\RedirectResponse;
@@ -53,6 +54,18 @@ final class ProjectResourceController
                     ->usingFileName($upload->hashName())
                     ->usingName($upload->getClientOriginalName())
                     ->toMediaCollection('attachment', 'public');
+
+                ProjectActivity::create([
+                    'project_id' => $project->id,
+                    'actor_user_id' => $request->user()?->getKey(),
+                    'kind' => 'resource_added',
+                    'payload' => [
+                        'resource_id' => $resource->id,
+                        'resource_type' => 'file',
+                        'resource_name' => $resource->name,
+                    ],
+                    'occurred_at' => now(),
+                ]);
             });
         } else {
             $data = $request->validate([
@@ -60,19 +73,32 @@ final class ProjectResourceController
                 'url' => 'required|url|max:1024',
             ]);
 
-            ProjectResource::create([
+            $resource = ProjectResource::create([
                 'project_id' => $project->id,
                 'type' => 'link',
                 'name' => $data['name'],
                 'url' => $data['url'],
                 'created_by_user_id' => $request->user()?->id,
             ]);
+
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => $request->user()?->getKey(),
+                'kind' => 'resource_added',
+                'payload' => [
+                    'resource_id' => $resource->id,
+                    'resource_type' => 'link',
+                    'resource_name' => $resource->name,
+                    'resource_url' => $resource->url,
+                ],
+                'occurred_at' => now(),
+            ]);
         }
 
         return back();
     }
 
-    public function destroy(string $slug, int $id): RedirectResponse
+    public function destroy(Request $request, string $slug, int $id): RedirectResponse
     {
         $project = $this->resolveProject($slug);
 
@@ -84,9 +110,20 @@ final class ProjectResourceController
             throw new NotFoundHttpException('Resource not found.');
         }
 
-        // Spatie cascades media rows on model delete via its observer; the
-        // file on disk is removed with them.
+        $name = $resource->name;
+        $type = $resource->type;
         $resource->delete();
+
+        ProjectActivity::create([
+            'project_id' => $project->id,
+            'actor_user_id' => $request->user()?->getKey(),
+            'kind' => 'resource_removed',
+            'payload' => [
+                'resource_type' => $type,
+                'resource_name' => $name,
+            ],
+            'occurred_at' => now(),
+        ]);
 
         return back();
     }

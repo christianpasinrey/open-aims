@@ -29,6 +29,7 @@ import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
+import ProjectActivityRow from '@/components/repo/projects/ProjectActivityRow.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import RichEditor from '@/components/repo/RichEditor.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
@@ -143,6 +144,13 @@ const props = defineProps<{
         color?: string | null;
     }>;
     available_members: WorkspaceMember[];
+    activities: Array<{
+        id: number;
+        kind: string;
+        payload: Record<string, unknown> | null;
+        occurred_at: string | null;
+        actor: { id: number; name: string; email: string } | null;
+    }>;
     tab: 'overview' | 'activity' | 'issues';
 }>();
 
@@ -1623,18 +1631,30 @@ watch(
                     </section>
                 </div>
 
-                <!-- ACTIVITY (placeholder) -->
+                <!-- ACTIVITY -->
                 <div
                     v-else-if="tab === 'activity'"
-                    class="flex flex-1 items-center justify-center px-6 py-12 text-center"
+                    class="flex-1 overflow-y-auto"
                 >
-                    <div class="max-w-sm">
-                        <h2 class="text-base font-medium text-foreground">
-                            No activity yet
+                    <div class="mx-auto w-full max-w-3xl px-8 py-8">
+                        <h2
+                            class="mb-3 text-[12px] font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            Activity
                         </h2>
-                        <p class="mt-2 text-sm text-muted-foreground">
-                            Project updates and changes will appear here.
-                        </p>
+                        <div
+                            v-if="!activities.length"
+                            class="text-[13px] text-muted-foreground"
+                        >
+                            No activity yet.
+                        </div>
+                        <ul v-else class="flex flex-col">
+                            <ProjectActivityRow
+                                v-for="a in activities"
+                                :key="a.id"
+                                :activity="a"
+                            />
+                        </ul>
                     </div>
                 </div>
 

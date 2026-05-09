@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Http\Controllers;
 
+use App\Models\User;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectActivity;
 use App\Modules\Projects\Models\ProjectMember;
 use App\Modules\Projects\Models\ProjectMilestone;
 use App\Modules\Teams\Models\Label;
@@ -84,6 +86,14 @@ final class ProjectWriteController
                 $project->teams()->sync($teamIds);
             }
 
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => request()->user()?->getKey(),
+                'kind' => 'created',
+                'payload' => null,
+                'occurred_at' => now(),
+            ]);
+
             return $project;
         });
 
@@ -120,7 +130,20 @@ final class ProjectWriteController
             }
         }
 
-        $project->fill($data)->save();
+        $before = [
+            'name' => $project->name,
+            'description' => $project->description,
+            'state' => $project->state?->value,
+            'priority' => (int) ($project->priority ?? 0),
+            'lead_user_id' => $project->lead_user_id,
+            'start_date' => $project->start_date?->toDateString(),
+            'target_date' => $project->target_date?->toDateString(),
+        ];
+
+        DB::transaction(function () use ($project, $data, $before, $request): void {
+            $project->fill($data)->save();
+            $this->recordProjectChanges($project->fresh(), $before, $request->user()?->getKey());
+        });
 
         return back();
     }
@@ -143,12 +166,23 @@ final class ProjectWriteController
                 ->max('sort_order')) + 1;
         }
 
-        ProjectMilestone::create([
+        $milestone = ProjectMilestone::create([
             'project_id' => $project->id,
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'target_date' => $data['target_date'] ?? null,
             'sort_order' => $sortOrder,
+        ]);
+
+        ProjectActivity::create([
+            'project_id' => $project->id,
+            'actor_user_id' => $request->user()?->getKey(),
+            'kind' => 'milestone_added',
+            'payload' => [
+                'milestone_id' => $milestone->id,
+                'milestone_name' => $milestone->name,
+            ],
+            'occurred_at' => now(),
         ]);
 
         return back();
@@ -165,8 +199,9 @@ final class ProjectWriteController
     {
         $project = $this->resolveProject($slug);
         $now = now();
+        $actorId = request()->user()?->getKey();
 
-        DB::transaction(function () use ($project, $now): void {
+        DB::transaction(function () use ($project, $now, $actorId): void {
             Issue::query()
                 ->where('project_id', $project->id)
                 ->whereNull('deleted_at')
@@ -176,6 +211,14 @@ final class ProjectWriteController
                 ->where('project_id', $project->id)
                 ->whereNull('deleted_at')
                 ->update(['deleted_at' => $now]);
+
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => $actorId,
+                'kind' => 'trashed',
+                'payload' => null,
+                'occurred_at' => $now,
+            ]);
 
             $project->deleted_at = $now;
             $project->save();
@@ -198,7 +241,8 @@ final class ProjectWriteController
         $from = $deletedAt->copy()->subSecond();
         $to = $deletedAt->copy()->addSecond();
 
-        DB::transaction(function () use ($project, $from, $to): void {
+        $actorId = request()->user()?->getKey();
+        DB::transaction(function () use ($project, $from, $to, $actorId): void {
             Issue::query()
                 ->withoutGlobalScopes()
                 ->where('project_id', $project->id)
@@ -209,6 +253,14 @@ final class ProjectWriteController
                 ->where('project_id', $project->id)
                 ->whereBetween('deleted_at', [$from, $to])
                 ->update(['deleted_at' => null]);
+
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => $actorId,
+                'kind' => 'restored',
+                'payload' => null,
+                'occurred_at' => now(),
+            ]);
 
             $project->deleted_at = null;
             $project->save();
@@ -246,10 +298,24 @@ final class ProjectWriteController
             abort(403, 'User is not a member of this workspace.');
         }
 
-        ProjectMember::query()->firstOrCreate(
+        $member = ProjectMember::query()->firstOrCreate(
             ['project_id' => $project->id, 'user_id' => $data['user_id']],
             ['role' => $data['role'] ?? 'contributor'],
         );
+
+        if ($member->wasRecentlyCreated) {
+            $u = User::query()->find($data['user_id']);
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => $request->user()?->getKey(),
+                'kind' => 'member_added',
+                'payload' => [
+                    'user_id' => $data['user_id'],
+                    'user_name' => $u?->name,
+                ],
+                'occurred_at' => now(),
+            ]);
+        }
 
         return back();
     }
@@ -258,10 +324,24 @@ final class ProjectWriteController
     {
         $project = $this->resolveProject($slug);
 
-        ProjectMember::query()
+        $deleted = ProjectMember::query()
             ->where('project_id', $project->id)
             ->where('user_id', $userId)
             ->delete();
+
+        if ($deleted > 0) {
+            $u = User::query()->find($userId);
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => request()->user()?->getKey(),
+                'kind' => 'member_removed',
+                'payload' => [
+                    'user_id' => $userId,
+                    'user_name' => $u?->name,
+                ],
+                'occurred_at' => now(),
+            ]);
+        }
 
         return back();
     }
@@ -287,7 +367,23 @@ final class ProjectWriteController
             abort(403, 'Label does not belong to one of the project teams.');
         }
 
+        $alreadyAttached = $project->labels()->where('labels.id', $data['label_id'])->exists();
         $project->labels()->syncWithoutDetaching([$data['label_id']]);
+
+        if (! $alreadyAttached) {
+            $label = Label::query()->find($data['label_id']);
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => $request->user()?->getKey(),
+                'kind' => 'label_added',
+                'payload' => [
+                    'label_id' => $data['label_id'],
+                    'label_name' => $label?->name,
+                    'label_color' => $label?->color,
+                ],
+                'occurred_at' => now(),
+            ]);
+        }
 
         return back();
     }
@@ -295,9 +391,119 @@ final class ProjectWriteController
     public function detachLabel(string $slug, int $labelId): RedirectResponse
     {
         $project = $this->resolveProject($slug);
+        $wasAttached = $project->labels()->where('labels.id', $labelId)->exists();
         $project->labels()->detach($labelId);
 
+        if ($wasAttached) {
+            $label = Label::query()->find($labelId);
+            ProjectActivity::create([
+                'project_id' => $project->id,
+                'actor_user_id' => request()->user()?->getKey(),
+                'kind' => 'label_removed',
+                'payload' => [
+                    'label_id' => $labelId,
+                    'label_name' => $label?->name,
+                    'label_color' => $label?->color,
+                ],
+                'occurred_at' => now(),
+            ]);
+        }
+
         return back();
+    }
+
+    /**
+     * Diff before/after of a project update and emit one ProjectActivity row
+     * per significant change.
+     *
+     * @param  array<string,mixed>  $before
+     */
+    private function recordProjectChanges(Project $project, array $before, ?int $actorId): void
+    {
+        $now = now();
+        $base = [
+            'project_id' => $project->id,
+            'actor_user_id' => $actorId,
+            'occurred_at' => $now,
+        ];
+
+        if ($before['name'] !== $project->name) {
+            ProjectActivity::create($base + [
+                'kind' => 'name_changed',
+                'payload' => ['from' => $before['name'], 'to' => $project->name],
+            ]);
+        }
+
+        if (($before['description'] ?? null) !== $project->description) {
+            ProjectActivity::create($base + [
+                'kind' => 'description_changed',
+                'payload' => null,
+            ]);
+        }
+
+        $newState = $project->state?->value;
+        if ($before['state'] !== $newState) {
+            ProjectActivity::create($base + [
+                'kind' => 'state_changed',
+                'payload' => ['from' => $before['state'], 'to' => $newState],
+            ]);
+        }
+
+        $newPriority = (int) ($project->priority ?? 0);
+        if ((int) $before['priority'] !== $newPriority) {
+            $labels = [
+                0 => 'No priority',
+                1 => 'Urgent',
+                2 => 'High',
+                3 => 'Medium',
+                4 => 'Low',
+            ];
+            ProjectActivity::create($base + [
+                'kind' => 'priority_changed',
+                'payload' => [
+                    'from' => (int) $before['priority'],
+                    'from_label' => $labels[(int) $before['priority']] ?? '—',
+                    'to' => $newPriority,
+                    'to_label' => $labels[$newPriority] ?? '—',
+                ],
+            ]);
+        }
+
+        if ($before['lead_user_id'] !== $project->lead_user_id) {
+            if ($project->lead_user_id === null) {
+                ProjectActivity::create($base + [
+                    'kind' => 'lead_unset',
+                    'payload' => null,
+                ]);
+            } else {
+                $u = User::query()->find($project->lead_user_id);
+                ProjectActivity::create($base + [
+                    'kind' => 'lead_set',
+                    'payload' => [
+                        'user_id' => $project->lead_user_id,
+                        'user_name' => $u?->name,
+                    ],
+                ]);
+            }
+        }
+
+        $beforeStart = $before['start_date'];
+        $afterStart = $project->start_date?->toDateString();
+        if ($beforeStart !== $afterStart) {
+            ProjectActivity::create($base + [
+                'kind' => 'start_date_changed',
+                'payload' => ['from' => $beforeStart, 'to' => $afterStart],
+            ]);
+        }
+
+        $beforeTarget = $before['target_date'];
+        $afterTarget = $project->target_date?->toDateString();
+        if ($beforeTarget !== $afterTarget) {
+            ProjectActivity::create($base + [
+                'kind' => 'target_date_changed',
+                'payload' => ['from' => $beforeTarget, 'to' => $afterTarget],
+            ]);
+        }
     }
 
     private function resolveProject(string $slug): Project

@@ -6,6 +6,7 @@ namespace App\Modules\Issues\Mcp\Tools;
 
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
+use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Label;
@@ -86,7 +87,7 @@ class IssuesCreate extends Tool
 
         $cycleId = null;
         if (! empty($data['cycle_number'])) {
-            $cycleId = \App\Modules\Cycles\Models\Cycle::query()
+            $cycleId = Cycle::query()
                 ->where('team_id', $team->id)
                 ->where('number', (int) $data['cycle_number'])
                 ->value('id');

@@ -80,4 +80,9 @@ class Project extends Model
     {
         return $this->hasMany(ProjectResource::class)->latest();
     }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(ProjectActivity::class)->orderBy('occurred_at');
+    }
 }

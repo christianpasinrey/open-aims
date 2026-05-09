@@ -6,6 +6,7 @@ namespace App\Modules\Issues\Http\Controllers;
 
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -168,7 +169,7 @@ final class InboxController
         if (preg_match('/^([A-Za-z]+)-(\d+)$/', $identifier, $m) !== 1) {
             return null;
         }
-        $team = \App\Modules\Teams\Models\Team::query()
+        $team = Team::query()
             ->where('workspace_id', $workspace->id)
             ->where('key', strtoupper($m[1]))
             ->first();

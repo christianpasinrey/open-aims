@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Issues\Mcp\Tools;
 
 use App\Core\Mcp\ResolvesWorkspace;
+use App\Core\Scopes\WorkspaceScope;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -47,7 +48,7 @@ class IssuesDelete extends Tool
             return Response::error("Team '{$key}' not found.");
         }
 
-        $issue = Issue::withoutGlobalScope(\App\Core\Scopes\WorkspaceScope::class)
+        $issue = Issue::withoutGlobalScope(WorkspaceScope::class)
             ->where('team_id', $team->id)
             ->where('number', (int) $number)
             ->first();

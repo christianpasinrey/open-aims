@@ -67,7 +67,9 @@ class InboxList extends Tool
             ->limit(30)
             ->get()
             ->each(function (Comment $c) use (&$entries) {
-                if ($c->issue === null) return;
+                if ($c->issue === null) {
+                    return;
+                }
                 $entries->push([
                     'kind' => 'commented',
                     'occurred_at' => $c->created_at?->toIso8601String(),

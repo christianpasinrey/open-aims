@@ -7,6 +7,7 @@ namespace App\Modules\Projects\Http\Controllers;
 use App\Models\User;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectActivity;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
@@ -150,6 +151,12 @@ final class ProjectDetailController
             ])
             ->all();
 
+        $activities = ProjectActivity::query()
+            ->where('project_id', $project->id)
+            ->with('actor:id,name,email')
+            ->orderBy('occurred_at')
+            ->get();
+
         return Inertia::render('projects/Show', [
             'tab' => $tab,
             'progress' => [
@@ -162,6 +169,17 @@ final class ProjectDetailController
             'labels' => $attachedLabels,
             'available_labels' => $availableLabels,
             'available_members' => $availableMembers,
+            'activities' => $activities->map(fn (ProjectActivity $a): array => [
+                'id' => $a->id,
+                'kind' => $a->kind,
+                'payload' => $a->payload,
+                'occurred_at' => $a->occurred_at?->toIso8601String(),
+                'actor' => $a->actor ? [
+                    'id' => $a->actor->id,
+                    'name' => $a->actor->name,
+                    'email' => $a->actor->email,
+                ] : null,
+            ])->all(),
             'states' => $statePositions->values()->map(static fn ($s): array => [
                 'id' => $s->id,
                 'name' => $s->name,

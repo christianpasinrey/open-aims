@@ -68,11 +68,21 @@ class IssuesUpdate extends Tool
         }
 
         $changes = [];
-        if (array_key_exists('title', $data)) $changes['title'] = $data['title'];
-        if (array_key_exists('description', $data)) $changes['description'] = $data['description'];
-        if (array_key_exists('priority', $data)) $changes['priority'] = (int) $data['priority'];
-        if (array_key_exists('estimate', $data)) $changes['estimate'] = $data['estimate'];
-        if (array_key_exists('due_date', $data)) $changes['due_date'] = $data['due_date'];
+        if (array_key_exists('title', $data)) {
+            $changes['title'] = $data['title'];
+        }
+        if (array_key_exists('description', $data)) {
+            $changes['description'] = $data['description'];
+        }
+        if (array_key_exists('priority', $data)) {
+            $changes['priority'] = (int) $data['priority'];
+        }
+        if (array_key_exists('estimate', $data)) {
+            $changes['estimate'] = $data['estimate'];
+        }
+        if (array_key_exists('due_date', $data)) {
+            $changes['due_date'] = $data['due_date'];
+        }
 
         if (array_key_exists('state', $data)) {
             $stateId = $data['state'] === null ? null : WorkflowState::query()
@@ -130,9 +140,15 @@ class IssuesUpdate extends Tool
 
     private function resolveAssignee(?string $value, int $currentUserId): ?int
     {
-        if ($value === null || $value === '') return null;
-        if ($value === 'me') return $currentUserId;
-        if (is_numeric($value)) return (int) $value;
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if ($value === 'me') {
+            return $currentUserId;
+        }
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
         $id = User::query()->where('email', $value)->value('id');
 
         return $id !== null ? (int) $id : null;

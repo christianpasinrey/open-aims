@@ -62,7 +62,9 @@ const userName = computed(() => payloadString('user_name'));
 </script>
 
 <template>
-    <li class="flex items-start gap-2 py-1.5 text-[12.5px] text-muted-foreground">
+    <li
+        class="flex items-start gap-2 py-1.5 text-[12.5px] text-muted-foreground"
+    >
         <Avatar
             v-if="activity.actor"
             :name="activity.actor.name"
@@ -90,7 +92,9 @@ const userName = computed(() => payloadString('user_name'));
                         v-if="fromState"
                         :type="(fromState.type as string) ?? 'unstarted'"
                     />
-                    <span class="text-foreground">{{ fromState?.name ?? '—' }}</span>
+                    <span class="text-foreground">{{
+                        fromState?.name ?? '—'
+                    }}</span>
                 </span>
                 <span> to </span>
                 <span class="inline-flex items-center gap-1">
@@ -98,16 +102,28 @@ const userName = computed(() => payloadString('user_name'));
                         v-if="toState"
                         :type="(toState.type as string) ?? 'unstarted'"
                     />
-                    <span class="text-foreground">{{ toState?.name ?? '—' }}</span>
+                    <span class="text-foreground">{{
+                        toState?.name ?? '—'
+                    }}</span>
                 </span>
             </template>
 
             <template v-else-if="activity.kind === 'priority_changed'">
-                <span> set priority to <span class="text-foreground">{{ payloadString('to_label') ?? '—' }}</span></span>
+                <span>
+                    set priority to
+                    <span class="text-foreground">{{
+                        payloadString('to_label') ?? '—'
+                    }}</span></span
+                >
             </template>
 
             <template v-else-if="activity.kind === 'assigned'">
-                <span> assigned to <span class="text-foreground">{{ userName ?? '—' }}</span></span>
+                <span>
+                    assigned to
+                    <span class="text-foreground">{{
+                        userName ?? '—'
+                    }}</span></span
+                >
             </template>
             <template v-else-if="activity.kind === 'unassigned'">
                 <span> unassigned the issue</span>
@@ -119,19 +135,36 @@ const userName = computed(() => payloadString('user_name'));
                     v-if="payloadString('project_slug')"
                     :href="`/projects/${payloadString('project_slug')}`"
                     class="text-foreground hover:underline"
-                >{{ projectName ?? '—' }}</Link>
-                <span v-else class="text-foreground">{{ projectName ?? '—' }}</span>
+                    >{{ projectName ?? '—' }}</Link
+                >
+                <span v-else class="text-foreground">{{
+                    projectName ?? '—'
+                }}</span>
             </template>
             <template v-else-if="activity.kind === 'project_unset'">
                 <span> removed the issue from its project</span>
             </template>
 
             <template v-else-if="activity.kind === 'cycle_set'">
-                <span> moved the issue to <span class="text-foreground">{{ payloadString('cycle_name') ?? 'a cycle' }}</span></span>
+                <span>
+                    moved the issue to
+                    <span class="text-foreground">{{
+                        payloadString('cycle_name') ?? 'a cycle'
+                    }}</span></span
+                >
             </template>
 
-            <template v-else-if="activity.kind === 'label_added' || activity.kind === 'label_removed'">
-                <span>{{ activity.kind === 'label_added' ? ' added label ' : ' removed label ' }}</span>
+            <template
+                v-else-if="
+                    activity.kind === 'label_added' ||
+                    activity.kind === 'label_removed'
+                "
+            >
+                <span>{{
+                    activity.kind === 'label_added'
+                        ? ' added label '
+                        : ' removed label '
+                }}</span>
                 <span
                     class="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-px text-[11px] text-foreground"
                 >
@@ -145,20 +178,104 @@ const userName = computed(() => payloadString('user_name'));
 
             <template v-else-if="activity.kind === 'relation_added'">
                 <span> added related issue </span>
-                <IssueRefHoverCard v-if="targetIdentifier" :identifier="targetIdentifier">
+                <IssueRefHoverCard
+                    v-if="targetIdentifier"
+                    :identifier="targetIdentifier"
+                >
                     {{ targetIdentifier }}
                 </IssueRefHoverCard>
-                <span v-if="relationType === 'blocks'" class="text-foreground"> as blocking</span>
-                <span v-if="targetTitle" class="text-muted-foreground"> — {{ targetTitle }}</span>
+                <span v-if="relationType === 'blocks'" class="text-foreground">
+                    as blocking</span
+                >
+                <span v-if="targetTitle" class="text-muted-foreground">
+                    — {{ targetTitle }}</span
+                >
             </template>
             <template v-else-if="activity.kind === 'relation_removed'">
                 <span> removed relation to </span>
-                <IssueRefHoverCard v-if="targetIdentifier" :identifier="targetIdentifier" />
+                <IssueRefHoverCard
+                    v-if="targetIdentifier"
+                    :identifier="targetIdentifier"
+                />
             </template>
 
             <template v-else-if="activity.kind === 'mentioned'">
                 <span> mentioned </span>
-                <span class="text-foreground">@{{ (activity.payload?.mentioned_user_names as string[] | undefined)?.[0] ?? 'someone' }}</span>
+                <span class="text-foreground"
+                    >@{{
+                        (
+                            activity.payload?.mentioned_user_names as
+                                | string[]
+                                | undefined
+                        )?.[0] ?? 'someone'
+                    }}</span
+                >
+            </template>
+
+            <template v-else-if="activity.kind === 'title_changed'">
+                <span> renamed the issue to </span>
+                <span class="text-foreground">{{
+                    payloadString('to') ?? '—'
+                }}</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'description_changed'">
+                <span> updated the description</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'cycle_unset'">
+                <span> removed the issue from its cycle</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'due_date_changed'">
+                <span v-if="payloadString('to')">
+                    set the due date to
+                    <span class="text-foreground">{{
+                        payloadString('to')
+                    }}</span>
+                </span>
+                <span v-else> cleared the due date</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'estimate_changed'">
+                <span
+                    v-if="
+                        payloadNumber('to') !== undefined &&
+                        payloadNumber('to') !== 0
+                    "
+                >
+                    set the estimate to
+                    <span class="text-foreground">{{
+                        payloadNumber('to')
+                    }}</span>
+                </span>
+                <span v-else> cleared the estimate</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'archived'">
+                <span> archived the issue</span>
+            </template>
+            <template v-else-if="activity.kind === 'unarchived'">
+                <span> unarchived the issue</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'branch_linked'">
+                <span> linked branch </span>
+                <span class="font-mono text-foreground">{{
+                    payloadString('branch_name') ?? '—'
+                }}</span>
+            </template>
+            <template v-else-if="activity.kind === 'branch_merged'">
+                <span> merged </span>
+                <span class="font-mono text-foreground">{{
+                    payloadString('branch_name') ?? '—'
+                }}</span>
+                <span v-if="payloadString('base_branch')"> into </span>
+                <span
+                    v-if="payloadString('base_branch')"
+                    class="font-mono text-foreground"
+                    >{{ payloadString('base_branch') }}</span
+                >
             </template>
 
             <template v-else>
@@ -166,7 +283,9 @@ const userName = computed(() => payloadString('user_name'));
             </template>
 
             <span class="ml-1 text-muted-foreground/80">·</span>
-            <span class="ml-1 text-muted-foreground/80">{{ relativeTime(activity.occurred_at) }}</span>
+            <span class="ml-1 text-muted-foreground/80">{{
+                relativeTime(activity.occurred_at)
+            }}</span>
         </div>
     </li>
 </template>
