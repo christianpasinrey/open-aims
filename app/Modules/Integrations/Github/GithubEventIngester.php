@@ -143,6 +143,10 @@ final class GithubEventIngester
     }
 
     /**
+     * Upsert a `github_repos` row from a webhook payload. Delegates to
+     * the public `upsertRepoFromApi()` so REST-driven sync writes the
+     * same shape.
+     *
      * @param  array<string,mixed>  $payload
      */
     private function upsertRepo(?GithubInstallation $installation, array $payload): ?GithubRepo
@@ -151,6 +155,20 @@ final class GithubEventIngester
         if ($repoData === null || $installation === null) {
             return null;
         }
+
+        return $this->upsertRepoFromApi($installation, $repoData);
+    }
+
+    /**
+     * Public entry point used by the REST-driven sync. Takes a repo
+     * object as returned by `/installation/repositories` (or any
+     * webhook payload's `repository` sub-object — they share the same
+     * shape).
+     *
+     * @param  array<string,mixed>  $repoData
+     */
+    public function upsertRepoFromApi(GithubInstallation $installation, array $repoData): ?GithubRepo
+    {
         $githubId = (int) ($repoData['id'] ?? 0);
         if ($githubId === 0) {
             return null;
@@ -195,36 +213,24 @@ final class GithubEventIngester
             $payload['head_commit']['timestamp'] ?? ($payload['repository']['pushed_at'] ?? null)
         );
 
-        $branch = GithubBranch::withTrashed()
-            ->where('repo_id', $repo->id)
-            ->where('name', $branchName)
-            ->first();
+        $branch = $this->upsertBranchFromApi($repo, [
+            'name' => $branchName,
+            'commit' => ['sha' => $headSha],
+        ]);
 
-        if ($branch === null) {
-            $branch = GithubBranch::create([
-                'repo_id' => $repo->id,
-                'name' => $branchName,
-                'head_sha' => $headSha !== '' ? $headSha : null,
-                'last_pusher_login' => $pusher,
-                'last_pushed_at' => $headTimestamp,
-            ]);
-        } else {
-            $updates = [];
-            if ($headSha !== '' && $branch->head_sha !== $headSha) {
-                $updates['head_sha'] = $headSha;
-            }
-            if ($pusher !== null) {
-                $updates['last_pusher_login'] = $pusher;
-            }
-            if ($headTimestamp !== null) {
-                $updates['last_pushed_at'] = $headTimestamp;
-            }
-            if ($branch->trashed()) {
-                $branch->restore();
-            }
-            if ($updates !== []) {
-                $branch->forceFill($updates)->save();
-            }
+        // Push payloads carry extras (pusher, head-commit timestamp)
+        // not present on REST `/branches`. Apply them on top so the
+        // webhook behaviour stays byte-equivalent with the previous
+        // single combined update.
+        $updates = [];
+        if ($pusher !== null) {
+            $updates['last_pusher_login'] = $pusher;
+        }
+        if ($headTimestamp !== null) {
+            $updates['last_pushed_at'] = $headTimestamp;
+        }
+        if ($updates !== []) {
+            $branch->forceFill($updates)->save();
         }
 
         if ($deleted) {
@@ -233,6 +239,54 @@ final class GithubEventIngester
     }
 
     /**
+     * Public entry point used by the REST-driven sync. Takes a branch
+     * object as returned by `/repos/{owner}/{repo}/branches`:
+     *
+     *   { "name": "feature/x", "commit": { "sha": "abc123" }, "protected": false }
+     *
+     * Restores soft-deleted rows. Does NOT touch `last_pushed_at` /
+     * `last_pusher_login` — the REST endpoint does not expose them, so
+     * we leave whatever the last push webhook wrote (or null on first
+     * backfill).
+     *
+     * @param  array<string,mixed>  $branchData
+     */
+    public function upsertBranchFromApi(GithubRepo $repo, array $branchData): GithubBranch
+    {
+        $name = (string) ($branchData['name'] ?? '');
+        $headSha = isset($branchData['commit']['sha']) ? (string) $branchData['commit']['sha'] : '';
+
+        $branch = GithubBranch::withTrashed()
+            ->where('repo_id', $repo->id)
+            ->where('name', $name)
+            ->first();
+
+        if ($branch === null) {
+            return GithubBranch::create([
+                'repo_id' => $repo->id,
+                'name' => $name,
+                'head_sha' => $headSha !== '' ? $headSha : null,
+            ]);
+        }
+
+        $updates = [];
+        if ($headSha !== '' && $branch->head_sha !== $headSha) {
+            $updates['head_sha'] = $headSha;
+        }
+        if ($branch->trashed()) {
+            $branch->restore();
+        }
+        if ($updates !== []) {
+            $branch->forceFill($updates)->save();
+        }
+
+        return $branch;
+    }
+
+    /**
+     * Upsert a `github_pull_requests` row from a webhook payload.
+     * Delegates to the public `upsertPullRequestFromApi()`.
+     *
      * @param  array<string,mixed>  $payload
      */
     private function upsertPullRequest(?GithubRepo $repo, array $payload): ?GithubPullRequest
@@ -244,6 +298,19 @@ final class GithubEventIngester
         if ($pr === null) {
             return null;
         }
+
+        return $this->upsertPullRequestFromApi($repo, $pr);
+    }
+
+    /**
+     * Public entry point used by the REST-driven sync. Takes a PR
+     * object as returned by `/repos/{owner}/{repo}/pulls` (or any
+     * webhook payload's `pull_request` sub-object — same shape).
+     *
+     * @param  array<string,mixed>  $pr
+     */
+    public function upsertPullRequestFromApi(GithubRepo $repo, array $pr): ?GithubPullRequest
+    {
         $githubId = (int) ($pr['id'] ?? 0);
         if ($githubId === 0) {
             return null;

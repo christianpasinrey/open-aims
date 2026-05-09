@@ -240,6 +240,64 @@ final class GithubAppService
     }
 
     /**
+     * GET /repos/{owner}/{repo}/branches — list all branches.
+     *
+     * Used by the Sync action to backfill `github_branches` for
+     * installations that pre-date the App. The REST endpoint does NOT
+     * expose the last-commit timestamp, so callers should leave
+     * `last_pushed_at` null on backfill — push webhooks fill it in
+     * later.
+     *
+     * Capped at 10 pages (1000 branches): repos with more than that
+     * are not worth pulling synchronously.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function listBranches(int $installationId, string $owner, string $repo): array
+    {
+        $token = $this->installationToken($installationId);
+        if ($token === null) {
+            return [];
+        }
+
+        $branches = [];
+        $page = 1;
+
+        do {
+            $response = $this->client($token)->get(self::API_BASE."/repos/{$owner}/{$repo}/branches", [
+                'per_page' => 100,
+                'page' => $page,
+            ]);
+            if (! $response->successful()) {
+                Log::warning('github-app: listBranches failed', [
+                    'installation_id' => $installationId,
+                    'owner' => $owner,
+                    'repo' => $repo,
+                    'status' => $response->status(),
+                ]);
+                break;
+            }
+
+            /** @var list<array<string,mixed>> $batch */
+            $batch = (array) $response->json();
+            foreach ($batch as $branch) {
+                if (is_array($branch)) {
+                    $branches[] = $branch;
+                }
+            }
+            $page++;
+
+            // Cap at 10 pages (1000 branches) to avoid runaway syncs on
+            // huge repos.
+            if ($page > 10) {
+                break;
+            }
+        } while (count($batch) === 100);
+
+        return $branches;
+    }
+
+    /**
      * GET /app/installations — list every installation of this App. Used
      * by the "Reconcile installations" admin action so we can adopt rows
      * for users who installed via github.com without going through our

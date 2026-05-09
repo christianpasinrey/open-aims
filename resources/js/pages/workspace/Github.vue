@@ -110,6 +110,16 @@ const linkedCount = computed<number | null>(() => {
     const v = url.searchParams.get('linked');
     return v === null ? null : Number(v);
 });
+const branchesCount = computed<number | null>(() => {
+    const url = new URL(window.location.href);
+    const v = url.searchParams.get('branches');
+    return v === null ? null : Number(v);
+});
+const pullsCount = computed<number | null>(() => {
+    const url = new URL(window.location.href);
+    const v = url.searchParams.get('pulls');
+    return v === null ? null : Number(v);
+});
 const attachedCount = computed<number | null>(() => {
     const url = new URL(window.location.href);
     const v = url.searchParams.get('attached');
@@ -255,11 +265,22 @@ function relativeTime(iso: string | null): string {
                         v-else-if="flashStatus === 'synced'"
                         class="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12.5px] text-emerald-400"
                     >
-                        Sync complete.
-                        <span v-if="linkedCount !== null"
-                            >{{ linkedCount }} pull request(s) linked or
-                            updated.</span
+                        <span
+                            v-if="
+                                branchesCount !== null && pullsCount !== null
+                            "
                         >
+                            Fetch complete. {{ branchesCount }} branches,
+                            {{ pullsCount }} pull requests,
+                            {{ linkedCount ?? 0 }} linked to issues.
+                        </span>
+                        <span v-else>
+                            Sync complete.
+                            <span v-if="linkedCount !== null"
+                                >{{ linkedCount }} pull request(s) linked or
+                                updated.</span
+                            >
+                        </span>
                     </p>
 
                     <!-- Installation -->
@@ -423,7 +444,11 @@ function relativeTime(iso: string | null): string {
                                     :disabled="processing"
                                 >
                                     <Plug class="mr-1.5 size-3.5" />
-                                    {{ processing ? 'Syncing…' : 'Sync now' }}
+                                    {{
+                                        processing
+                                            ? 'Fetching…'
+                                            : 'Fetch from GitHub'
+                                    }}
                                 </Button>
                             </Form>
                         </div>
