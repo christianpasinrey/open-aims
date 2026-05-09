@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectActivity;
+use App\Modules\Projects\Models\ProjectResource;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
@@ -157,6 +158,17 @@ final class ProjectDetailController
             ->orderBy('occurred_at')
             ->get();
 
+        // Latest plan attached via MCP (or any future Plan upload path). We
+        // surface the summary on every project payload, plus the full body
+        // when small enough to render inline.
+        $latestPlanResource = ProjectResource::query()
+            ->where('project_id', $project->id)
+            ->where('is_plan', true)
+            ->with('media')
+            ->latest()
+            ->first();
+        [$latestPlan, $latestPlanContent, $planTooLarge] = $this->buildLatestPlan($latestPlanResource);
+
         return Inertia::render('projects/Show', [
             'tab' => $tab,
             'progress' => [
@@ -232,6 +244,7 @@ final class ProjectDetailController
                     return [
                         'id' => $r->id,
                         'type' => $r->type,
+                        'is_plan' => (bool) $r->is_plan,
                         'name' => $r->name,
                         'url' => $r->type === 'link'
                             ? $r->url
@@ -246,6 +259,9 @@ final class ProjectDetailController
                         ] : null,
                     ];
                 })->all(),
+                'latest_plan' => $latestPlan,
+                'latest_plan_content' => $latestPlanContent,
+                'plan_too_large' => $planTooLarge,
             ],
             'issues' => $issues->map(fn (Issue $i): array => [
                 'id' => $i->id,
@@ -270,5 +286,60 @@ final class ProjectDetailController
                 'updated_at' => $i->updated_at?->toIso8601String(),
             ])->all(),
         ]);
+    }
+
+    /**
+     * Build the front-end payload for the latest plan attached to a project.
+     *
+     * Returns a 3-tuple [summary, fullContent, tooLarge]:
+     *   - summary: null | array with id/format/name/url/content_preview/uploaded_at
+     *   - fullContent: full body string, or null if missing OR larger than the
+     *     inline-render cap (200 KB).
+     *   - tooLarge: true when the file body exists but exceeds the cap.
+     *
+     * @return array{0: ?array, 1: ?string, 2: bool}
+     */
+    private function buildLatestPlan(?ProjectResource $resource): array
+    {
+        if ($resource === null) {
+            return [null, null, false];
+        }
+
+        $media = $resource->getFirstMedia('attachment');
+        $name = $resource->name;
+        $format = str_ends_with(strtolower($name), '.html') ? 'html' : 'md';
+
+        $body = null;
+        if ($media !== null) {
+            $path = $media->getPath();
+            if (is_string($path) && $path !== '' && is_readable($path)) {
+                $body = (string) @file_get_contents($path);
+            }
+        }
+
+        $preview = $body !== null ? mb_substr($body, 0, 500) : '';
+
+        // Cap inline rendering at 200 KB; bigger files are linked-only.
+        $maxBytes = 200 * 1024;
+        $tooLarge = false;
+        $fullContent = null;
+        if ($body !== null) {
+            if (strlen($body) > $maxBytes) {
+                $tooLarge = true;
+            } else {
+                $fullContent = $body;
+            }
+        }
+
+        $summary = [
+            'id' => (int) $resource->id,
+            'format' => $format,
+            'name' => $name,
+            'url' => $media?->getFullUrl(),
+            'content_preview' => $preview,
+            'uploaded_at' => $resource->created_at?->toIso8601String(),
+        ];
+
+        return [$summary, $fullContent, $tooLarge];
     }
 }

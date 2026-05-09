@@ -6,6 +6,7 @@ namespace App\Modules\Projects\Mcp\Tools;
 
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Mcp\Request;
@@ -15,10 +16,14 @@ use Laravel\Mcp\Server\Tool;
 
 #[Description(
     'Fetch a project by slug with full detail: description, lead, members, '
-    .'milestones, linked teams, issue counts, progress.'
+    .'milestones, linked teams, issue counts, progress. '
+    .'Also returns the latest plan attached to the project — `plan` (summary) '
+    .'and `plan_full_content` (full markdown/HTML body) so future Claude '
+    .'sessions can read the plan without scanning the codebase.'
 )]
 class ProjectsGet extends Tool
 {
+    use AttachesProjectPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -63,6 +68,14 @@ class ProjectsGet extends Tool
         $total = (int) $project->total_issues;
         $completed = (int) $project->completed_issues;
 
+        $planResource = ProjectResource::query()
+            ->where('project_id', $project->id)
+            ->where('is_plan', true)
+            ->latest()
+            ->first();
+        $planSummary = $this->planSummary($planResource);
+        $planFullContent = $this->planFullContent($planResource);
+
         return Response::json([
             'slug' => $project->slug,
             'name' => $project->name,
@@ -94,6 +107,8 @@ class ProjectsGet extends Tool
             'total_issues' => $total,
             'completed_issues' => $completed,
             'progress_percent' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
+            'plan' => $planSummary,
+            'plan_full_content' => $planFullContent,
             'url' => '/projects/'.$project->slug,
         ]);
     }
