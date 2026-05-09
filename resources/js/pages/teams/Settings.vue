@@ -15,6 +15,7 @@ type Team = {
     color: string | null;
     description: string | null;
     private: boolean;
+    github_repo_full_name: string | null;
 };
 
 const props = defineProps<{ team: Team }>();
@@ -23,6 +24,7 @@ const name = ref<string>(props.team.name);
 const color = ref<string>(props.team.color ?? '#6366f1');
 const icon = ref<string>(props.team.icon ?? '');
 const description = ref<string>(props.team.description ?? '');
+const githubRepo = ref<string>(props.team.github_repo_full_name ?? '');
 const submitting = ref(false);
 const errorMessage = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
@@ -34,6 +36,7 @@ watch(
         color.value = next.color ?? '#6366f1';
         icon.value = next.icon ?? '';
         description.value = next.description ?? '';
+        githubRepo.value = next.github_repo_full_name ?? '';
     },
 );
 
@@ -52,6 +55,7 @@ function save() {
             color: color.value,
             icon: icon.value || null,
             description: description.value || null,
+            github_repo_full_name: githubRepo.value.trim() || null,
         },
         {
             preserveScroll: true,
@@ -175,6 +179,24 @@ function save() {
                             maxlength="500"
                             class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-[13px] outline-none focus-visible:border-ring"
                         />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="t-repo">GitHub repository</Label>
+                        <Input
+                            id="t-repo"
+                            v-model="githubRepo"
+                            placeholder="owner/repo"
+                            maxlength="200"
+                            class="font-mono text-[12.5px]"
+                        />
+                        <p class="text-[12px] text-muted-foreground">
+                            Branches and PRs from this repo are linked to issues
+                            in this team. Use the
+                            <span class="font-mono">owner/repo</span> form (e.g.
+                            <span class="font-mono">acme/web</span>). Leave
+                            empty to disable the link.
+                        </p>
                     </div>
 
                     <p

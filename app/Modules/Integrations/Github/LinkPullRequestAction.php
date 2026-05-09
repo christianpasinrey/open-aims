@@ -7,7 +7,9 @@ namespace App\Modules\Integrations\Github;
 use App\Modules\Integrations\Github\Models\GithubInstallation;
 use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Models\IssueActivity;
 use App\Modules\Teams\Models\Team;
+use App\Modules\Teams\Models\WorkflowState;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -42,9 +44,16 @@ final class LinkPullRequestAction
         }
 
         $state = $this->resolveState($pull);
+        $baseRef = (string) ($pull['base']['ref'] ?? 'main');
         $linked = 0;
 
         foreach ($issues as $issue) {
+            $existing = GithubLinkedPullRequest::query()
+                ->where('installation_id', $installation->id)
+                ->where('pr_node_id', (string) ($pull['node_id'] ?? ''))
+                ->first();
+            $previousState = $existing?->pr_state;
+
             $row = GithubLinkedPullRequest::updateOrCreate(
                 [
                     'installation_id' => $installation->id,
@@ -64,12 +73,100 @@ final class LinkPullRequestAction
                 ],
             );
 
+            if ($row->wasRecentlyCreated) {
+                IssueActivity::create([
+                    'issue_id' => $issue->id,
+                    'actor_user_id' => null,
+                    'kind' => 'branch_linked',
+                    'payload' => [
+                        'branch_name' => $branch,
+                        'pr_number' => (int) ($pull['number'] ?? 0),
+                        'pr_url' => (string) ($pull['html_url'] ?? ''),
+                        'pr_title' => (string) ($pull['title'] ?? ''),
+                    ],
+                    'occurred_at' => now(),
+                ]);
+            }
+
+            // Detect first transition into 'merged' and react: write a
+            // branch_merged activity row + auto-transition the issue's
+            // workflow state to the team's first 'completed' state.
+            if ($state === 'merged' && $previousState !== 'merged') {
+                IssueActivity::create([
+                    'issue_id' => $issue->id,
+                    'actor_user_id' => null,
+                    'kind' => 'branch_merged',
+                    'payload' => [
+                        'branch_name' => $branch,
+                        'base_branch' => $baseRef,
+                        'pr_number' => (int) ($pull['number'] ?? 0),
+                        'pr_url' => (string) ($pull['html_url'] ?? ''),
+                    ],
+                    'occurred_at' => now(),
+                ]);
+
+                if ($baseRef === 'main' || $baseRef === 'master') {
+                    $this->autoTransitionToCompleted($issue);
+                }
+            }
+
             if ($row->wasRecentlyCreated || $row->wasChanged()) {
                 $linked++;
             }
         }
 
         return $linked;
+    }
+
+    /**
+     * Move the issue to the team's first 'completed' workflow state, but
+     * only if it's not already in a terminal state (completed/canceled).
+     * Emits a status_changed activity row matching what
+     * IssueWriteController emits on manual changes.
+     */
+    private function autoTransitionToCompleted(Issue $issue): void
+    {
+        $current = WorkflowState::query()->find($issue->workflow_state_id);
+        if ($current && in_array($current->type, ['completed', 'canceled'], true)) {
+            return;
+        }
+
+        $completed = WorkflowState::query()
+            ->where('team_id', $issue->team_id)
+            ->where('type', 'completed')
+            ->orderBy('position')
+            ->first();
+        if ($completed === null) {
+            return;
+        }
+
+        $issue->forceFill([
+            'workflow_state_id' => $completed->id,
+            'completed_at' => $issue->completed_at ?? now(),
+        ])->save();
+
+        IssueActivity::create([
+            'issue_id' => $issue->id,
+            'actor_user_id' => null,
+            'kind' => 'status_changed',
+            'payload' => [
+                'from' => $current ? [
+                    'id' => $current->id,
+                    'name' => $current->name,
+                    'type' => $current->type,
+                    'color' => $current->color,
+                ] : null,
+                'to' => [
+                    'id' => $completed->id,
+                    'name' => $completed->name,
+                    'type' => $completed->type,
+                    'color' => $completed->color,
+                ],
+                'auto' => true,
+                'reason' => 'pr_merged',
+            ],
+            'occurred_at' => now(),
+        ]);
     }
 
     /**

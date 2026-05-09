@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Integrations\Github;
 
+use App\Modules\Teams\Models\Team;
 use Firebase\JWT\JWT;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
@@ -205,6 +206,63 @@ final class GithubAppService
     }
 
     /**
+     * GET /app/installations — list every installation of this App. Used
+     * by the "Reconcile installations" admin action so we can adopt rows
+     * for users who installed via github.com without going through our
+     * state-passing /gh/install flow.
+     *
+     * Returns null when the App isn't configured (so the caller can show
+     * a friendly error). Returns [] when configured but the app has no
+     * installations.
+     *
+     * @return list<array<string,mixed>>|null
+     */
+    public function listInstallations(): ?array
+    {
+        $jwt = $this->appJwt();
+        if ($jwt === null) {
+            return null;
+        }
+
+        $out = [];
+        $page = 1;
+        do {
+            $response = Http::withHeaders([
+                'Accept' => self::ACCEPT,
+                'X-GitHub-Api-Version' => self::VERSION,
+                'Authorization' => 'Bearer '.$jwt,
+                'User-Agent' => 'aims-github-app',
+            ])->get(self::API_BASE.'/app/installations', [
+                'per_page' => 100,
+                'page' => $page,
+            ]);
+            if (! $response->successful()) {
+                Log::warning('github-app: listInstallations failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                break;
+            }
+
+            /** @var list<array<string,mixed>> $batch */
+            $batch = (array) $response->json();
+            foreach ($batch as $row) {
+                if (is_array($row)) {
+                    $out[] = $row;
+                }
+            }
+            $page++;
+            // App rarely has more than a handful of installs; cap at 5
+            // pages anyway so we never spin.
+            if ($page > 5) {
+                break;
+            }
+        } while (count($batch) === 100);
+
+        return $out;
+    }
+
+    /**
      * GET /repos/{owner}/{repo}/pulls/{number}
      *
      * @return array<string,mixed>|null
@@ -298,25 +356,62 @@ final class GithubAppService
     }
 
     /**
-     * Exposes the configured team→repo mapping so callers can resolve
-     * which repo a repo team should pull from.
+     * Exposes the configured team→repo mapping. Now sourced from the
+     * `teams.github_repo_full_name` column (UI editable per team), with
+     * the legacy `services.github_app.team_repo_map` config kept as a
+     * fallback so existing deploys keep working.
      *
      * @return array<string,string> // team_key => "owner/repo"
      */
     public function teamRepoMap(): array
     {
-        $cfg = config('services.github_app.team_repo_map', []);
-
-        return is_array($cfg)
-            ? array_filter($cfg, static fn ($v): bool => is_string($v) && $v !== '')
+        $fromConfig = config('services.github_app.team_repo_map', []);
+        $map = is_array($fromConfig)
+            ? array_filter($fromConfig, static fn ($v): bool => is_string($v) && $v !== '')
             : [];
+
+        // Override / extend with whatever workspaces have set in the DB.
+        try {
+            $rows = Team::query()
+                ->withoutGlobalScopes()
+                ->whereNotNull('github_repo_full_name')
+                ->get(['key', 'github_repo_full_name']);
+            foreach ($rows as $row) {
+                $map[strtoupper((string) $row->key)] = (string) $row->github_repo_full_name;
+            }
+        } catch (\Throwable) {
+            // DB unavailable (early boot, migrations not run, …) — fall back
+            // to whatever the config provided.
+        }
+
+        return $map;
     }
 
     public function repoForTeamKey(string $teamKey): ?string
     {
-        $map = $this->teamRepoMap();
+        $key = strtoupper($teamKey);
 
-        return $map[strtoupper($teamKey)] ?? null;
+        // Prefer the per-team column if present, else fall back to config.
+        try {
+            $row = Team::query()
+                ->withoutGlobalScopes()
+                ->where('key', $key)
+                ->whereNotNull('github_repo_full_name')
+                ->value('github_repo_full_name');
+            if (is_string($row) && $row !== '') {
+                return $row;
+            }
+        } catch (\Throwable) {
+            // ignore — config fallback
+        }
+
+        $map = is_array(config('services.github_app.team_repo_map'))
+            ? config('services.github_app.team_repo_map')
+            : [];
+
+        $val = $map[$key] ?? null;
+
+        return is_string($val) && $val !== '' ? $val : null;
     }
 
     /**

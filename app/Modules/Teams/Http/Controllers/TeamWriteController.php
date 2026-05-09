@@ -37,7 +37,22 @@ final class TeamWriteController
             'color' => 'sometimes|nullable|string|max:9|regex:/^#?[0-9A-Fa-f]{3,8}$/',
             'icon' => 'sometimes|nullable|string|max:32',
             'description' => 'sometimes|nullable|string|max:500',
+            'github_repo_full_name' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:200',
+                // owner/repo format (single slash, no spaces, no leading slash)
+                'regex:/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/',
+            ],
         ]);
+
+        if (array_key_exists('github_repo_full_name', $data)
+            && is_string($data['github_repo_full_name'])
+            && $data['github_repo_full_name'] === ''
+        ) {
+            $data['github_repo_full_name'] = null;
+        }
 
         if (array_key_exists('color', $data) && is_string($data['color']) && $data['color'] !== '' && ! str_starts_with($data['color'], '#')) {
             $data['color'] = '#'.$data['color'];

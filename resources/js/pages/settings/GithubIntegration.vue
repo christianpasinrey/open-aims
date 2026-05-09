@@ -202,12 +202,32 @@ function fmtDate(iso: string | null): string {
                         </div>
                     </div>
                 </div>
-                <a
-                    :href="installUrl"
-                    class="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-90"
-                >
-                    Install on GitHub
-                </a>
+                <div class="flex items-center gap-2">
+                    <Form
+                        action="/gh/reconcile"
+                        method="post"
+                        v-slot="{ processing }"
+                    >
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            size="sm"
+                            :disabled="processing"
+                        >
+                            {{
+                                processing
+                                    ? 'Looking up…'
+                                    : 'Already installed?'
+                            }}
+                        </Button>
+                    </Form>
+                    <a
+                        :href="installUrl"
+                        class="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-90"
+                    >
+                        Install on GitHub
+                    </a>
+                </div>
             </div>
 
             <div

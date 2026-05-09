@@ -40,6 +40,7 @@ final class TeamSettingsController
                 'color' => $team->color,
                 'description' => $team->description,
                 'private' => (bool) $team->private,
+                'github_repo_full_name' => $team->github_repo_full_name,
             ],
         ]);
     }

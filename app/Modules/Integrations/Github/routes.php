@@ -18,6 +18,8 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
         ->name('github-app.install.callback');
     Route::post('gh/sync', [GithubAppController::class, 'sync'])
         ->name('github-app.sync');
+    Route::post('gh/reconcile', [GithubAppController::class, 'reconcile'])
+        ->name('github-app.reconcile');
 
     Route::get('settings/github', [GithubIntegrationSettingsController::class, 'show'])
         ->name('settings.github');

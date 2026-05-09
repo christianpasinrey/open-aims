@@ -142,6 +142,55 @@ final class GithubAppController
     }
 
     /**
+     * Recover installations that were created on github.com directly
+     * (i.e. without going through our /gh/install state-passing flow) by
+     * asking the App for the list of all its installations and attaching
+     * any unknown ones to the current workspace.
+     */
+    public function reconcile(Request $request): RedirectResponse
+    {
+        $workspace = $this->currentWorkspace();
+        if ($workspace === null) {
+            return redirect('/settings/github')->withErrors([
+                'github_app' => 'No active workspace.',
+            ]);
+        }
+
+        $installations = $this->github->listInstallations();
+        if ($installations === null) {
+            return redirect('/settings/github')->withErrors([
+                'github_app' => 'GitHub App is not configured (missing app id or private key).',
+            ]);
+        }
+
+        $attached = 0;
+        foreach ($installations as $remote) {
+            $remoteId = (int) ($remote['id'] ?? 0);
+            if ($remoteId === 0) {
+                continue;
+            }
+            $existing = GithubInstallation::query()
+                ->where('installation_id', (string) $remoteId)
+                ->first();
+            if ($existing !== null) {
+                continue;
+            }
+
+            GithubInstallation::create([
+                'workspace_id' => $workspace->id,
+                'installation_id' => (string) $remoteId,
+                'account_login' => (string) ($remote['account']['login'] ?? 'unknown'),
+                'account_type' => (string) ($remote['account']['type'] ?? 'Organization'),
+                'repository_selection' => (string) ($remote['repository_selection'] ?? 'all'),
+                'suspended_at' => null,
+            ]);
+            $attached++;
+        }
+
+        return redirect('/settings/github?status=reconciled&attached='.$attached);
+    }
+
+    /**
      * Issue REST calls against the App JWT (no installation token yet)
      * to fetch installation metadata. Returns null fields when the App
      * is not configured so the UI shows "unknown" but doesn't crash.

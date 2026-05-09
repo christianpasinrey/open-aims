@@ -22,6 +22,7 @@ class Team extends Model
         'color',
         'issue_counter',
         'private',
+        'github_repo_full_name',
     ];
 
     protected $casts = [
