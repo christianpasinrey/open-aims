@@ -59,6 +59,8 @@ final class IssueDetailController
                 'children:id,team_id,number,title,workflow_state_id,priority,assignee_user_id',
                 'children.workflowState:id,name,type,color',
                 'children.assignee:id,name',
+                'resources.media',
+                'resources.creator:id,name,email',
             ])
             ->first();
 
@@ -182,6 +184,26 @@ final class IssueDetailController
                         'name' => $c->assignee->name,
                     ] : null,
                 ])->all(),
+                'resources' => $issue->resources->map(function ($r): array {
+                    $media = $r->getFirstMedia('attachment');
+
+                    return [
+                        'id' => $r->id,
+                        'type' => $r->type,
+                        'name' => $r->name,
+                        'url' => $r->type === 'link'
+                            ? $r->url
+                            : ($media?->getFullUrl() ?? null),
+                        'mime_type' => $media?->mime_type,
+                        'size' => $media ? (int) $media->size : null,
+                        'created_at' => $r->created_at?->toIso8601String(),
+                        'creator' => $r->creator ? [
+                            'id' => $r->creator->id,
+                            'name' => $r->creator->name,
+                            'email' => $r->creator->email,
+                        ] : null,
+                    ];
+                })->all(),
                 'created_at' => $issue->created_at?->toIso8601String(),
                 'updated_at' => $issue->updated_at?->toIso8601String(),
             ],

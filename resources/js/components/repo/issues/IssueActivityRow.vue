@@ -259,6 +259,39 @@ const userName = computed(() => payloadString('user_name'));
                 <span> unarchived the issue</span>
             </template>
 
+            <template v-else-if="activity.kind === 'resource_added'">
+                <span>
+                    {{
+                        payloadString('resource_type') === 'link'
+                            ? ' added link '
+                            : ' uploaded '
+                    }}
+                </span>
+                <a
+                    v-if="payloadString('resource_url')"
+                    :href="payloadString('resource_url')"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-foreground hover:underline"
+                    >{{ payloadString('resource_name') ?? '—' }}</a
+                >
+                <span v-else class="text-foreground">{{
+                    payloadString('resource_name') ?? '—'
+                }}</span>
+            </template>
+            <template v-else-if="activity.kind === 'resource_removed'">
+                <span>
+                    {{
+                        payloadString('resource_type') === 'link'
+                            ? ' removed link '
+                            : ' removed file '
+                    }}
+                </span>
+                <span class="text-foreground">{{
+                    payloadString('resource_name') ?? '—'
+                }}</span>
+            </template>
+
             <template v-else-if="activity.kind === 'branch_linked'">
                 <span> linked branch </span>
                 <span class="font-mono text-foreground">{{

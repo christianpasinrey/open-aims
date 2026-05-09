@@ -118,6 +118,11 @@ class Issue extends Model
         return $this->hasMany(Attachment::class);
     }
 
+    public function resources(): HasMany
+    {
+        return $this->hasMany(IssueResource::class)->latest();
+    }
+
     public function identifier(): string
     {
         $team = $this->team()->first();
