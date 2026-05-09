@@ -21,6 +21,12 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::post('gh/reconcile', [GithubAppController::class, 'reconcile'])
         ->name('github-app.reconcile');
 
-    Route::get('settings/github', [GithubIntegrationSettingsController::class, 'show'])
+    // GitHub integration belongs under workspace settings, not the
+    // user-profile settings (it's a workspace-scoped resource).
+    Route::get('workspace/github', [GithubIntegrationSettingsController::class, 'show'])
+        ->name('workspace.github');
+
+    // Back-compat: old links still redirect to the new home.
+    Route::redirect('settings/github', '/workspace/github')
         ->name('settings.github');
 });

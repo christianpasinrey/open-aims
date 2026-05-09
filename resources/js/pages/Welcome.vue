@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowRight } from 'lucide-vue-next';
+import { ArrowRight, Github } from 'lucide-vue-next';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 </script>
@@ -33,7 +33,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
                 class="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[12px] text-muted-foreground"
             >
                 <span class="size-1.5 rounded-full bg-brand"></span>
-                Issue tracking, redesigned for speed
+                IMS &middot; AIMS &middot; Advanced Issue Management System
             </span>
 
             <h1
@@ -45,9 +45,9 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
             <p
                 class="mt-4 max-w-xl text-[15px] text-balance text-muted-foreground"
             >
-                AIMS is a fast, opinionated workspace for tracking
-                issues, projects, and cycles &mdash; built for teams that move
-                quickly and care about craft.
+                An advanced issue management system for teams that move quickly
+                and care about craft &mdash; issues, projects, cycles, and your
+                repository, in one workspace.
             </p>
 
             <div class="mt-9 flex items-center gap-3">
@@ -59,19 +59,22 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
                     <ArrowRight class="size-3.5" />
                 </Link>
                 <a
-                    href="https://the app"
-                    target="_blank"
-                    rel="noreferrer"
-                    class="rounded-md px-4 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    >Inspired by repo &rarr;</a
+                    :href="'/gh/redirect'"
+                    class="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-accent"
                 >
+                    <Github class="size-3.5" />
+                    Continue with GitHub
+                </a>
             </div>
         </section>
 
         <footer
             class="flex items-center justify-between px-6 py-5 text-[12px] text-muted-foreground sm:px-10"
         >
-            <span>&copy; {{ new Date().getFullYear() }} AIMS</span>
+            <span
+                >&copy; {{ new Date().getFullYear() }} AIMS &middot;
+                AIMS</span
+            >
             <span>Built with Laravel &middot; Inertia &middot; Vue</span>
         </footer>
     </main>

@@ -20,6 +20,7 @@ const props = defineProps<{ ws: Workspace | null }>();
 const sidebarNavItems = [
     { title: 'General', href: '/workspace/settings' },
     { title: 'Members', href: '/workspace/members' },
+    { title: 'GitHub', href: '/workspace/github' },
 ];
 
 const name = ref<string>(props.ws?.name ?? '');

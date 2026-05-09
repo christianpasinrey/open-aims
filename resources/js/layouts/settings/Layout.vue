@@ -10,6 +10,9 @@ import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
 
+// GitHub workspace integration lives under /workspace/github, not here.
+// The user profile only carries personal GitHub account linking, which is
+// embedded inline on the Profile page.
 const sidebarNavItems: NavItem[] = [
     {
         title: 'Profile',
@@ -22,10 +25,6 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Appearance',
         href: editAppearance(),
-    },
-    {
-        title: 'GitHub',
-        href: '/settings/github',
     },
 ];
 

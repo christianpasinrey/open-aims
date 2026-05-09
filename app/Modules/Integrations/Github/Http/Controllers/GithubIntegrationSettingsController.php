@@ -81,7 +81,7 @@ final class GithubIntegrationSettingsController
             'issue' => $issueMap[$pr->issue_id] ?? null,
         ])->all();
 
-        return Inertia::render('settings/GithubIntegration', [
+        return Inertia::render('workspace/Github', [
             'configured' => $this->github->isConfigured(),
             'installUrl' => $this->github->installUrl($workspace->slug),
             'appName' => $this->github->appName(),
