@@ -51,6 +51,9 @@ return [
         'client_id' => env('GITHUB_APP_CLIENT_ID'),
         'client_secret' => env('GITHUB_APP_CLIENT_SECRET'),
         'webhook_secret' => env('GITHUB_APP_WEBHOOK_SECRET'),
+        // Inline PEM (preferred for hosted deploys where you don't want
+        // a file on disk). When set, takes precedence over the path.
+        'private_key' => env('GITHUB_APP_PRIVATE_KEY'),
         'private_key_path' => env('GITHUB_APP_PRIVATE_KEY_PATH', 'storage/keys/github-app.pem'),
         'install_url' => env('GITHUB_APP_INSTALL_URL'),
 

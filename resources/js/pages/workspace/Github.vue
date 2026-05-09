@@ -205,18 +205,37 @@ function fmtDate(iso: string | null): string {
                             v-if="!configured"
                             class="rounded-md border border-dashed border-border bg-muted/30 px-4 py-3 text-[12.5px] text-muted-foreground"
                         >
-                            Set
-                            <code class="font-mono">GITHUB_APP_ID</code>,
-                            <code class="font-mono">GITHUB_APP_NAME</code>,
-                            <code class="font-mono"
-                                >GITHUB_APP_WEBHOOK_SECRET</code
-                            >
-                            and place the App's
-                            <code class="font-mono">.pem</code> at
-                            <code class="font-mono"
-                                >storage/keys/github-app.pem</code
-                            >
-                            to enable installation.
+                            <p>
+                                Set
+                                <code class="font-mono">GITHUB_APP_ID</code>,
+                                <code class="font-mono">GITHUB_APP_NAME</code>
+                                and
+                                <code class="font-mono"
+                                    >GITHUB_APP_WEBHOOK_SECRET</code
+                                >, plus the App's private key one of two
+                                ways:
+                            </p>
+                            <ul class="ml-4 mt-1.5 list-disc space-y-0.5">
+                                <li>
+                                    inline as
+                                    <code class="font-mono"
+                                        >GITHUB_APP_PRIVATE_KEY</code
+                                    >
+                                    (the full PEM, newlines preserved or
+                                    escaped as
+                                    <code class="font-mono">\n</code>); or
+                                </li>
+                                <li>
+                                    on disk via
+                                    <code class="font-mono"
+                                        >GITHUB_APP_PRIVATE_KEY_PATH</code
+                                    >
+                                    (defaults to
+                                    <code class="font-mono"
+                                        >storage/keys/github-app.pem</code
+                                    >).
+                                </li>
+                            </ul>
                         </div>
 
                         <div

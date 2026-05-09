@@ -40,21 +40,12 @@ final class GithubAppService
     public function appJwt(): ?string
     {
         $appId = config('services.github_app.app_id');
-        $keyPath = (string) config('services.github_app.private_key_path');
-        if (empty($appId) || $keyPath === '') {
+        if (empty($appId)) {
             return null;
         }
 
-        $absolutePath = str_starts_with($keyPath, '/') || preg_match('/^[A-Za-z]:/', $keyPath) === 1
-            ? $keyPath
-            : base_path($keyPath);
-
-        if (! is_file($absolutePath)) {
-            return null;
-        }
-
-        $privateKey = file_get_contents($absolutePath);
-        if ($privateKey === false || $privateKey === '') {
+        $privateKey = $this->resolvePrivateKey();
+        if ($privateKey === null) {
             return null;
         }
 
@@ -66,6 +57,49 @@ final class GithubAppService
         ];
 
         return JWT::encode($payload, $privateKey, 'RS256');
+    }
+
+    /**
+     * Pull the App's private key from either the inline env var
+     * (GITHUB_APP_PRIVATE_KEY → services.github_app.private_key) or the
+     * configured file path. Inline wins. Returns null when neither is set
+     * or the file is missing.
+     *
+     * Inline values commonly come from .env where literal newlines are
+     * encoded as \n; we normalise both \r\n and \n forms so the JWT
+     * library can parse the PEM regardless.
+     */
+    private function resolvePrivateKey(): ?string
+    {
+        $inline = config('services.github_app.private_key');
+        if (is_string($inline) && trim($inline) !== '') {
+            // .env values lose newlines; if the user pasted "\n" escape
+            // sequences, turn them back into real newlines so the PEM
+            // parses.
+            $pem = str_replace(["\r\n", '\\n'], "\n", $inline);
+
+            return $pem;
+        }
+
+        $keyPath = (string) config('services.github_app.private_key_path');
+        if ($keyPath === '') {
+            return null;
+        }
+
+        $absolutePath = str_starts_with($keyPath, '/') || preg_match('/^[A-Za-z]:/', $keyPath) === 1
+            ? $keyPath
+            : base_path($keyPath);
+
+        if (! is_file($absolutePath)) {
+            return null;
+        }
+
+        $contents = file_get_contents($absolutePath);
+        if ($contents === false || $contents === '') {
+            return null;
+        }
+
+        return $contents;
     }
 
     /**
@@ -344,15 +378,9 @@ final class GithubAppService
         if (empty($appId)) {
             return false;
         }
-        $keyPath = (string) config('services.github_app.private_key_path');
-        if ($keyPath === '') {
-            return false;
-        }
-        $abs = str_starts_with($keyPath, '/') || preg_match('/^[A-Za-z]:/', $keyPath) === 1
-            ? $keyPath
-            : base_path($keyPath);
 
-        return is_file($abs);
+        // Either an inline env PEM or a real file on disk satisfies us.
+        return $this->resolvePrivateKey() !== null;
     }
 
     /**
