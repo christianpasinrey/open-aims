@@ -43,6 +43,45 @@ type RecentPullRequest = {
     issue: { identifier: string; title: string } | null;
 };
 
+type BranchRow = {
+    id: number;
+    name: string;
+    head_sha: string | null;
+    repo_full_name: string | null;
+    last_pusher_login: string | null;
+    last_pushed_at: string | null;
+    html_url: string | null;
+};
+
+type PullRow = {
+    id: number;
+    number: number;
+    title: string;
+    state: 'open' | 'closed' | 'merged' | string;
+    merged: boolean;
+    draft: boolean;
+    head_branch_name: string | null;
+    base_ref: string | null;
+    html_url: string | null;
+    author_login: string | null;
+    opened_at: string | null;
+    closed_at: string | null;
+    merged_at: string | null;
+    repo_full_name: string | null;
+};
+
+type WebhookEventRow = {
+    id: number;
+    event_type: string;
+    action: string | null;
+    repository_full_name: string | null;
+    sender_login: string | null;
+    signature_ok: boolean;
+    processed_at: string | null;
+    processing_error: string | null;
+    received_at: string | null;
+};
+
 defineProps<{
     configured: boolean;
     installUrl: string;
@@ -50,6 +89,9 @@ defineProps<{
     installations: Installation[];
     teams: TeamRow[];
     recentPullRequests: RecentPullRequest[];
+    branches: BranchRow[];
+    pulls: PullRow[];
+    events: WebhookEventRow[];
 }>();
 
 const sidebarNavItems = [
@@ -107,6 +149,42 @@ function fmtDate(iso: string | null): string {
         month: 'short',
         day: 'numeric',
     });
+}
+
+function relativeTime(iso: string | null): string {
+    if (!iso) {
+        return '—';
+    }
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) {
+        return '—';
+    }
+    const diff = Date.now() - then;
+    if (diff < 0) {
+        return 'just now';
+    }
+    const sec = Math.floor(diff / 1000);
+    if (sec < 60) {
+        return sec <= 5 ? 'just now' : `${sec}s ago`;
+    }
+    const min = Math.floor(sec / 60);
+    if (min < 60) {
+        return `${min}m ago`;
+    }
+    const hr = Math.floor(min / 60);
+    if (hr < 24) {
+        return `${hr}h ago`;
+    }
+    const day = Math.floor(hr / 24);
+    if (day < 30) {
+        return `${day}d ago`;
+    }
+    const mo = Math.floor(day / 30);
+    if (mo < 12) {
+        return `${mo}mo ago`;
+    }
+    const yr = Math.floor(day / 365);
+    return `${yr}y ago`;
 }
 </script>
 
@@ -450,6 +528,460 @@ function fmtDate(iso: string | null): string {
                             >
                             env var if present.
                         </p>
+                    </section>
+
+                    <!-- Branches -->
+                    <section class="space-y-3">
+                        <h2 class="text-[13px] font-semibold text-foreground">
+                            Branches
+                        </h2>
+                        <div
+                            v-if="branches.length === 0"
+                            class="rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-[12px] text-muted-foreground"
+                        >
+                            No branches yet — push to a repo this app can see
+                            and they'll show up here.
+                        </div>
+                        <div
+                            v-else
+                            class="overflow-hidden rounded-md border border-border bg-card"
+                        >
+                            <table class="w-full text-[13px]">
+                                <thead>
+                                    <tr
+                                        class="border-b border-border bg-muted/30"
+                                    >
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Branch
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Repository
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            HEAD
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Pusher
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Pushed
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="branch in branches"
+                                        :key="branch.id"
+                                        class="border-b border-border last:border-b-0"
+                                    >
+                                        <td
+                                            class="h-9 max-w-[260px] px-3 py-1.5"
+                                        >
+                                            <a
+                                                v-if="branch.html_url"
+                                                :href="branch.html_url"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="inline-flex items-center gap-1.5 truncate font-mono text-[11.5px] text-foreground hover:underline"
+                                            >
+                                                <span class="truncate">{{
+                                                    branch.name
+                                                }}</span>
+                                                <ExternalLink
+                                                    class="size-3 shrink-0 text-muted-foreground"
+                                                />
+                                            </a>
+                                            <span
+                                                v-else
+                                                class="font-mono text-[11.5px] text-foreground"
+                                                >{{ branch.name }}</span
+                                            >
+                                        </td>
+                                        <td
+                                            class="h-9 max-w-[220px] truncate px-3 py-1.5"
+                                        >
+                                            <span
+                                                v-if="branch.repo_full_name"
+                                                class="truncate font-mono text-[11.5px] text-muted-foreground"
+                                                >{{ branch.repo_full_name }}</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="text-[11.5px] text-muted-foreground"
+                                                >—</span
+                                            >
+                                        </td>
+                                        <td class="h-9 px-3 py-1.5">
+                                            <span
+                                                v-if="branch.head_sha"
+                                                class="font-mono text-[11px] text-muted-foreground"
+                                                >{{ branch.head_sha }}</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="text-[11px] text-muted-foreground"
+                                                >—</span
+                                            >
+                                        </td>
+                                        <td
+                                            class="h-9 px-3 py-1.5 text-[12px] text-muted-foreground"
+                                        >
+                                            {{
+                                                branch.last_pusher_login || '—'
+                                            }}
+                                        </td>
+                                        <td
+                                            class="h-9 px-3 py-1.5 text-[12px] text-muted-foreground"
+                                        >
+                                            {{
+                                                relativeTime(
+                                                    branch.last_pushed_at,
+                                                )
+                                            }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Pull requests -->
+                    <section class="space-y-3">
+                        <h2 class="text-[13px] font-semibold text-foreground">
+                            Pull requests
+                        </h2>
+                        <div
+                            v-if="pulls.length === 0"
+                            class="rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-[12px] text-muted-foreground"
+                        >
+                            No pull requests yet — open a PR on a repo this app
+                            can see and they'll show up here.
+                        </div>
+                        <div
+                            v-else
+                            class="overflow-hidden rounded-md border border-border bg-card"
+                        >
+                            <table class="w-full text-[13px]">
+                                <thead>
+                                    <tr
+                                        class="border-b border-border bg-muted/30"
+                                    >
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            PR
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            State
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Branch
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Repository
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Author
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Opened
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="pr in pulls"
+                                        :key="pr.id"
+                                        class="border-b border-border last:border-b-0"
+                                    >
+                                        <td
+                                            class="h-9 max-w-[280px] px-3 py-1.5"
+                                        >
+                                            <a
+                                                v-if="pr.html_url"
+                                                :href="pr.html_url"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="flex items-center gap-2 truncate text-foreground hover:underline"
+                                            >
+                                                <component
+                                                    :is="
+                                                        pr.merged
+                                                            ? GitMerge
+                                                            : GitPullRequest
+                                                    "
+                                                    class="size-3.5 shrink-0 text-muted-foreground"
+                                                />
+                                                <span
+                                                    class="font-mono text-[11px] text-muted-foreground"
+                                                    >#{{ pr.number }}</span
+                                                >
+                                                <span class="truncate">{{
+                                                    pr.title
+                                                }}</span>
+                                                <ExternalLink
+                                                    class="size-3 shrink-0 text-muted-foreground"
+                                                />
+                                            </a>
+                                            <span
+                                                v-else
+                                                class="flex items-center gap-2 truncate"
+                                            >
+                                                <span
+                                                    class="font-mono text-[11px] text-muted-foreground"
+                                                    >#{{ pr.number }}</span
+                                                >
+                                                <span class="truncate">{{
+                                                    pr.title
+                                                }}</span>
+                                            </span>
+                                        </td>
+                                        <td class="h-9 px-3 py-1.5">
+                                            <span
+                                                v-if="pr.draft"
+                                                class="inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase ring-1 ring-border"
+                                            >
+                                                Draft
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase"
+                                                :class="
+                                                    pillClass(
+                                                        pr.merged
+                                                            ? 'merged'
+                                                            : pr.state,
+                                                    )
+                                                "
+                                            >
+                                                {{
+                                                    pillLabel(
+                                                        pr.merged
+                                                            ? 'merged'
+                                                            : pr.state,
+                                                    )
+                                                }}
+                                            </span>
+                                        </td>
+                                        <td
+                                            class="h-9 max-w-[220px] truncate px-3 py-1.5"
+                                        >
+                                            <span
+                                                class="truncate font-mono text-[11px] text-muted-foreground"
+                                            >
+                                                {{
+                                                    pr.head_branch_name || '—'
+                                                }}
+                                                <span
+                                                    v-if="pr.base_ref"
+                                                    class="text-muted-foreground/70"
+                                                >
+                                                    →
+                                                    {{ pr.base_ref }}
+                                                </span>
+                                            </span>
+                                        </td>
+                                        <td
+                                            class="h-9 max-w-[200px] truncate px-3 py-1.5"
+                                        >
+                                            <span
+                                                v-if="pr.repo_full_name"
+                                                class="truncate font-mono text-[11px] text-muted-foreground"
+                                                >{{ pr.repo_full_name }}</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="text-[11px] text-muted-foreground"
+                                                >—</span
+                                            >
+                                        </td>
+                                        <td
+                                            class="h-9 px-3 py-1.5 text-[12px] text-muted-foreground"
+                                        >
+                                            {{ pr.author_login || '—' }}
+                                        </td>
+                                        <td
+                                            class="h-9 px-3 py-1.5 text-muted-foreground"
+                                        >
+                                            {{ fmtDate(pr.opened_at) }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Recent webhook activity -->
+                    <section class="space-y-3">
+                        <h2 class="text-[13px] font-semibold text-foreground">
+                            Recent webhook activity
+                        </h2>
+                        <div
+                            v-if="events.length === 0"
+                            class="rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-[12px] text-muted-foreground"
+                        >
+                            No webhooks received yet.
+                        </div>
+                        <div
+                            v-else
+                            class="overflow-hidden rounded-md border border-border bg-card"
+                        >
+                            <table class="w-full text-[13px]">
+                                <thead>
+                                    <tr
+                                        class="border-b border-border bg-muted/30"
+                                    >
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Event
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Repository
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Sender
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Signature
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Status
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                                        >
+                                            Received
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="evt in events"
+                                        :key="evt.id"
+                                        class="border-b border-border last:border-b-0"
+                                    >
+                                        <td class="h-9 px-3 py-1.5">
+                                            <span
+                                                class="font-mono text-[11.5px] text-foreground"
+                                                >{{ evt.event_type }}</span
+                                            >
+                                            <span
+                                                v-if="evt.action"
+                                                class="font-mono text-[11px] text-muted-foreground"
+                                            >
+                                                ·
+                                                {{ evt.action }}
+                                            </span>
+                                        </td>
+                                        <td
+                                            class="h-9 max-w-[220px] truncate px-3 py-1.5"
+                                        >
+                                            <span
+                                                v-if="evt.repository_full_name"
+                                                class="truncate font-mono text-[11px] text-muted-foreground"
+                                                >{{
+                                                    evt.repository_full_name
+                                                }}</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="text-[11px] text-muted-foreground"
+                                                >—</span
+                                            >
+                                        </td>
+                                        <td
+                                            class="h-9 px-3 py-1.5 text-[12px] text-muted-foreground"
+                                        >
+                                            {{ evt.sender_login || '—' }}
+                                        </td>
+                                        <td class="h-9 px-3 py-1.5">
+                                            <span
+                                                v-if="evt.signature_ok"
+                                                class="font-mono text-[12px] text-emerald-400"
+                                                aria-label="Signature OK"
+                                                >✓</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="font-mono text-[12px] text-rose-400"
+                                                aria-label="Signature failed"
+                                                >✗</span
+                                            >
+                                        </td>
+                                        <td class="h-9 px-3 py-1.5">
+                                            <div class="flex flex-col leading-tight">
+                                                <span
+                                                    class="text-[11.5px]"
+                                                    :class="
+                                                        evt.processed_at
+                                                            ? 'text-emerald-400'
+                                                            : 'text-amber-400'
+                                                    "
+                                                >
+                                                    {{
+                                                        evt.processed_at
+                                                            ? 'Processed'
+                                                            : 'Pending'
+                                                    }}
+                                                </span>
+                                                <span
+                                                    v-if="
+                                                        evt.processing_error
+                                                    "
+                                                    class="truncate text-[10.5px] text-muted-foreground"
+                                                    :title="
+                                                        evt.processing_error
+                                                    "
+                                                >
+                                                    {{
+                                                        evt.processing_error.slice(
+                                                            0,
+                                                            60,
+                                                        )
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td
+                                            class="h-9 px-3 py-1.5 text-[12px] text-muted-foreground"
+                                        >
+                                            {{
+                                                relativeTime(evt.received_at)
+                                            }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </section>
 
                     <!-- Recent PR activity -->
