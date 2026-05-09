@@ -7,6 +7,7 @@ namespace App\Modules\Integrations\Github;
 use App\Modules\Integrations\Github\Models\GithubInstallation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Verifies a GitHub webhook signature, then dispatches by event type.
@@ -18,6 +19,7 @@ final class GithubWebhookHandler
     public function __construct(
         private readonly GithubAppService $github,
         private readonly LinkPullRequestAction $linkPr,
+        private readonly GithubEventIngester $ingester,
     ) {}
 
     /**
@@ -26,21 +28,39 @@ final class GithubWebhookHandler
     public function handle(Request $request): array
     {
         $event = (string) $request->header('X-GitHub-Event', '');
+        $deliveryId = (string) $request->header('X-GitHub-Delivery', '');
         $signature = (string) $request->header('X-Hub-Signature-256', '');
         $secret = (string) config('services.github_app.webhook_secret', '');
         $body = (string) $request->getContent();
 
-        if (! $this->github->verifyWebhook($signature, $body, $secret)) {
-            return ['handled' => false, 'event' => $event, 'reason' => 'invalid signature'];
+        $signatureOk = $this->github->verifyWebhook($signature, $body, $secret);
+
+        // Synthesise a delivery_id when GitHub doesn't send one (testing,
+        // proxies). Real GitHub deliveries always provide a UUID here.
+        if ($deliveryId === '') {
+            $deliveryId = (string) Str::uuid();
         }
 
         /** @var array<string,mixed> $payload */
         $payload = json_decode($body, true) ?: [];
 
+        // Always persist the delivery, even if the signature fails — that
+        // way we have an audit trail of suspicious traffic. Derivation
+        // only runs on signature_ok.
+        $this->ingester->ingest($deliveryId, $event, $payload, $signatureOk);
+
+        if (! $signatureOk) {
+            return ['handled' => false, 'event' => $event, 'reason' => 'invalid signature'];
+        }
+
+        // Side-effect handlers we still run beyond derivation: lifecycle
+        // mutations on github_installations rows.
         return match ($event) {
             'installation' => $this->handleInstallation($payload),
             'installation_repositories' => $this->handleInstallationRepositories($payload),
             'pull_request' => $this->handlePullRequest($payload),
+            'push' => ['handled' => true, 'event' => 'push'],
+            'create', 'delete' => ['handled' => true, 'event' => $event],
             'ping' => ['handled' => true, 'event' => 'ping'],
             default => ['handled' => true, 'event' => $event, 'reason' => 'ignored'],
         };
