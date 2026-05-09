@@ -45,7 +45,7 @@ final class GithubAppController
         $state = (string) $request->query('state', '');
 
         if ($installationId === '') {
-            return redirect('/settings/github')->withErrors([
+            return redirect('/workspace/github')->withErrors([
                 'github_app' => 'GitHub did not return an installation_id.',
             ]);
         }
@@ -58,7 +58,7 @@ final class GithubAppController
             $workspace = $this->currentWorkspace();
         }
         if ($workspace === null) {
-            return redirect('/settings/github')->withErrors([
+            return redirect('/workspace/github')->withErrors([
                 'github_app' => 'No active workspace to attach the installation to.',
             ]);
         }
@@ -89,7 +89,7 @@ final class GithubAppController
             ]);
         }
 
-        return redirect('/settings/github?status='.urlencode($setupAction === 'install' ? 'installed' : 'updated'));
+        return redirect('/workspace/github?status='.urlencode($setupAction === 'install' ? 'installed' : 'updated'));
     }
 
     public function webhook(Request $request): JsonResponse
@@ -110,7 +110,7 @@ final class GithubAppController
     {
         $workspace = $this->currentWorkspace();
         if ($workspace === null) {
-            return redirect('/settings/github')->withErrors([
+            return redirect('/workspace/github')->withErrors([
                 'github_app' => 'No active workspace.',
             ]);
         }
@@ -121,7 +121,7 @@ final class GithubAppController
             ->get();
 
         if ($installations->isEmpty()) {
-            return redirect('/settings/github')->withErrors([
+            return redirect('/workspace/github')->withErrors([
                 'github_app' => 'No active installations for this workspace.',
             ]);
         }
@@ -138,7 +138,7 @@ final class GithubAppController
             }
         }
 
-        return redirect('/settings/github?status=synced&linked='.$linked);
+        return redirect('/workspace/github?status=synced&linked='.$linked);
     }
 
     /**
@@ -151,43 +151,67 @@ final class GithubAppController
     {
         $workspace = $this->currentWorkspace();
         if ($workspace === null) {
-            return redirect('/settings/github')->withErrors([
+            return redirect('/workspace/github')->withErrors([
                 'github_app' => 'No active workspace.',
             ]);
         }
 
         $installations = $this->github->listInstallations();
         if ($installations === null) {
-            return redirect('/settings/github')->withErrors([
+            return redirect('/workspace/github')->withErrors([
                 'github_app' => 'GitHub App is not configured (missing app id or private key).',
             ]);
         }
 
         $attached = 0;
+        $refreshed = 0;
         foreach ($installations as $remote) {
             $remoteId = (int) ($remote['id'] ?? 0);
             if ($remoteId === 0) {
                 continue;
             }
+
+            $login = (string) ($remote['account']['login'] ?? 'unknown');
+            $type = (string) ($remote['account']['type'] ?? 'Organization');
+            $repoSel = (string) ($remote['repository_selection'] ?? 'all');
+
             $existing = GithubInstallation::query()
                 ->where('installation_id', (string) $remoteId)
                 ->first();
             if ($existing !== null) {
+                // Refresh stale metadata (e.g. installations adopted before
+                // the App's private key was available, so they got stuck
+                // with 'unknown' / defaults).
+                $updates = [];
+                if ($existing->account_login !== $login) {
+                    $updates['account_login'] = $login;
+                }
+                if ($existing->account_type !== $type) {
+                    $updates['account_type'] = $type;
+                }
+                if ($existing->repository_selection !== $repoSel) {
+                    $updates['repository_selection'] = $repoSel;
+                }
+                if ($updates !== []) {
+                    $existing->forceFill($updates)->save();
+                    $refreshed++;
+                }
+
                 continue;
             }
 
             GithubInstallation::create([
                 'workspace_id' => $workspace->id,
                 'installation_id' => (string) $remoteId,
-                'account_login' => (string) ($remote['account']['login'] ?? 'unknown'),
-                'account_type' => (string) ($remote['account']['type'] ?? 'Organization'),
-                'repository_selection' => (string) ($remote['repository_selection'] ?? 'all'),
+                'account_login' => $login,
+                'account_type' => $type,
+                'repository_selection' => $repoSel,
                 'suspended_at' => null,
             ]);
             $attached++;
         }
 
-        return redirect('/settings/github?status=reconciled&attached='.$attached);
+        return redirect('/workspace/github?status=reconciled&attached='.$attached.'&refreshed='.$refreshed);
     }
 
     /**
@@ -234,9 +258,16 @@ final class GithubAppController
      * Pull every open PR in every repo the installation can see, then
      * run the link action against each. Returns the number of links
      * inserted/updated.
+     *
+     * Also opportunistically refreshes the installation row's metadata
+     * (account_login / type / repository_selection) — useful when the
+     * row was created before the App's private key was available, so
+     * the original metadata fetch failed and got persisted as 'unknown'.
      */
     private function syncInstallation(GithubInstallation $installation): int
     {
+        $this->refreshInstallationMeta($installation);
+
         $repos = $this->github->listRepos((int) $installation->installation_id);
         $linked = 0;
 
@@ -253,6 +284,24 @@ final class GithubAppController
         }
 
         return $linked;
+    }
+
+    private function refreshInstallationMeta(GithubInstallation $installation): void
+    {
+        $meta = $this->fetchInstallationMeta((int) $installation->installation_id);
+        $updates = [];
+        if (is_string($meta['account_login']) && $meta['account_login'] !== '' && $meta['account_login'] !== $installation->account_login) {
+            $updates['account_login'] = $meta['account_login'];
+        }
+        if (is_string($meta['account_type']) && $meta['account_type'] !== '' && $meta['account_type'] !== $installation->account_type) {
+            $updates['account_type'] = $meta['account_type'];
+        }
+        if (is_string($meta['repository_selection']) && $meta['repository_selection'] !== '' && $meta['repository_selection'] !== $installation->repository_selection) {
+            $updates['repository_selection'] = $meta['repository_selection'];
+        }
+        if ($updates !== []) {
+            $installation->forceFill($updates)->save();
+        }
     }
 
     private function currentWorkspace(): ?Workspace
