@@ -7,6 +7,7 @@ namespace App\Modules\Projects\Mcp\Tools;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectResource;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
@@ -17,10 +18,13 @@ use Laravel\Mcp\Server\Tool;
 
 #[Description(
     'List projects in the workspace. Optional filters: team key (only '
-    .'projects linked to that team), status, lead ("me"|user_id|email).'
+    .'projects linked to that team), status, lead ("me"|user_id|email). '
+    .'Each project includes a `plan` summary (or null) so callers can tell '
+    .'at a glance which projects have a plan attached.'
 )]
 class ProjectsList extends Tool
 {
+    use AttachesProjectPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -73,9 +77,21 @@ class ProjectsList extends Tool
         $limit = (int) ($data['limit'] ?? 50);
         $projects = $query->orderBy('name')->limit($limit)->get();
 
+        // Preload the latest plan per project to avoid N+1 lookups.
+        $latestPlans = ProjectResource::query()
+            ->whereIn('project_id', $projects->pluck('id'))
+            ->where('is_plan', true)
+            ->orderBy('project_id')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->with('media')
+            ->get()
+            ->groupBy('project_id')
+            ->map(fn ($group) => $group->first());
+
         return Response::json([
             'count' => $projects->count(),
-            'projects' => $projects->map(function (Project $p) {
+            'projects' => $projects->map(function (Project $p) use ($latestPlans) {
                 $total = (int) $p->total_issues;
                 $completed = (int) $p->completed_issues;
                 $percent = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
@@ -90,6 +106,7 @@ class ProjectsList extends Tool
                     'completed_issues' => $completed,
                     'progress_percent' => $percent,
                     'target_date' => $p->target_date?->toDateString(),
+                    'plan' => $this->planSummary($latestPlans->get($p->id)),
                     'url' => '/projects/'.$p->slug,
                 ];
             })->all(),

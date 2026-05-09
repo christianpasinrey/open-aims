@@ -19,10 +19,16 @@ use Laravel\Mcp\Server\Tool;
 
 #[Description(
     'Create a new project. Attaches to one or more teams via `team_keys`. '
-    .'Auto-generates a unique slug from the name.'
+    .'Auto-generates a unique slug from the name. '
+    .'Always attach a plan unless skip_plan is true. Plans live with the project, not in the codebase. '
+    .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html"). '
+    .'The plan is stored as a project resource and rendered inline on the project page; '
+    .'future MCP read calls (projects.get) return the full plan body so later sessions '
+    .'can pick up the work without scanning the repo.'
 )]
 class ProjectsCreate extends Tool
 {
+    use AttachesProjectPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -44,7 +50,22 @@ class ProjectsCreate extends Tool
             'icon' => 'nullable|string|max:64',
             'start_date' => 'nullable|date',
             'target_date' => 'nullable|date',
+            'plan_content' => 'nullable|string',
+            'plan_format' => 'nullable|string|in:md,html',
+            'skip_plan' => 'nullable|boolean',
         ])->validate();
+
+        $skipPlan = (bool) ($data['skip_plan'] ?? false);
+        $planContent = isset($data['plan_content']) && is_string($data['plan_content'])
+            ? $data['plan_content']
+            : null;
+        $planFormat = $data['plan_format'] ?? 'md';
+
+        if (! $skipPlan && ($planContent === null || $planContent === '')) {
+            return Response::error(
+                'Plan is required. Pass plan_content (markdown or HTML) or skip_plan=true.'
+            );
+        }
 
         $teams = Team::query()
             ->where('workspace_id', $workspace->id)
@@ -85,10 +106,22 @@ class ProjectsCreate extends Tool
             return $project;
         });
 
+        $planSummary = null;
+        if ($planContent !== null && $planContent !== '') {
+            $planResource = $this->attachPlanToProject(
+                $project,
+                $planContent,
+                $planFormat,
+                $user?->getAuthIdentifier() !== null ? (int) $user->getAuthIdentifier() : null,
+            );
+            $planSummary = $this->planSummary($planResource);
+        }
+
         return Response::json([
             'slug' => $project->slug,
             'name' => $project->name,
             'url' => '/projects/'.$project->slug,
+            'plan' => $planSummary,
         ]);
     }
 
@@ -117,6 +150,12 @@ class ProjectsCreate extends Tool
             'icon' => $schema->string()->description('Emoji shortcode like ":rocket:".'),
             'start_date' => $schema->string(),
             'target_date' => $schema->string(),
+            'plan_content' => $schema->string()->description(
+                'Full plan body. Markdown or HTML depending on plan_format. '
+                .'Required unless skip_plan=true.'
+            ),
+            'plan_format' => $schema->string()->description('"md" (default) or "html". Required if plan_content is set.'),
+            'skip_plan' => $schema->boolean()->description('Set true to bypass the plan requirement (default false).'),
             'workspace_slug' => $schema->string(),
         ];
     }
