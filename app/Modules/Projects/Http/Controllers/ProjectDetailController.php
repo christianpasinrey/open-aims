@@ -18,6 +18,7 @@ use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -362,17 +363,17 @@ final class ProjectDetailController
      */
     private function loadPolymorphicLinks(Project $project): array
     {
-        /** @var \Illuminate\Support\Collection<int,GithubLink> $links */
+        /** @var Collection<int,GithubLink> $links */
         $links = $project->githubLinks()->orderByDesc('created_at')->get();
 
         $branchIds = $links->where('source_type', 'branch')->pluck('source_id')->all();
         $prIds = $links->where('source_type', 'pull_request')->pluck('source_id')->all();
 
-        /** @var \Illuminate\Support\Collection<int,GithubBranch> $branches */
+        /** @var Collection<int,GithubBranch> $branches */
         $branches = $branchIds === []
             ? collect()
             : GithubBranch::query()->with('repo:id,full_name')->whereIn('id', $branchIds)->get()->keyBy('id');
-        /** @var \Illuminate\Support\Collection<int,GithubPullRequest> $prs */
+        /** @var Collection<int,GithubPullRequest> $prs */
         $prs = $prIds === []
             ? collect()
             : GithubPullRequest::query()->whereIn('id', $prIds)->get()->keyBy('id');
@@ -448,7 +449,7 @@ final class ProjectDetailController
             return [];
         }
 
-        /** @var \Illuminate\Support\Collection<int,GithubBranch> $branches */
+        /** @var Collection<int,GithubBranch> $branches */
         $branches = GithubBranch::query()
             ->with('repo:id,full_name')
             ->whereHas('repo', static function ($q) use ($installationIds): void {
@@ -458,7 +459,7 @@ final class ProjectDetailController
             ->limit(100)
             ->get();
 
-        /** @var \Illuminate\Support\Collection<int,GithubPullRequest> $prs */
+        /** @var Collection<int,GithubPullRequest> $prs */
         $prs = GithubPullRequest::query()
             ->with('repo:id,full_name')
             ->whereHas('repo', static function ($q) use ($installationIds): void {
