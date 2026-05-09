@@ -105,6 +105,7 @@ type Issue = {
     resources: Array<{
         id: number;
         type: 'file' | 'link';
+        is_plan: boolean;
         name: string;
         url: string | null;
         mime_type: string | null;
@@ -112,6 +113,18 @@ type Issue = {
         created_at: string | null;
         creator: { id: number; name: string; email: string } | null;
     }>;
+    latest_plan:
+        | {
+              id: number;
+              format: 'md' | 'html';
+              name: string;
+              url: string | null;
+              content_preview: string;
+              uploaded_at: string | null;
+          }
+        | null;
+    latest_plan_content: string | null;
+    plan_too_large: boolean;
     completed_at?: string | null;
     canceled_at?: string | null;
     created_at: string | null;
@@ -389,6 +402,56 @@ const isOverdue = computed<boolean>(() => {
 const resourceFileInput = ref<HTMLInputElement | null>(null);
 const resourceUploading = ref<boolean>(false);
 
+// Plan resources are rendered in their own section above Activity, so
+// hide them from the generic Resources list to avoid double-display.
+const nonPlanResources = computed(() =>
+    (props.issue.resources ?? []).filter((r) => !r.is_plan),
+);
+
+const planFormat = computed<'md' | 'html'>(
+    () => props.issue.latest_plan?.format ?? 'md',
+);
+const planUploadedLabel = computed<string | null>(() => {
+    const at = props.issue.latest_plan?.uploaded_at;
+    if (!at) {
+        return null;
+    }
+    try {
+        return new Date(at).toLocaleString();
+    } catch {
+        return at;
+    }
+});
+const planHtmlSrcdoc = computed<string>(() => {
+    if (
+        props.issue.latest_plan?.format !== 'html' ||
+        !props.issue.latest_plan_content
+    ) {
+        return '';
+    }
+    // Wrap user HTML in a minimal scaffold so links open in a new tab and
+    // the body inherits a sane base style. The iframe is sandboxed with no
+    // allow-* flags — no JS, no same-origin, no top navigation, no forms.
+    const body = props.issue.latest_plan_content;
+    return [
+        '<!doctype html>',
+        '<html><head><meta charset="utf-8">',
+        '<base target="_blank">',
+        '<style>',
+        'html,body{margin:0;padding:12px 14px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:13px;line-height:1.55;color:#0f172a;background:transparent;}',
+        '@media (prefers-color-scheme: dark){html,body{color:#e2e8f0;}}',
+        'h1,h2,h3,h4{font-weight:600;line-height:1.3;}',
+        'pre,code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;}',
+        'pre{padding:8px;border-radius:6px;background:rgba(127,127,127,0.12);overflow-x:auto;}',
+        'img{max-width:100%;height:auto;}',
+        'a{color:#6366f1;text-decoration:underline;}',
+        '</style>',
+        '</head><body>',
+        body,
+        '</body></html>',
+    ].join('');
+});
+
 function pickFile() {
     resourceFileInput.value?.click();
 }
@@ -589,6 +652,100 @@ function fmtBytes(bytes: number | null): string {
                             :description="issue.description"
                         />
                     </div>
+
+                    <!-- Plan (uploaded by Claude via MCP) -->
+                    <section class="mt-10">
+                        <div
+                            class="mb-3 flex items-center justify-between gap-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            <span>Plan</span>
+                            <span
+                                v-if="issue.latest_plan"
+                                class="inline-flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 text-[10px] tracking-normal text-muted-foreground normal-case"
+                                :title="
+                                    planUploadedLabel
+                                        ? `Uploaded ${planUploadedLabel}`
+                                        : undefined
+                                "
+                            >
+                                {{ planFormat === 'html' ? 'HTML' : 'Markdown' }}
+                            </span>
+                        </div>
+
+                        <div
+                            v-if="!issue.latest_plan"
+                            class="rounded-md border border-dashed border-border px-3 py-3 text-[12.5px] text-muted-foreground"
+                        >
+                            No plan attached yet. Plans are uploaded by Claude
+                            through MCP.
+                        </div>
+
+                        <div
+                            v-else
+                            class="overflow-hidden rounded-md border border-border bg-card"
+                        >
+                            <div
+                                class="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-[12px] text-muted-foreground"
+                            >
+                                <span class="inline-flex items-center gap-1.5">
+                                    <FileIcon class="size-3.5" />
+                                    <span class="truncate">{{
+                                        issue.latest_plan.name
+                                    }}</span>
+                                </span>
+                                <a
+                                    v-if="issue.latest_plan.url"
+                                    :href="issue.latest_plan.url"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="text-[11.5px] hover:text-foreground hover:underline"
+                                >
+                                    Download
+                                </a>
+                            </div>
+
+                            <div
+                                v-if="issue.plan_too_large"
+                                class="px-3 py-3 text-[12.5px] text-muted-foreground"
+                            >
+                                Plan is too large to render inline — download
+                                the file to read it.
+                            </div>
+
+                            <MarkdownContent
+                                v-else-if="
+                                    planFormat === 'md' &&
+                                    issue.latest_plan_content
+                                "
+                                :source="issue.latest_plan_content"
+                                :interactive-tasks="false"
+                                class="px-3 py-2"
+                            />
+
+                            <iframe
+                                v-else-if="
+                                    planFormat === 'html' &&
+                                    issue.latest_plan_content
+                                "
+                                :srcdoc="planHtmlSrcdoc"
+                                sandbox=""
+                                title="Issue plan"
+                                class="block w-full border-0"
+                                style="
+                                    min-height: 400px;
+                                    max-height: 800px;
+                                    height: 520px;
+                                "
+                            />
+
+                            <div
+                                v-else
+                                class="px-3 py-3 text-[12.5px] text-muted-foreground"
+                            >
+                                Plan content unavailable.
+                            </div>
+                        </div>
+                    </section>
 
                     <section class="mt-10">
                         <h2
@@ -798,11 +955,11 @@ function fmtBytes(bytes: number | null): string {
                                 @change="onResourceFile"
                             />
                             <ul
-                                v-if="issue.resources?.length"
+                                v-if="nonPlanResources.length"
                                 class="mb-2 divide-y divide-border rounded-md border border-border"
                             >
                                 <li
-                                    v-for="r in issue.resources"
+                                    v-for="r in nonPlanResources"
                                     :key="r.id"
                                     class="group grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 px-2.5 py-1.5"
                                 >

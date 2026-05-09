@@ -6,6 +6,7 @@ namespace App\Modules\Issues\Mcp\Tools;
 
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Models\IssueResource;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
@@ -17,10 +18,13 @@ use Laravel\Mcp\Server\Tool;
 #[Description(
     'List issues in the active workspace with rich filtering. Returns at '
     .'most `limit` items, ordered by priority then last update. Use '
-    .'`team` to scope to a single team (e.g. "LAM"); omit for all teams.'
+    .'`team` to scope to a single team (e.g. "LAM"); omit for all teams. '
+    .'Each issue includes a `plan` summary (or null) so callers can tell '
+    .'at a glance which issues have a plan attached.'
 )]
 class IssuesList extends Tool
 {
+    use AttachesIssuePlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -107,6 +111,18 @@ class IssuesList extends Tool
             ->limit($limit)
             ->get();
 
+        // Preload the latest plan per issue to avoid N+1 lookups.
+        $latestPlans = IssueResource::query()
+            ->whereIn('issue_id', $issues->pluck('id'))
+            ->where('is_plan', true)
+            ->orderBy('issue_id')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->with('media')
+            ->get()
+            ->groupBy('issue_id')
+            ->map(fn ($group) => $group->first());
+
         return Response::json([
             'count' => $issues->count(),
             'issues' => $issues->map(fn (Issue $i) => [
@@ -119,6 +135,7 @@ class IssuesList extends Tool
                 'project' => $i->project?->name,
                 'labels' => $i->labels->pluck('name')->all(),
                 'updated_at' => $i->updated_at?->toIso8601String(),
+                'plan' => $this->planSummary($latestPlans->get($i->id)),
                 'url' => '/issues/'.$i->team->key.'-'.$i->number,
             ])->all(),
         ]);
