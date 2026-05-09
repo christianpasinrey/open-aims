@@ -8,9 +8,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -103,10 +101,14 @@ final class GithubOAuthController
             return redirect('/settings/profile')->with('status', 'github-linked');
         }
 
-        // Sign-in / sign-up flow.
+        // Sign-in only — never auto-create accounts. A workspace owner
+        // must invite the user (creating their User row) before they can
+        // log in with GitHub.
         $user = User::query()->where('github_id', $githubId)->first();
 
         if ($user === null && $email !== null) {
+            // Existing user with the same email but no GitHub link yet:
+            // adopt the link on first sign-in. We do NOT create new users.
             $user = User::query()->where('email', $email)->first();
             if ($user !== null) {
                 $user->forceFill([
@@ -118,15 +120,9 @@ final class GithubOAuthController
         }
 
         if ($user === null) {
-            $user = User::create([
-                'name' => $name,
-                'email' => $email ?? "gh-{$githubId}@users.noreply.github.com",
-                'password' => Hash::make(Str::random(40)),
-                'github_id' => $githubId,
-                'github_login' => $login,
-                'github_avatar_url' => $avatar,
+            return redirect('/login')->withErrors([
+                'github' => "No account in this workspace matches GitHub user @{$login}. Ask an admin to invite you first.",
             ]);
-            $user->forceFill(['email_verified_at' => now()])->save();
         }
 
         Auth::login($user, remember: true);
