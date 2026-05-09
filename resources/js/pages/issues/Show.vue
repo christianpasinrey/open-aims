@@ -1,15 +1,39 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     ChevronDown,
     ChevronRight,
+    File as FileIcon,
+    Link as LinkIcon,
+    Loader2,
     PanelRightClose,
     PanelRightOpen,
+    Paperclip,
+    Plus,
     Star,
+    Upload,
+    X,
 } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { useFavourites } from '@/composables/useFavourites';
 
 import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
@@ -76,6 +100,16 @@ type Issue = {
         priority: number;
         state: { name: string; type: string; color: string } | null;
         assignee: { id: number; name: string } | null;
+    }>;
+    resources: Array<{
+        id: number;
+        type: 'file' | 'link';
+        name: string;
+        url: string | null;
+        mime_type: string | null;
+        size: number | null;
+        created_at: string | null;
+        creator: { id: number; name: string; email: string } | null;
     }>;
     completed_at?: string | null;
     canceled_at?: string | null;
@@ -230,6 +264,7 @@ const sectionCollapsed = ref<Record<string, boolean>>({
     properties: false,
     labels: false,
     project: false,
+    resources: false,
     relations: false,
 });
 
@@ -237,7 +272,9 @@ function toggleRail() {
     railCollapsed.value = !railCollapsed.value;
     persistRailState();
 }
-function toggleSection(key: 'properties' | 'labels' | 'project' | 'relations') {
+function toggleSection(
+    key: 'properties' | 'labels' | 'project' | 'resources' | 'relations',
+) {
     sectionCollapsed.value = {
         ...sectionCollapsed.value,
         [key]: !sectionCollapsed.value[key],
@@ -305,6 +342,115 @@ const isOverdue = computed<boolean>(() => {
 
     return target < today && !completed;
 });
+
+// =================================================================
+// Resources: upload file or attach link
+// =================================================================
+const resourceFileInput = ref<HTMLInputElement | null>(null);
+const resourceUploading = ref<boolean>(false);
+
+function pickFile() {
+    resourceFileInput.value?.click();
+}
+function onResourceFile(e: Event) {
+    const target = e.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    resourceUploading.value = true;
+    router.post(
+        `/issues/${props.issue.identifier}/resources`,
+        {
+            type: 'file',
+            file,
+            name: file.name,
+        },
+        {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: () => {
+                toast.success(`Uploaded "${file.name}"`);
+            },
+            onError: (errors) => {
+                const first = Object.values(errors)[0];
+                toast.error(
+                    (first as string | undefined) ?? 'Could not upload file',
+                );
+            },
+            onFinish: () => {
+                resourceUploading.value = false;
+                if (resourceFileInput.value) {
+                    resourceFileInput.value.value = '';
+                }
+            },
+        },
+    );
+}
+
+const linkDialogOpen = ref<boolean>(false);
+const linkForm = ref<{ name: string; url: string }>({ name: '', url: '' });
+const linkSubmitting = ref<boolean>(false);
+const linkError = ref<string | null>(null);
+
+function openLinkDialog() {
+    linkForm.value = { name: '', url: '' };
+    linkError.value = null;
+    linkDialogOpen.value = true;
+}
+function submitLink() {
+    const name = linkForm.value.name.trim();
+    const url = linkForm.value.url.trim();
+    if (!name || !url) {
+        linkError.value = 'Name and URL are required.';
+        return;
+    }
+
+    linkSubmitting.value = true;
+    router.post(
+        `/issues/${props.issue.identifier}/resources`,
+        { type: 'link', name, url },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                linkDialogOpen.value = false;
+                toast.success(`Saved "${name}"`);
+            },
+            onError: (errors) => {
+                linkError.value =
+                    (Object.values(errors)[0] as string | undefined) ??
+                    'Could not save link.';
+            },
+            onFinish: () => {
+                linkSubmitting.value = false;
+            },
+        },
+    );
+}
+
+function deleteResource(id: number, name: string) {
+    router.delete(`/issues/${props.issue.identifier}/resources/${id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success(`Removed "${name}"`);
+        },
+    });
+}
+
+function fmtBytes(bytes: number | null): string {
+    if (bytes === null || bytes === undefined) {
+        return '';
+    }
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    const kb = bytes / 1024;
+    if (kb < 1024) {
+        return `${kb.toFixed(1)} KB`;
+    }
+    return `${(kb / 1024).toFixed(1)} MB`;
+}
 </script>
 
 <template>
@@ -581,6 +727,127 @@ const isOverdue = computed<boolean>(() => {
                         </div>
                     </section>
 
+                    <!-- Resources -->
+                    <section
+                        class="rounded-lg border border-border/60 bg-card/40 px-3 py-2.5"
+                    >
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                            :aria-expanded="!sectionCollapsed.resources"
+                            @click="toggleSection('resources')"
+                        >
+                            <span>Resources</span>
+                            <component
+                                :is="
+                                    sectionCollapsed.resources
+                                        ? ChevronRight
+                                        : ChevronDown
+                                "
+                                class="size-3 opacity-60"
+                            />
+                        </button>
+                        <div
+                            v-show="!sectionCollapsed.resources"
+                            class="mt-1.5"
+                        >
+                            <input
+                                ref="resourceFileInput"
+                                type="file"
+                                class="hidden"
+                                @change="onResourceFile"
+                            />
+                            <ul
+                                v-if="issue.resources?.length"
+                                class="mb-2 divide-y divide-border rounded-md border border-border"
+                            >
+                                <li
+                                    v-for="r in issue.resources"
+                                    :key="r.id"
+                                    class="group grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 px-2.5 py-1.5"
+                                >
+                                    <component
+                                        :is="
+                                            r.type === 'link'
+                                                ? LinkIcon
+                                                : r.mime_type?.startsWith(
+                                                        'image/',
+                                                    )
+                                                  ? Paperclip
+                                                  : FileIcon
+                                        "
+                                        class="size-3.5 text-muted-foreground"
+                                    />
+                                    <a
+                                        v-if="r.url"
+                                        :href="r.url"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="min-w-0 truncate text-[13px] text-foreground hover:underline"
+                                        :title="r.name"
+                                    >
+                                        {{ r.name }}
+                                    </a>
+                                    <span
+                                        v-else
+                                        class="min-w-0 truncate text-[13px] text-muted-foreground"
+                                    >
+                                        {{ r.name }}
+                                    </span>
+                                    <span
+                                        v-if="r.size"
+                                        class="text-[10.5px] text-muted-foreground tabular-nums"
+                                    >
+                                        {{ fmtBytes(r.size) }}
+                                    </span>
+                                    <span v-else></span>
+                                    <button
+                                        type="button"
+                                        class="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-rose-400"
+                                        :aria-label="`Remove ${r.name}`"
+                                        :title="`Remove ${r.name}`"
+                                        @click="deleteResource(r.id, r.name)"
+                                    >
+                                        <X class="size-3.5" />
+                                    </button>
+                                </li>
+                            </ul>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <button
+                                        type="button"
+                                        :disabled="resourceUploading"
+                                        class="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground disabled:opacity-50"
+                                    >
+                                        <Loader2
+                                            v-if="resourceUploading"
+                                            class="size-3.5 animate-spin"
+                                        />
+                                        <Plus v-else class="size-3.5" />
+                                        {{
+                                            resourceUploading
+                                                ? 'Uploading…'
+                                                : 'Add document or link…'
+                                        }}
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    align="start"
+                                    class="w-52"
+                                >
+                                    <DropdownMenuItem @select="pickFile">
+                                        <Upload class="size-3.5" />
+                                        Upload file
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem @select="openLinkDialog">
+                                        <LinkIcon class="size-3.5" />
+                                        Add link
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </section>
+
                     <!-- Relations -->
                     <section
                         v-if="
@@ -678,5 +945,69 @@ const isOverdue = computed<boolean>(() => {
                 </div>
             </aside>
         </div>
+
+        <!-- Add link dialog -->
+        <Dialog v-model:open="linkDialogOpen">
+            <DialogContent class="sm:max-w-[460px]">
+                <DialogHeader>
+                    <DialogTitle>Add link</DialogTitle>
+                    <DialogDescription>
+                        Save an external URL alongside this issue.
+                    </DialogDescription>
+                </DialogHeader>
+                <form class="space-y-4" @submit.prevent="submitLink">
+                    <div class="space-y-1">
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="issue-link-name"
+                            >Name</label
+                        >
+                        <Input
+                            id="issue-link-name"
+                            v-model="linkForm.name"
+                            type="text"
+                            placeholder="e.g. Design spec"
+                            class="h-8 text-[13px]"
+                            autofocus
+                        />
+                    </div>
+                    <div class="space-y-1">
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="issue-link-url"
+                            >URL</label
+                        >
+                        <Input
+                            id="issue-link-url"
+                            v-model="linkForm.url"
+                            type="url"
+                            placeholder="https://…"
+                            class="h-8 text-[13px]"
+                        />
+                    </div>
+                    <p v-if="linkError" class="text-[12px] text-rose-400">
+                        {{ linkError }}
+                    </p>
+                    <DialogFooter>
+                        <DialogClose
+                            class="rounded-md px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                            Cancel
+                        </DialogClose>
+                        <button
+                            type="submit"
+                            :disabled="linkSubmitting"
+                            class="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background hover:opacity-90 disabled:opacity-50"
+                        >
+                            <Loader2
+                                v-if="linkSubmitting"
+                                class="size-3.5 animate-spin"
+                            />
+                            {{ linkSubmitting ? 'Saving…' : 'Save link' }}
+                        </button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>
