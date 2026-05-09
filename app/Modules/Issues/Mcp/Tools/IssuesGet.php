@@ -7,6 +7,7 @@ namespace App\Modules\Issues\Mcp\Tools;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Models\IssueResource;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
@@ -18,10 +19,14 @@ use Laravel\Mcp\Server\Tool;
 #[Description(
     'Fetch the full detail for a single issue: description (markdown), '
     .'state, priority, assignee, creator, project, cycle, labels, comments, '
-    .'parent and sub-issues. Use the LAM-N identifier.'
+    .'parent and sub-issues. Use the LAM-N identifier. '
+    .'Also returns the latest plan attached to the issue — `plan` (summary) '
+    .'and `plan_full_content` (full markdown/HTML body) so future Claude '
+    .'sessions can read the plan without scanning the codebase.'
 )]
 class IssuesGet extends Tool
 {
+    use AttachesIssuePlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -77,6 +82,14 @@ class IssuesGet extends Tool
             $truncated = true;
         }
 
+        $planResource = IssueResource::query()
+            ->where('issue_id', $issue->id)
+            ->where('is_plan', true)
+            ->latest()
+            ->first();
+        $planSummary = $this->planSummary($planResource);
+        $planFullContent = $this->planFullContent($planResource);
+
         return Response::json([
             'identifier' => $team->key.'-'.$issue->number,
             'title' => $issue->title,
@@ -124,6 +137,8 @@ class IssuesGet extends Tool
             ])->all(),
             'created_at' => $issue->created_at?->toIso8601String(),
             'updated_at' => $issue->updated_at?->toIso8601String(),
+            'plan' => $planSummary,
+            'plan_full_content' => $planFullContent,
             'url' => '/issues/'.$team->key.'-'.$issue->number,
         ]);
     }

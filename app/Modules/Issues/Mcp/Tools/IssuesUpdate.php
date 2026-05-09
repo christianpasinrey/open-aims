@@ -21,10 +21,14 @@ use Laravel\Mcp\Server\Tool;
 
 #[Description(
     'Partial update of an issue. Send only the fields you want to change. '
-    .'State transitions auto-set started_at / completed_at / canceled_at.'
+    .'State transitions auto-set started_at / completed_at / canceled_at. '
+    .'Always attach a plan unless skip_plan is true. Plans live with the issue, not in the codebase. '
+    .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html") to refresh '
+    .'the issue plan; previous plan rows are preserved as history but flagged inactive.'
 )]
 class IssuesUpdate extends Tool
 {
+    use AttachesIssuePlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -48,7 +52,22 @@ class IssuesUpdate extends Tool
             'due_date' => 'sometimes|nullable|date',
             'labels' => 'sometimes|array',
             'labels.*' => 'string|max:64',
+            'plan_content' => 'sometimes|nullable|string',
+            'plan_format' => 'sometimes|nullable|string|in:md,html',
+            'skip_plan' => 'sometimes|nullable|boolean',
         ])->validate();
+
+        $skipPlan = (bool) ($data['skip_plan'] ?? false);
+        $planContent = isset($data['plan_content']) && is_string($data['plan_content'])
+            ? $data['plan_content']
+            : null;
+        $planFormat = $data['plan_format'] ?? 'md';
+
+        if (! $skipPlan && ($planContent === null || $planContent === '')) {
+            return Response::error(
+                'Plan is required. Pass plan_content (markdown or HTML) or skip_plan=true.'
+            );
+        }
 
         [$key, $number] = explode('-', strtoupper($data['identifier']));
         $team = Team::query()
@@ -131,10 +150,22 @@ class IssuesUpdate extends Tool
             $issue->labels()->sync($labelIds);
         }
 
+        $planSummary = null;
+        if ($planContent !== null && $planContent !== '') {
+            $planResource = $this->attachPlanToIssue(
+                $issue,
+                $planContent,
+                $planFormat,
+                $user?->getAuthIdentifier() !== null ? (int) $user->getAuthIdentifier() : null,
+            );
+            $planSummary = $this->planSummary($planResource);
+        }
+
         return Response::json([
             'identifier' => $team->key.'-'.$issue->number,
             'updated_fields' => array_keys($changes) + (array_key_exists('labels', $data) ? ['labels'] : []),
             'url' => '/issues/'.$team->key.'-'.$issue->number,
+            'plan' => $planSummary,
         ]);
     }
 
@@ -168,6 +199,12 @@ class IssuesUpdate extends Tool
             'estimate' => $schema->number(),
             'due_date' => $schema->string()->description('YYYY-MM-DD.'),
             'labels' => $schema->array()->items($schema->string()),
+            'plan_content' => $schema->string()->description(
+                'Full plan body. Markdown or HTML depending on plan_format. '
+                .'Required unless skip_plan=true.'
+            ),
+            'plan_format' => $schema->string()->description('"md" (default) or "html". Required if plan_content is set.'),
+            'skip_plan' => $schema->boolean()->description('Set true to bypass the plan requirement (default false).'),
             'workspace_slug' => $schema->string(),
         ];
     }

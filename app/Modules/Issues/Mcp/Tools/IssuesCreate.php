@@ -24,10 +24,16 @@ use Laravel\Mcp\Server\Tool;
     'Create a new issue in a team. Auto-numbers within the team. The '
     .'creator is the authenticated user. Optional fields: description '
     .'(markdown), priority (0..4), state name, assignee ("me"|user_id|email), '
-    .'project_slug, cycle_number, labels (string[]).'
+    .'project_slug, cycle_number, labels (string[]). '
+    .'Always attach a plan unless skip_plan is true. Plans live with the issue, not in the codebase. '
+    .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html"). '
+    .'The plan is stored as an issue resource and rendered inline on the issue page; '
+    .'future MCP read calls (issues.get) return the full plan body so later sessions '
+    .'can pick up the work without scanning the repo.'
 )]
 class IssuesCreate extends Tool
 {
+    use AttachesIssuePlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -52,7 +58,22 @@ class IssuesCreate extends Tool
             'cycle_number' => 'nullable|integer|min:1',
             'labels' => 'nullable|array',
             'labels.*' => 'string|max:64',
+            'plan_content' => 'nullable|string',
+            'plan_format' => 'nullable|string|in:md,html',
+            'skip_plan' => 'nullable|boolean',
         ])->validate();
+
+        $skipPlan = (bool) ($data['skip_plan'] ?? false);
+        $planContent = isset($data['plan_content']) && is_string($data['plan_content'])
+            ? $data['plan_content']
+            : null;
+        $planFormat = $data['plan_format'] ?? 'md';
+
+        if (! $skipPlan && ($planContent === null || $planContent === '')) {
+            return Response::error(
+                'Plan is required. Pass plan_content (markdown or HTML) or skip_plan=true.'
+            );
+        }
 
         $team = Team::query()
             ->where('workspace_id', $workspace->id)
@@ -123,10 +144,22 @@ class IssuesCreate extends Tool
             }
         }
 
+        $planSummary = null;
+        if ($planContent !== null && $planContent !== '') {
+            $planResource = $this->attachPlanToIssue(
+                $issue,
+                $planContent,
+                $planFormat,
+                $user->getAuthIdentifier() !== null ? (int) $user->getAuthIdentifier() : null,
+            );
+            $planSummary = $this->planSummary($planResource);
+        }
+
         return Response::json([
             'identifier' => $team->key.'-'.$issue->number,
             'title' => $issue->title,
             'url' => '/issues/'.$team->key.'-'.$issue->number,
+            'plan' => $planSummary,
         ]);
     }
 
@@ -158,6 +191,12 @@ class IssuesCreate extends Tool
             'project_slug' => $schema->string()->description('Project slug from projects.list.'),
             'cycle_number' => $schema->integer()->description('Cycle number for this team.'),
             'labels' => $schema->array()->items($schema->string())->description('Label names (must already exist in the team).'),
+            'plan_content' => $schema->string()->description(
+                'Full plan body. Markdown or HTML depending on plan_format. '
+                .'Required unless skip_plan=true.'
+            ),
+            'plan_format' => $schema->string()->description('"md" (default) or "html". Required if plan_content is set.'),
+            'skip_plan' => $schema->boolean()->description('Set true to bypass the plan requirement (default false).'),
             'workspace_slug' => $schema->string()->description('Optional workspace override.'),
         ];
     }

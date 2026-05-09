@@ -22,9 +22,14 @@ class IssueResource extends Model implements HasMedia
     protected $fillable = [
         'issue_id',
         'type',
+        'is_plan',
         'name',
         'url',
         'created_by_user_id',
+    ];
+
+    protected $casts = [
+        'is_plan' => 'bool',
     ];
 
     public function issue(): BelongsTo
