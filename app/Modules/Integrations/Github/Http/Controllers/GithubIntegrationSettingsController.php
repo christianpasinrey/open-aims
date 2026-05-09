@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Integrations\Github\Http\Controllers;
 
 use App\Modules\Integrations\Github\GithubAppService;
+use App\Modules\Integrations\Github\Models\GithubBranch;
 use App\Modules\Integrations\Github\Models\GithubInstallation;
 use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
+use App\Modules\Integrations\Github\Models\GithubPullRequest;
+use App\Modules\Integrations\Github\Models\GithubRepo;
+use App\Modules\Integrations\Github\Models\GithubWebhookEvent;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
@@ -81,6 +85,81 @@ final class GithubIntegrationSettingsController
             'issue' => $issueMap[$pr->issue_id] ?? null,
         ])->all();
 
+        $installationIds = $installations->pluck('id')->all();
+
+        $repoIds = GithubRepo::query()
+            ->whereIn('installation_id', $installationIds)
+            ->pluck('id')
+            ->all();
+
+        $branches = GithubBranch::query()
+            ->whereIn('repo_id', $repoIds)
+            ->with('repo:id,full_name')
+            ->orderByDesc('last_pushed_at')
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get();
+
+        $branchesPayload = $branches->map(static function (GithubBranch $b): array {
+            $repoFullName = $b->repo?->full_name;
+            $htmlUrl = $repoFullName !== null
+                ? 'https://github.com/'.$repoFullName.'/tree/'.rawurlencode((string) $b->name)
+                : null;
+
+            return [
+                'id' => $b->id,
+                'name' => $b->name,
+                'head_sha' => $b->head_sha !== null ? substr((string) $b->head_sha, 0, 8) : null,
+                'repo_full_name' => $repoFullName,
+                'last_pusher_login' => $b->last_pusher_login,
+                'last_pushed_at' => $b->last_pushed_at?->toIso8601String(),
+                'html_url' => $htmlUrl,
+            ];
+        })->all();
+
+        $pulls = GithubPullRequest::query()
+            ->whereIn('repo_id', $repoIds)
+            ->with('repo:id,full_name')
+            ->orderByDesc('opened_at')
+            ->limit(50)
+            ->get();
+
+        $pullsPayload = $pulls->map(static fn (GithubPullRequest $pr): array => [
+            'id' => $pr->id,
+            'number' => $pr->number,
+            'title' => $pr->title,
+            'state' => $pr->state,
+            'merged' => (bool) $pr->merged,
+            'draft' => (bool) $pr->draft,
+            'head_branch_name' => $pr->head_branch_name,
+            'base_ref' => $pr->base_ref,
+            'html_url' => $pr->html_url,
+            'author_login' => $pr->author_login,
+            'opened_at' => $pr->opened_at?->toIso8601String(),
+            'closed_at' => $pr->closed_at?->toIso8601String(),
+            'merged_at' => $pr->merged_at?->toIso8601String(),
+            'repo_full_name' => $pr->repo?->full_name,
+        ])->all();
+
+        $events = GithubWebhookEvent::query()
+            ->whereIn('installation_id', $installationIds)
+            ->orderByDesc('received_at')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+
+        $eventsPayload = $events->map(static fn (GithubWebhookEvent $e): array => [
+            'id' => $e->id,
+            'event_type' => $e->event_type,
+            'action' => $e->action,
+            'repository_full_name' => $e->repository_full_name,
+            'sender_login' => $e->sender_login,
+            'signature_ok' => (bool) $e->signature_ok,
+            'processed_at' => $e->processed_at?->toIso8601String(),
+            'processing_error' => $e->processing_error,
+            'received_at' => $e->received_at?->toIso8601String(),
+        ])->all();
+
         return Inertia::render('workspace/Github', [
             'configured' => $this->github->isConfigured(),
             'installUrl' => $this->github->installUrl($workspace->slug),
@@ -96,6 +175,9 @@ final class GithubIntegrationSettingsController
             ])->all(),
             'teams' => $teamsPayload,
             'recentPullRequests' => $recentPayload,
+            'branches' => $branchesPayload,
+            'pulls' => $pullsPayload,
+            'events' => $eventsPayload,
         ]);
     }
 }
