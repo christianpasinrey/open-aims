@@ -150,7 +150,7 @@ function removeMember(m: Member) {
             </li>
         </ul>
         <div v-else class="flex flex-1 items-center justify-center px-6 py-12">
-            <p class="text-sm text-muted-foreground">No matching members.</p>
+            <p class="text-sm text-muted-foreground">Sin miembros que coincidan.</p>
         </div>
 
         <AddMemberDialog
