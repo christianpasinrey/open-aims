@@ -39,6 +39,9 @@ import AppLogo from '@/components/AppLogo.vue';
 const WorkspaceJoinSearch = defineAsyncComponent(
     () => import('@/components/workspace/WorkspaceJoinSearch.vue'),
 );
+const InvitationsBell = defineAsyncComponent(
+    () => import('@/components/InvitationsBell.vue'),
+);
 import Avatar from '@/components/repo/Avatar.vue';
 import TeamIcon from '@/components/repo/TeamIcon.vue';
 import { Button } from '@/components/ui/button';
@@ -509,6 +512,7 @@ function logout() {
                     </DropdownMenu>
 
                     <div class="ml-auto flex items-center gap-0.5">
+                        <InvitationsBell />
                         <button
                             type="button"
                             class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
