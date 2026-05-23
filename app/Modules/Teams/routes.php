@@ -6,6 +6,7 @@ use App\Modules\Teams\Http\Controllers\LabelPreviewController;
 use App\Modules\Teams\Http\Controllers\LabelWriteController;
 use App\Modules\Teams\Http\Controllers\TeamListController;
 use App\Modules\Teams\Http\Controllers\TeamMemberListController;
+use App\Modules\Teams\Http\Controllers\TeamMemberWriteController;
 use App\Modules\Teams\Http\Controllers\TeamSettingsController;
 use App\Modules\Teams\Http\Controllers\TeamWriteController;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +35,11 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::get('teams/{key}/members', [TeamMemberListController::class, 'index'])
         ->where('key', '[A-Za-z0-9]+')
         ->name('teams.members');
+
+    Route::post('teams/{key}/members', [TeamMemberWriteController::class, 'store'])->name('teams.members.store');
+    Route::delete('teams/{key}/members/{userId}', [TeamMemberWriteController::class, 'destroy'])
+        ->whereNumber('userId')
+        ->name('teams.members.destroy');
 
     Route::get('teams/{key}/settings', [TeamSettingsController::class, 'index'])
         ->where('key', '[A-Za-z0-9]+')

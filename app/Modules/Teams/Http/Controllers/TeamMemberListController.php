@@ -7,6 +7,7 @@ namespace App\Modules\Teams\Http\Controllers;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\TeamMember;
 use App\Modules\Workspaces\Models\Workspace;
+use App\Modules\Workspaces\Models\WorkspaceMember;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -34,6 +35,11 @@ final class TeamMemberListController
             ->with('user:id,name,email')
             ->get();
 
+        $currentRole = WorkspaceMember::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('user_id', request()->user()?->getKey())
+            ->value('role');
+
         return Inertia::render('teams/Members', [
             'team' => [
                 'id' => $team->id,
@@ -41,6 +47,7 @@ final class TeamMemberListController
                 'key' => $team->key,
                 'color' => $team->color,
             ],
+            'currentRole' => $currentRole !== null ? (string) $currentRole : null,
             'members' => $members->map(fn (TeamMember $m): array => [
                 'id' => $m->id,
                 'role' => $m->role,
