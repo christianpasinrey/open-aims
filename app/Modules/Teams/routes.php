@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Teams\Http\Controllers\LabelPreviewController;
 use App\Modules\Teams\Http\Controllers\LabelWriteController;
+use App\Modules\Teams\Http\Controllers\TeamListController;
 use App\Modules\Teams\Http\Controllers\TeamMemberListController;
 use App\Modules\Teams\Http\Controllers\TeamSettingsController;
 use App\Modules\Teams\Http\Controllers\TeamWriteController;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::post('teams', [TeamWriteController::class, 'store'])->name('teams.store');
+
+    Route::get('workspace/teams', [TeamListController::class, 'index'])->name('workspace.teams');
     Route::get('labels/{id}/preview', [LabelPreviewController::class, 'show'])
         ->where('id', '\d+')
         ->name('labels.preview');

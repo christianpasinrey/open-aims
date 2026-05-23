@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Teams\Models;
 
 use App\Core\Concerns\BelongsToWorkspace;
+use App\Modules\Issues\Models\Issue;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -43,5 +44,10 @@ class Team extends Model
     public function labels(): HasMany
     {
         return $this->hasMany(Label::class);
+    }
+
+    public function issues(): HasMany
+    {
+        return $this->hasMany(Issue::class);
     }
 }
