@@ -23,17 +23,15 @@ import {
     UserPlus,
     X,
 } from 'lucide-vue-next';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import GithubLinksPanel from '@/components/repo/github/GithubLinksPanel.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
-import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
-import ProjectActivityRow from '@/components/repo/projects/ProjectActivityRow.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
-import RichEditor from '@/components/repo/RichEditor.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
+
 import {
     Dialog,
     DialogClose,
@@ -43,6 +41,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -169,6 +168,18 @@ type AvailableGithubSource = {
     label: string;
     sublabel: string;
 };
+
+const RichEditor = defineAsyncComponent(
+    () => import('@/components/repo/RichEditor.vue'),
+);
+
+const ProjectActivityRow = defineAsyncComponent(
+    () => import('@/components/repo/projects/ProjectActivityRow.vue'),
+);
+
+const MarkdownContent = defineAsyncComponent(
+    () => import('@/components/repo/MarkdownContent.vue'),
+);
 
 const props = defineProps<{
     project: Project;

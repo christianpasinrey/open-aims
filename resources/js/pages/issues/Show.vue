@@ -15,7 +15,7 @@ import {
     Upload,
     X,
 } from 'lucide-vue-next';
-import { computed, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import {
@@ -40,18 +40,29 @@ import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
 import CyclePicker from '@/components/repo/issues/CyclePicker.vue';
 import DueDatePicker from '@/components/repo/issues/DueDatePicker.vue';
 import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
-import GithubLinksPanel from '@/components/repo/github/GithubLinksPanel.vue';
 import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
 import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
 import IssueActions from '@/components/repo/issues/IssueActions.vue';
 import IssueActivityRow from '@/components/repo/issues/IssueActivityRow.vue';
 import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
-import LinkedPullRequests from '@/components/repo/issues/LinkedPullRequests.vue';
-import MarkdownContent from '@/components/repo/MarkdownContent.vue';
 import PriorityPicker from '@/components/repo/issues/PriorityPicker.vue';
 import ProjectPicker from '@/components/repo/issues/ProjectPicker.vue';
 import StatusPicker from '@/components/repo/issues/StatusPicker.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
+
+// Heavy / non-critical-path components are loaded asynchronously so they stay
+// out of the page's static import graph — and therefore out of Vite's asset
+// preload `Link` header, which otherwise overflows nginx's proxy header buffer
+// and 502s on full page loads (in-app Inertia visits never carry that header).
+const MarkdownContent = defineAsyncComponent(
+    () => import('@/components/repo/MarkdownContent.vue'),
+);
+const GithubLinksPanel = defineAsyncComponent(
+    () => import('@/components/repo/github/GithubLinksPanel.vue'),
+);
+const LinkedPullRequests = defineAsyncComponent(
+    () => import('@/components/repo/issues/LinkedPullRequests.vue'),
+);
 
 type State = {
     id: number;
