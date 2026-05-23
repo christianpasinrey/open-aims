@@ -41,3 +41,21 @@ it('reports an invitation as acceptable only when pending and unexpired', functi
         ->and($expired->isAcceptable())->toBeFalse()
         ->and($accepted->isAcceptable())->toBeFalse();
 });
+
+it('builds an invitation mail with the accept link', function () {
+    $invitation = WorkspaceInvitation::create([
+        'workspace_id' => $this->workspace->id,
+        'email' => 'new@example.com',
+        'role' => 'member',
+        'token' => str_repeat('d', 64),
+        'invited_by_user_id' => $this->user->id,
+        'expires_at' => now()->addDays(3),
+    ]);
+
+    $mail = (new \App\Modules\Workspaces\Notifications\WorkspaceInvitationNotification($invitation, $this->workspace->name, $this->user->name))
+        ->toMail(new \Illuminate\Notifications\AnonymousNotifiable);
+
+    $rendered = $mail->render();
+    expect($rendered)->toContain('/invite/'.str_repeat('d', 64))
+        ->and($rendered)->toContain($this->workspace->name);
+});
