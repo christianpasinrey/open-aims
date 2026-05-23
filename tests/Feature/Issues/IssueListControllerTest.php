@@ -16,19 +16,14 @@ beforeEach(function () {
 });
 
 describe('IssueListController::index', function () {
-    it('renders an empty list when no workspace context exists', function () {
-        // Login a user with no workspace memberships → no current.workspace bound.
+    it('redirects to onboarding when no workspace context exists', function () {
+        // Login a user with no workspace memberships → RequireWorkspace gate redirects.
         app()->forgetInstance('current.workspace');
-        $orphan = User::factory()->create();
+        $orphan = User::factory()->create(['email_verified_at' => now()]);
 
         $response = $this->actingAs($orphan)->get(route('issues.index'));
 
-        $response->assertOk();
-        $response->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('issues/Index')
-            ->where('issues', [])
-            ->where('team', null)
-        );
+        $response->assertRedirect(route('onboarding'));
     });
 
     it('lists every team issue when a team is in scope', function () {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Workspaces\Http\Controllers\InvitationAcceptController;
 use App\Modules\Workspaces\Http\Controllers\InvitationWriteController;
+use App\Modules\Workspaces\Http\Controllers\OnboardingController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceMembersPageController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceSettingsController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceWriteController;
@@ -19,6 +20,8 @@ Route::middleware(['web', 'throttle:10,1'])->group(function (): void {
 });
 
 Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
+    Route::get('onboarding', [OnboardingController::class, 'index'])->name('onboarding');
+
     // Members — single endpoint that returns JSON when `?json=1` or
     // `Accept: application/json`, Inertia page otherwise. The JSON shape
     // is consumed by the assignee picker in the issue right rail.
