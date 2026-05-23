@@ -58,8 +58,8 @@ final class InvitationAcceptController
                     'name' => $data['name'],
                     'email' => $invitation->email,
                     'password' => $data['password'],
-                    'email_verified_at' => now(),
                 ]);
+                $user->forceFill(['email_verified_at' => now()])->save();
                 $this->attachMembership($invitation, (int) $user->getKey());
 
                 return $user;
