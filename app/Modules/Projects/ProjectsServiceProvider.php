@@ -7,6 +7,8 @@ namespace App\Modules\Projects;
 use App\Core\Registries\ModuleRegistry;
 use App\Core\Support\ModuleServiceProvider;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectActivity;
+use App\Modules\Projects\Observers\ProjectActivityTelegramObserver;
 use App\Modules\Projects\Observers\ProjectObserver;
 
 final class ProjectsServiceProvider extends ModuleServiceProvider
@@ -23,5 +25,6 @@ final class ProjectsServiceProvider extends ModuleServiceProvider
         $this->app->make(ModuleRegistry::class)->register(new ProjectsModuleManifest);
 
         Project::observe(ProjectObserver::class);
+        ProjectActivity::observe(ProjectActivityTelegramObserver::class);
     }
 }

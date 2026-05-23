@@ -7,6 +7,8 @@ namespace App\Modules\Issues;
 use App\Core\Registries\ModuleRegistry;
 use App\Core\Support\ModuleServiceProvider;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Models\IssueActivity;
+use App\Modules\Issues\Observers\IssueActivityTelegramObserver;
 use App\Modules\Issues\Observers\IssueObserver;
 
 final class IssuesServiceProvider extends ModuleServiceProvider
@@ -23,5 +25,6 @@ final class IssuesServiceProvider extends ModuleServiceProvider
         $this->app->make(ModuleRegistry::class)->register(new IssuesModuleManifest);
 
         Issue::observe(IssueObserver::class);
+        IssueActivity::observe(IssueActivityTelegramObserver::class);
     }
 }
