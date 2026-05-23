@@ -618,6 +618,18 @@ function logout() {
                     <SidebarMenuItem>
                         <SidebarMenuButton
                             as-child
+                            :is-active="currentPath === '/workspace/teams'"
+                            tooltip="Equipos"
+                        >
+                            <Link :href="'/workspace/teams'">
+                                <Users />
+                                <span>Equipos</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            as-child
                             :is-active="isTrashActive"
                             tooltip="Trash"
                         >
