@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Modules\Workspaces\Models\WorkspaceInvitation;
+use App\Modules\Workspaces\Models\WorkspaceMember;
+use Illuminate\Support\Facades\Auth;
 
 beforeEach(function () {
     $fix = makeWorkspaceFixture();
@@ -25,7 +27,13 @@ function makeInvite(int $workspaceId, int $inviterId, array $overrides = []): Wo
 
 it('shows the accept page for a valid token', function () {
     makeInvite($this->workspace->id, $this->owner->id);
-    $this->get('/invite/'.str_repeat('a', 64))->assertOk();
+    $this->get('/invite/'.str_repeat('a', 64))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('auth/AcceptInvitation')
+            ->where('valid', true)
+            ->where('email', 'invitee@example.com')
+            ->where('workspaceName', $this->workspace->name));
 });
 
 it('shows an invalid state for an expired token', function () {
@@ -38,8 +46,15 @@ it('shows an invalid state for an expired token', function () {
         ->assertInertia(fn ($page) => $page->component('auth/AcceptInvitation')->where('valid', false));
 });
 
-use App\Modules\Workspaces\Models\WorkspaceMember;
-use Illuminate\Support\Facades\Auth;
+it('shows an invalid state for an already-accepted token', function () {
+    makeInvite($this->workspace->id, $this->owner->id, [
+        'token' => str_repeat('h', 64),
+        'accepted_at' => now(),
+    ]);
+    $this->get('/invite/'.str_repeat('h', 64))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('auth/AcceptInvitation')->where('valid', false));
+});
 
 it('creates the account and membership for a new email', function () {
     makeInvite($this->workspace->id, $this->owner->id, ['token' => str_repeat('c', 64)]);

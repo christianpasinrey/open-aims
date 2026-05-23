@@ -77,7 +77,9 @@ final class InvitationAcceptController
             ]);
         }
 
-        $this->attachMembership($invitation, (int) $existing->getKey());
+        DB::transaction(function () use ($invitation, $existing): void {
+            $this->attachMembership($invitation, (int) $existing->getKey());
+        });
         $request->session()->put('current_workspace_id', $invitation->workspace_id);
 
         return redirect()->route('issues.index');
