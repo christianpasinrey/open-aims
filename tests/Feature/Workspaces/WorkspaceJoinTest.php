@@ -41,7 +41,9 @@ function openWorkspace(string $policy): Workspace
 it('joins an open workspace instantly as member', function () {
     $ws = openWorkspace('open');
     $u = User::factory()->create(['email_verified_at' => now()]);
-    $this->actingAs($u)->post("/workspaces/{$ws->slug}/join")->assertRedirect();
+    $this->actingAs($u)->post("/workspaces/{$ws->slug}/join")
+        ->assertRedirect()
+        ->assertSessionHas('current_workspace_id', $ws->id);
     expect(WorkspaceMember::where('workspace_id', $ws->id)->where('user_id', $u->id)->where('role', 'member')->exists())->toBeTrue();
 });
 
@@ -67,6 +69,13 @@ it('is a no-op when already a member', function () {
     $ws = openWorkspace('open');
     $u = User::factory()->create(['email_verified_at' => now()]);
     WorkspaceMember::create(['workspace_id' => $ws->id, 'user_id' => $u->id, 'role' => 'member', 'joined_at' => now()]);
-    $this->actingAs($u)->post("/workspaces/{$ws->slug}/join")->assertRedirect();
+    $this->actingAs($u)->post("/workspaces/{$ws->slug}/join")
+        ->assertRedirect()
+        ->assertSessionHas('current_workspace_id', $ws->id);
     expect(WorkspaceMember::where('workspace_id', $ws->id)->where('user_id', $u->id)->count())->toBe(1);
+});
+
+it('returns 404 for a non-existent workspace slug', function () {
+    $u = User::factory()->create(['email_verified_at' => now()]);
+    $this->actingAs($u)->post('/workspaces/does-not-exist/join')->assertNotFound();
 });

@@ -34,9 +34,9 @@ final class WorkspaceJoinRequestNotification extends Notification implements Sho
                 'meta' => [['label' => 'Solicitante', 'value' => $this->requesterName]],
                 'statusFrom' => null,
                 'statusTo' => null,
-                'actionUrl' => url('/workspace/members'),
+                'actionUrl' => route('workspace.members'),
                 'actionText' => 'Revisar solicitudes',
-                'footnote' => null,
+                'footnote' => 'Recibes este correo porque administras este workspace.',
             ]);
     }
 }
