@@ -37,3 +37,38 @@ it('shows an invalid state for an expired token', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page->component('auth/AcceptInvitation')->where('valid', false));
 });
+
+use App\Modules\Workspaces\Models\WorkspaceMember;
+use Illuminate\Support\Facades\Auth;
+
+it('creates the account and membership for a new email', function () {
+    makeInvite($this->workspace->id, $this->owner->id, ['token' => str_repeat('c', 64)]);
+
+    $this->post('/invite/'.str_repeat('c', 64), [
+        'name' => 'New Person',
+        'password' => 'Sup3r-secret-pw!',
+        'password_confirmation' => 'Sup3r-secret-pw!',
+    ])->assertRedirect(route('issues.index'));
+
+    $user = User::where('email', 'invitee@example.com')->first();
+    expect($user)->not->toBeNull()
+        ->and($user->email_verified_at)->not->toBeNull()
+        ->and(Auth::id())->toBe($user->id);
+    expect(WorkspaceMember::where('workspace_id', $this->workspace->id)->where('user_id', $user->id)->where('role', 'member')->exists())->toBeTrue();
+    expect(WorkspaceInvitation::where('token', str_repeat('c', 64))->first()->accepted_at)->not->toBeNull();
+});
+
+it('rejects a reused (already accepted) token', function () {
+    makeInvite($this->workspace->id, $this->owner->id, [
+        'token' => str_repeat('d', 64),
+        'accepted_at' => now(),
+    ]);
+
+    $this->post('/invite/'.str_repeat('d', 64), [
+        'name' => 'X',
+        'password' => 'Sup3r-secret-pw!',
+        'password_confirmation' => 'Sup3r-secret-pw!',
+    ])->assertRedirect(route('login'));
+
+    expect(User::where('email', 'invitee@example.com')->exists())->toBeFalse();
+});
