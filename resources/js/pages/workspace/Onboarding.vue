@@ -17,9 +17,13 @@ defineOptions({
 const form = useForm<{
     name: string;
     join_policy: 'request' | 'open' | 'private';
+    team_name: string;
+    team_key: string;
 }>({
     name: '',
     join_policy: 'request',
+    team_name: '',
+    team_key: '',
 });
 
 function submit(): void {
@@ -86,6 +90,50 @@ function submit(): void {
                 class="text-[12px] text-destructive"
             >
                 {{ form.errors.join_policy }}
+            </p>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+            <label for="ws-team-name" class="text-[12px] font-medium text-foreground">
+                Nombre del equipo
+            </label>
+            <input
+                id="ws-team-name"
+                v-model="form.team_name"
+                type="text"
+                name="team_name"
+                autocomplete="off"
+                :placeholder="form.name || 'Mi equipo'"
+                class="h-10 w-full rounded-md border border-border bg-card px-3 text-[14px] text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/30 focus:outline-none"
+                :class="{
+                    'border-destructive focus:border-destructive focus:ring-destructive/30':
+                        form.errors.team_name,
+                }"
+            />
+            <p v-if="form.errors.team_name" class="text-[12px] text-destructive">
+                {{ form.errors.team_name }}
+            </p>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+            <label for="ws-team-key" class="text-[12px] font-medium text-foreground">
+                Key del equipo <span class="text-muted-foreground">(opcional)</span>
+            </label>
+            <input
+                id="ws-team-key"
+                v-model="form.team_key"
+                type="text"
+                name="team_key"
+                autocomplete="off"
+                placeholder="EJ: LAM"
+                class="h-10 w-full rounded-md border border-border bg-card px-3 text-[14px] text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/30 focus:outline-none"
+                :class="{
+                    'border-destructive focus:border-destructive focus:ring-destructive/30':
+                        form.errors.team_key,
+                }"
+            />
+            <p v-if="form.errors.team_key" class="text-[12px] text-destructive">
+                {{ form.errors.team_key }}
             </p>
         </div>
 
