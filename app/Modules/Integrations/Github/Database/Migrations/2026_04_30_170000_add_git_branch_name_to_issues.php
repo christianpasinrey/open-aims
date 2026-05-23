@@ -18,7 +18,7 @@ return new class extends Migration
             });
         }
 
-        $this->backfillFromrepo();
+        $this->backfillFromSnapshot();
     }
 
     public function down(): void
@@ -32,13 +32,13 @@ return new class extends Migration
     }
 
     /**
-     * Best-effort backfill: read the bundled repo snapshot and copy
+     * Best-effort backfill: read a bundled repo snapshot and copy
      * `gitBranchName` into the new column for every issue we can match by
      * (team_key, number).
      */
-    private function backfillFromrepo(): void
+    private function backfillFromSnapshot(): void
     {
-        $jsonPath = base_path('database/seed-data/repo/issues.json');
+        $jsonPath = base_path('database/seed-data/example/issues.json');
         if (! is_file($jsonPath)) {
             return;
         }

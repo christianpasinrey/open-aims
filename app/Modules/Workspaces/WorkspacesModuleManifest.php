@@ -47,7 +47,7 @@ final class WorkspacesModuleManifest implements ModuleManifest, ProvidesMcpTools
     public function onboardingSteps(): array
     {
         return [
-            ['title' => 'Create your workspace', 'description' => 'Name your repo-lab space.'],
+            ['title' => 'Create your workspace', 'description' => 'Name your workspace.'],
             ['title' => 'Invite teammates', 'description' => 'Bring the team in by email.'],
         ];
     }

@@ -66,7 +66,7 @@ return [
         // env-overridable per entry. Future: move to a `teams.github_repo_full_name`
         // column.
         'team_repo_map' => [
-            'LAM' => env('GITHUB_APP_REPO_LAM', 'repo-lab/repo'),
+            'LAM' => env('GITHUB_APP_REPO_LAM'),
         ],
     ],
 

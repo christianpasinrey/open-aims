@@ -12,7 +12,7 @@ return new class extends Migration
     {
         Schema::table('teams', function (Blueprint $table): void {
             if (! Schema::hasColumn('teams', 'github_repo_full_name')) {
-                // owner/repo, e.g. "repo-lab/repo"
+                // owner/repo, e.g. "owner/repo"
                 $table->string('github_repo_full_name', 200)->nullable()->after('private');
             }
         });

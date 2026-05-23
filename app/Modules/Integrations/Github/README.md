@@ -11,7 +11,7 @@ The OAuth flow is per-user and only sees what the connected user can see.
 A GitHub App is installed once on a GitHub account (org or user), has its
 own credentials and webhook secret, and is independent of any one user's
 session. That's the right primitive for "watch all PRs in
-`repo-lab/repo` and link them to LAM-* issues".
+`your-org/your-repo` and link them to issues".
 
 ## Architecture
 
@@ -41,8 +41,8 @@ Two strategies, in order:
 
 1. **Exact match against `issues.git_branch_name`.** repo's "copy git
    branch name" feature produces strings like
-   `christianpasinrey/lam-275-phpinsecurehash...` which we backfilled
-   from `database/seed-data/repo/issues.json`.
+   `username/key-123-issue-title...` which can be backfilled
+   from `database/seed-data/{snapshot}/issues.json`.
 2. **Identifier fallback** — parse `[A-Z]+-\d+` from anywhere in the
    branch name and look up by `(team.key, issue.number)`.
 
@@ -53,9 +53,9 @@ A PR matched against multiple issues creates one
 
 1. Go to <https://github.com/settings/apps> (or your org's apps page).
 2. **New GitHub App.** Fill in:
-    - **Name** — e.g. `aims-lab`. This becomes
+    - **Name** — e.g. `your-app-name`. This becomes
       `GITHUB_APP_NAME` and is part of the install URL
-      (`https://github.com/apps/aims-lab/installations/new`).
+      (`https://github.com/apps/your-app-name/installations/new`).
     - **Homepage URL** — your `APP_URL`.
     - **Callback URL** — `${APP_URL}/gh/install/callback`.
     - **Webhook URL** — `${APP_URL}/gh/webhook`.
@@ -69,14 +69,13 @@ A PR matched against multiple issues creates one
       messages)
 4. **Subscribe to events**: `Pull request`, `Installation repositories`.
 5. **Where can this GitHub App be installed?** — pick "Any account" if
-   you'll install it on `repo-lab`, otherwise "Only on this
-   account".
+   you'll install it on a shared org, otherwise "Only on this account".
 6. **Create**, then on the App settings page:
     - Note the **App ID** → `GITHUB_APP_ID`.
     - **Generate a private key** → save the `.pem` to
       `storage/keys/github-app.pem` (path is configurable via
       `GITHUB_APP_PRIVATE_KEY_PATH`). The directory is git-ignored.
-7. **Install the App** on `repo-lab` — pick the `repo` repo
+7. **Install the App** on your-org — pick your-repo
    (or "All repositories"). After install, GitHub redirects back to
    `/gh/install/callback` and we record the installation.
 
@@ -84,11 +83,11 @@ A PR matched against multiple issues creates one
 
 ```dotenv
 GITHUB_APP_ID=123456
-GITHUB_APP_NAME=aims-lab
+GITHUB_APP_NAME=your-app-name
 GITHUB_APP_WEBHOOK_SECRET=<32-byte hex>
 GITHUB_APP_PRIVATE_KEY_PATH=storage/keys/github-app.pem
-GITHUB_APP_INSTALL_URL=https://github.com/apps/aims-lab/installations/new
-GITHUB_APP_REPO_LAM=repo-lab/repo
+GITHUB_APP_INSTALL_URL=https://github.com/apps/your-app-name/installations/new
+GITHUB_APP_REPO_LAM=your-org/your-repo
 ```
 
 ## Testing the webhook locally
