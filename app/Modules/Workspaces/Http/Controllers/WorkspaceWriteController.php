@@ -112,6 +112,8 @@ final class WorkspaceWriteController
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:60',
             'color' => 'sometimes|nullable|string|max:9|regex:/^#?[0-9A-Fa-f]{3,8}$/',
+            'telegram_enabled' => 'sometimes|boolean',
+            'telegram_chat_id' => 'sometimes|nullable|string|max:64',
         ]);
 
         if (array_key_exists('name', $data)) {
@@ -128,6 +130,20 @@ final class WorkspaceWriteController
             } else {
                 $settings['color'] = $color;
             }
+            $workspace->settings = $settings;
+        }
+
+        if (array_key_exists('telegram_enabled', $data) || array_key_exists('telegram_chat_id', $data)) {
+            $settings = is_array($workspace->settings) ? $workspace->settings : [];
+            $telegram = is_array($settings['telegram'] ?? null) ? $settings['telegram'] : [];
+            if (array_key_exists('telegram_enabled', $data)) {
+                $telegram['enabled'] = (bool) $data['telegram_enabled'];
+            }
+            if (array_key_exists('telegram_chat_id', $data)) {
+                $chatId = $data['telegram_chat_id'];
+                $telegram['chat_id'] = (is_string($chatId) && $chatId !== '') ? $chatId : null;
+            }
+            $settings['telegram'] = $telegram;
             $workspace->settings = $settings;
         }
 

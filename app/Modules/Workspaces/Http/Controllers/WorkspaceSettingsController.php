@@ -6,6 +6,7 @@ namespace App\Modules\Workspaces\Http\Controllers;
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Workspaces\Models\Workspace;
+use App\Modules\Workspaces\Models\WorkspaceMember;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -31,6 +32,14 @@ final class WorkspaceSettingsController
                 'slug' => $workspace->slug,
                 'logo_url' => $workspace->logo_url,
                 'color' => HandleInertiaRequests::workspaceColor($workspace),
+                'telegram' => [
+                    'enabled' => (bool) ($workspace->settings['telegram']['enabled'] ?? false),
+                    'chat_id' => $workspace->settings['telegram']['chat_id'] ?? null,
+                ],
+                'current_role' => WorkspaceMember::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('user_id', request()->user()?->getKey())
+                    ->value('role'),
             ],
         ]);
     }
