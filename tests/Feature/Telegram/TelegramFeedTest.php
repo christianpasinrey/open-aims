@@ -189,3 +189,12 @@ describe('milestones', function () {
         Bus::assertDispatched(SendTelegramMessage::class);
     });
 });
+
+it('posts to an explicit chat id when given', function () {
+    config(['services.telegram.token' => 'TESTTOKEN', 'services.telegram.channel' => '-100GLOBAL']);
+    Http::fake(['api.telegram.org/*' => Http::response(['ok' => true], 200)]);
+
+    (new SendTelegramMessage('<b>hi</b>', '-100OVERRIDE'))->handle();
+
+    Http::assertSent(fn ($request) => $request['chat_id'] === '-100OVERRIDE');
+});

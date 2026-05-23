@@ -31,12 +31,13 @@ final class SendTelegramMessage implements ShouldQueue
 
     public function __construct(
         public string $html,
+        public ?string $chatId = null,
     ) {}
 
     public function handle(): void
     {
         $token = config('services.telegram.token');
-        $channel = config('services.telegram.channel');
+        $channel = $this->chatId ?? config('services.telegram.channel');
 
         if (empty($token) || empty($channel)) {
             return;
