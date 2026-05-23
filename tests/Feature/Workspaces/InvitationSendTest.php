@@ -57,12 +57,14 @@ it('builds an invitation mail with the accept link', function () {
         'expires_at' => now()->addDays(3),
     ]);
 
-    $mail = (new WorkspaceInvitationNotification($invitation, $this->workspace->name, $this->user->name))
+    // Use a deterministic, special-char-free name: the Blade template HTML-escapes
+    // output, so a faker name with an apostrophe (e.g. O'Connell) wouldn't match raw.
+    $mail = (new WorkspaceInvitationNotification($invitation, 'Acme Workspace', $this->user->name))
         ->toMail(new AnonymousNotifiable);
 
     $rendered = $mail->render();
     expect($rendered)->toContain('/invite/'.str_repeat('d', 64))
-        ->and($rendered)->toContain($this->workspace->name);
+        ->and($rendered)->toContain('Acme Workspace');
 });
 
 it('lets an owner invite an email and sends the notification', function () {
