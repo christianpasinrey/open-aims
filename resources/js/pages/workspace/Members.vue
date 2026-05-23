@@ -6,6 +6,9 @@ import { computed, defineAsyncComponent, ref } from 'vue';
 const JoinRequestsTray = defineAsyncComponent(
     () => import('@/components/workspace/JoinRequestsTray.vue'),
 );
+const InviteUserPicker = defineAsyncComponent(
+    () => import('@/components/workspace/InviteUserPicker.vue'),
+);
 import Avatar from '@/components/repo/Avatar.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -78,6 +81,9 @@ function formatDate(iso: string | null): string {
     });
 }
 
+// Invite dialog tab: 'search' | 'email'
+const inviteTab = ref<'search' | 'email'>('search');
+
 // Invite form state
 const inviteEmail = ref('');
 const inviteRole = ref<'admin' | 'member' | 'guest'>('member');
@@ -110,6 +116,7 @@ function submitInvite(): void {
 
 function openInviteDialog(): void {
     inviteErrors.value = {};
+    inviteTab.value = 'search';
     inviteOpen.value = true;
 }
 </script>
@@ -199,15 +206,45 @@ function openInviteDialog(): void {
 
         <!-- Invite dialog — only rendered/usable when canInvite is true -->
         <Dialog v-if="canInvite" v-model:open="inviteOpen">
-            <DialogContent class="sm:max-w-md">
+            <DialogContent class="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Invitar por email</DialogTitle>
+                    <DialogTitle>Invitar miembro</DialogTitle>
                     <DialogDescription>
-                        Envía una invitación a un nuevo miembro del workspace.
+                        Busca un usuario registrado o envía una invitación por email.
                     </DialogDescription>
                 </DialogHeader>
 
-                <form class="grid gap-4" @submit.prevent="submitInvite">
+                <!-- Tab switcher -->
+                <div class="flex gap-1 rounded-md border border-border bg-muted/40 p-1">
+                    <button
+                        type="button"
+                        class="flex-1 rounded px-3 py-1.5 text-[12.5px] font-medium transition-colors"
+                        :class="inviteTab === 'search'
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'"
+                        @click="inviteTab = 'search'"
+                    >
+                        Buscar usuario registrado
+                    </button>
+                    <button
+                        type="button"
+                        class="flex-1 rounded px-3 py-1.5 text-[12.5px] font-medium transition-colors"
+                        :class="inviteTab === 'email'
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'"
+                        @click="inviteTab = 'email'"
+                    >
+                        Invitar por email
+                    </button>
+                </div>
+
+                <!-- Tab: search registered users -->
+                <div v-if="inviteTab === 'search'" class="pt-1">
+                    <InviteUserPicker />
+                </div>
+
+                <!-- Tab: manual email invite -->
+                <form v-else class="grid gap-4" @submit.prevent="submitInvite">
                     <div class="grid gap-1.5">
                         <Label for="invite-email">Correo electrónico</Label>
                         <Input
