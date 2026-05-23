@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { Users, UserPlus, Search } from 'lucide-vue-next';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { Users, UserPlus, Search, Loader2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 type Member = {
     id: number;
@@ -22,10 +29,18 @@ type Member = {
     user: { id: number; name: string; email: string };
 };
 
-const props = defineProps<{ members: Member[]; count: number }>();
+const props = defineProps<{
+    members: Member[];
+    count: number;
+    currentRole?: string | null;
+}>();
 
 const query = ref('');
 const inviteOpen = ref(false);
+
+const canInvite = computed(
+    () => props.currentRole === 'owner' || props.currentRole === 'admin',
+);
 
 const filtered = computed<Member[]>(() => {
     const q = query.value.trim().toLowerCase();
@@ -58,6 +73,41 @@ function formatDate(iso: string | null): string {
         day: 'numeric',
     });
 }
+
+// Invite form state
+const inviteEmail = ref('');
+const inviteRole = ref<'admin' | 'member' | 'guest'>('member');
+const inviteProcessing = ref(false);
+const inviteErrors = ref<{ email?: string; role?: string; invitation?: string }>({});
+
+function submitInvite(): void {
+    inviteProcessing.value = true;
+    inviteErrors.value = {};
+
+    router.post(
+        '/workspace/invitations',
+        { email: inviteEmail.value, role: inviteRole.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                inviteEmail.value = '';
+                inviteRole.value = 'member';
+                inviteOpen.value = false;
+            },
+            onError: (errors) => {
+                inviteErrors.value = errors as typeof inviteErrors.value;
+            },
+            onFinish: () => {
+                inviteProcessing.value = false;
+            },
+        },
+    );
+}
+
+function openInviteDialog(): void {
+    inviteErrors.value = {};
+    inviteOpen.value = true;
+}
 </script>
 
 <template>
@@ -77,7 +127,7 @@ function formatDate(iso: string | null): string {
                 >
                     Settings
                 </Link>
-                <Button size="sm" @click="inviteOpen = true">
+                <Button v-if="canInvite" size="sm" @click="openInviteDialog">
                     <UserPlus class="mr-1 size-3.5" />
                     Invite
                 </Button>
@@ -139,29 +189,69 @@ function formatDate(iso: string | null): string {
             <p class="text-sm text-muted-foreground">No matching members.</p>
         </div>
 
-        <Dialog v-model:open="inviteOpen">
+        <!-- Invite dialog — only rendered/usable when canInvite is true -->
+        <Dialog v-if="canInvite" v-model:open="inviteOpen">
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Invite a teammate</DialogTitle>
+                    <DialogTitle>Invitar por email</DialogTitle>
                     <DialogDescription>
-                        Invitations aren&rsquo;t wired up yet. Coming soon.
+                        Envía una invitación a un nuevo miembro del workspace.
                     </DialogDescription>
                 </DialogHeader>
-                <div class="grid gap-2">
-                    <Label for="invite-email">Email address</Label>
-                    <Input
-                        id="invite-email"
-                        type="email"
-                        placeholder="teammate@company.com"
-                        disabled
-                    />
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" @click="inviteOpen = false"
-                        >Close</Button
-                    >
-                    <Button disabled>Send invite</Button>
-                </DialogFooter>
+
+                <form class="grid gap-4" @submit.prevent="submitInvite">
+                    <div class="grid gap-1.5">
+                        <Label for="invite-email">Correo electrónico</Label>
+                        <Input
+                            id="invite-email"
+                            v-model="inviteEmail"
+                            type="email"
+                            placeholder="compañero@empresa.com"
+                            required
+                            :disabled="inviteProcessing"
+                            :class="{ 'border-destructive': inviteErrors.email }"
+                        />
+                        <p v-if="inviteErrors.email" class="text-[12px] text-destructive">
+                            {{ inviteErrors.email }}
+                        </p>
+                    </div>
+
+                    <div class="grid gap-1.5">
+                        <Label for="invite-role">Rol</Label>
+                        <Select v-model="inviteRole" :disabled="inviteProcessing">
+                            <SelectTrigger id="invite-role">
+                                <SelectValue placeholder="Selecciona un rol" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="admin">Administrador</SelectItem>
+                                <SelectItem value="member">Miembro</SelectItem>
+                                <SelectItem value="guest">Invitado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p v-if="inviteErrors.role" class="text-[12px] text-destructive">
+                            {{ inviteErrors.role }}
+                        </p>
+                    </div>
+
+                    <p v-if="inviteErrors.invitation" class="text-[12px] text-destructive">
+                        {{ inviteErrors.invitation }}
+                    </p>
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            :disabled="inviteProcessing"
+                            @click="inviteOpen = false"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button type="submit" :disabled="inviteProcessing">
+                            <Loader2 v-if="inviteProcessing" class="mr-1 size-3.5 animate-spin" />
+                            {{ inviteProcessing ? 'Enviando…' : 'Invitar' }}
+                        </Button>
+                    </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     </div>

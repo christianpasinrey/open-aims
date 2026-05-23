@@ -76,9 +76,15 @@ final class WorkspaceMembersPageController
             ->values()
             ->all();
 
+        $currentUserId = $request->user()?->getKey();
+        $currentRole = $members
+            ->first(fn (WorkspaceMember $m) => $m->user_id === $currentUserId)
+            ?->role ?? null;
+
         return Inertia::render('workspace/Members', [
             'members' => $rows,
             'count' => count($rows),
+            'currentRole' => $currentRole !== null ? (string) $currentRole : null,
         ]);
     }
 
