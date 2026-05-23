@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Modules\Teams\Models\Team;
+use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceMember;
 
@@ -59,4 +61,30 @@ it('rejects an unknown join_policy', function () {
     $this->actingAs($user)->from('/onboarding')
         ->post(route('workspaces.store'), ['name' => 'X', 'join_policy' => 'superadmin'])
         ->assertSessionHasErrors('join_policy');
+});
+
+it('bootstraps a usable team (with states) when creating a workspace', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->post(route('workspaces.store'), [
+        'name' => 'My Space',
+        'team_name' => 'Engineering',
+        'team_key' => 'ENG',
+    ])->assertRedirect();
+
+    $ws = Workspace::where('name', 'My Space')->first();
+    $team = Team::where('workspace_id', $ws->id)->first();
+    expect($team)->not->toBeNull()
+        ->and($team->name)->toBe('Engineering')
+        ->and($team->key)->toBe('ENG');
+    expect(WorkflowState::where('team_id', $team->id)->count())->toBe(6);
+});
+
+it('defaults the team name to the workspace name when team_name is omitted', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user)->post(route('workspaces.store'), ['name' => 'Solo Space']);
+
+    $ws = Workspace::where('name', 'Solo Space')->first();
+    $team = Team::where('workspace_id', $ws->id)->first();
+    expect($team)->not->toBeNull()->and($team->name)->toBe('Solo Space');
 });

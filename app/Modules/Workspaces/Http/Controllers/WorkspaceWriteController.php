@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Workspaces\Http\Controllers;
 
+use App\Modules\Teams\Support\TeamProvisioner;
 use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\RedirectResponse;
@@ -35,6 +36,8 @@ final class WorkspaceWriteController
         $data = $request->validate([
             'name' => 'required|string|max:60',
             'join_policy' => 'sometimes|in:open,request,private',
+            'team_name' => 'sometimes|string|max:80',
+            'team_key' => 'sometimes|nullable|string|max:8',
         ]);
 
         $workspace = DB::transaction(function () use ($data, $user): Workspace {
@@ -51,6 +54,12 @@ final class WorkspaceWriteController
                 'role' => 'owner',
                 'joined_at' => now(),
             ]);
+
+            app(TeamProvisioner::class)->create(
+                $workspace,
+                (! empty($data['team_name']) ? $data['team_name'] : $data['name']),
+                $data['team_key'] ?? null,
+            );
 
             return $workspace;
         });
