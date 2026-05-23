@@ -475,11 +475,13 @@ function logout() {
                                     >
                                         Account
                                     </DropdownMenuLabel>
-                                    <DropdownMenuItem
-                                        disabled
-                                        class="cursor-pointer"
-                                    >
-                                        Create or join a workspace…
+                                    <DropdownMenuItem as-child>
+                                        <Link
+                                            href="/onboarding"
+                                            class="flex w-full cursor-pointer items-center"
+                                        >
+                                            Create or join a workspace…
+                                        </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         disabled
