@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Workspaces\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -27,5 +28,15 @@ class WorkspaceInvitation extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    public function invitedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'invited_by_user_id');
+    }
+
+    public function isAcceptable(): bool
+    {
+        return $this->accepted_at === null && $this->expires_at !== null && $this->expires_at->isFuture();
     }
 }
