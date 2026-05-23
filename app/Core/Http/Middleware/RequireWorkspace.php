@@ -27,7 +27,7 @@ final class RequireWorkspace
     private const ALLOWED_PREFIXES = [
         'login', 'register', 'logout', 'forgot-password', 'reset-password',
         'email', 'user/confirm-password', 'two-factor-challenge',
-        'invite', 'onboarding', 'workspaces', 'gh', 'build', 'storage',
+        'invite', 'invitations', 'onboarding', 'workspaces', 'gh', 'build', 'storage',
         'settings',
     ];
 

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Workspaces\Http\Controllers\InvitationAcceptController;
+use App\Modules\Workspaces\Http\Controllers\InvitationInboxController;
 use App\Modules\Workspaces\Http\Controllers\InvitationWriteController;
 use App\Modules\Workspaces\Http\Controllers\JoinRequestController;
 use App\Modules\Workspaces\Http\Controllers\OnboardingController;
@@ -67,4 +68,9 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::get('workspace/requests', [JoinRequestController::class, 'index'])->name('workspace.requests.index');
     Route::post('workspace/requests/{id}/approve', [JoinRequestController::class, 'approve'])->whereNumber('id')->name('workspace.requests.approve');
     Route::post('workspace/requests/{id}/reject', [JoinRequestController::class, 'reject'])->whereNumber('id')->name('workspace.requests.reject');
+
+    // In-app invitation inbox: list pending, accept, decline.
+    Route::get('invitations/pending', [InvitationInboxController::class, 'pending'])->name('invitations.pending');
+    Route::post('invitations/{id}/accept', [InvitationInboxController::class, 'accept'])->whereNumber('id')->name('invitations.inbox.accept');
+    Route::post('invitations/{id}/decline', [InvitationInboxController::class, 'decline'])->whereNumber('id')->name('invitations.inbox.decline');
 });
