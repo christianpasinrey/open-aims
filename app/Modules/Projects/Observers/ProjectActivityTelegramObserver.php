@@ -7,12 +7,18 @@ namespace App\Modules\Projects\Observers;
 use App\Jobs\SendTelegramMessage;
 use App\Modules\Projects\Models\ProjectActivity;
 use App\Modules\Projects\Support\ProjectActivityTelegramFormatter;
+use App\Modules\Workspaces\Support\WorkspaceTelegram;
 
 final class ProjectActivityTelegramObserver
 {
     public function created(ProjectActivity $activity): void
     {
-        if (empty(config('services.telegram.token')) || empty(config('services.telegram.channel'))) {
+        $project = $activity->project;
+        if ($project === null) {
+            return;
+        }
+        $chatId = WorkspaceTelegram::resolveChatId((int) $project->workspace_id);
+        if ($chatId === null) {
             return;
         }
 
@@ -21,6 +27,6 @@ final class ProjectActivityTelegramObserver
             return;
         }
 
-        SendTelegramMessage::dispatch($text)->afterCommit();
+        SendTelegramMessage::dispatch($text, $chatId)->afterCommit();
     }
 }

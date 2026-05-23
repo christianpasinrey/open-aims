@@ -112,6 +112,7 @@ describe('SendTelegramMessage job', function () {
 describe('dispatch on activity', function () {
     it('dispatches a telegram job when an issue activity is recorded', function () {
         Bus::fake();
+        $this->workspace->update(['settings' => ['telegram' => ['enabled' => true]]]);
 
         $issue = makeIssue($this->team, $this->workspace, $this->states['Todo']);
         IssueActivity::create([
@@ -162,6 +163,7 @@ describe('comments', function () {
 
     it('dispatches a telegram job when a comment is created', function () {
         Bus::fake();
+        $this->workspace->update(['settings' => ['telegram' => ['enabled' => true]]]);
 
         $issue = makeIssue($this->team, $this->workspace, $this->states['Todo']);
         Comment::create([
@@ -178,6 +180,7 @@ describe('comments', function () {
 describe('milestones', function () {
     it('logs a milestone_added activity and posts it to the feed', function () {
         Bus::fake();
+        $this->workspace->update(['settings' => ['telegram' => ['enabled' => true]]]);
 
         $project = Project::factory()->create(['workspace_id' => $this->workspace->id]);
         $milestone = $project->milestones()->create(['name' => 'Beta', 'sort_order' => 1]);
@@ -197,4 +200,25 @@ it('posts to an explicit chat id when given', function () {
     (new SendTelegramMessage('<b>hi</b>', '-100OVERRIDE'))->handle();
 
     Http::assertSent(fn ($request) => $request['chat_id'] === '-100OVERRIDE');
+});
+
+it('does not post issue activity when the workspace has telegram disabled', function () {
+    Bus::fake();
+    $issue = makeIssue($this->team, $this->workspace, $this->states['Todo']);
+    IssueActivity::create([
+        'issue_id' => $issue->id, 'actor_user_id' => $this->user->id,
+        'kind' => 'created', 'payload' => null, 'occurred_at' => now(),
+    ]);
+    Bus::assertNotDispatched(SendTelegramMessage::class);
+});
+
+it('posts issue activity with the resolved chat id when the workspace enables telegram', function () {
+    Bus::fake();
+    $this->workspace->update(['settings' => ['telegram' => ['enabled' => true, 'chat_id' => '-100WS']]]);
+    $issue = makeIssue($this->team, $this->workspace, $this->states['Todo']);
+    IssueActivity::create([
+        'issue_id' => $issue->id, 'actor_user_id' => $this->user->id,
+        'kind' => 'created', 'payload' => null, 'occurred_at' => now(),
+    ]);
+    Bus::assertDispatched(SendTelegramMessage::class, fn ($job) => $job->chatId === '-100WS');
 });

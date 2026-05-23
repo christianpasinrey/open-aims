@@ -7,12 +7,18 @@ namespace App\Modules\Issues\Observers;
 use App\Jobs\SendTelegramMessage;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Support\CommentTelegramFormatter;
+use App\Modules\Workspaces\Support\WorkspaceTelegram;
 
 final class CommentTelegramObserver
 {
     public function created(Comment $comment): void
     {
-        if (empty(config('services.telegram.token')) || empty(config('services.telegram.channel'))) {
+        $issue = $comment->issue;
+        if ($issue === null) {
+            return;
+        }
+        $chatId = WorkspaceTelegram::resolveChatId((int) $issue->workspace_id);
+        if ($chatId === null) {
             return;
         }
 
@@ -21,6 +27,6 @@ final class CommentTelegramObserver
             return;
         }
 
-        SendTelegramMessage::dispatch($text)->afterCommit();
+        SendTelegramMessage::dispatch($text, $chatId)->afterCommit();
     }
 }
