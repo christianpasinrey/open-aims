@@ -2,11 +2,21 @@
 
 declare(strict_types=1);
 
+use App\Modules\Workspaces\Http\Controllers\InvitationAcceptController;
 use App\Modules\Workspaces\Http\Controllers\InvitationWriteController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceMembersPageController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceSettingsController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceWriteController;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['web', 'throttle:10,1'])->group(function (): void {
+    Route::get('invite/{token}', [InvitationAcceptController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->name('invitations.accept.show');
+    Route::post('invite/{token}', [InvitationAcceptController::class, 'accept'])
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->name('invitations.accept');
+});
 
 Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     // Members — single endpoint that returns JSON when `?json=1` or
