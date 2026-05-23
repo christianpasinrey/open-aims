@@ -72,3 +72,25 @@ it('rejects a reused (already accepted) token', function () {
 
     expect(User::where('email', 'invitee@example.com')->exists())->toBeFalse();
 });
+
+it('adds membership for an existing logged-in account without creating a user', function () {
+    $existing = User::factory()->create(['email' => 'invitee@example.com']);
+    makeInvite($this->workspace->id, $this->owner->id, ['token' => str_repeat('f', 64)]);
+
+    $before = User::count();
+
+    $this->actingAs($existing)
+        ->post('/invite/'.str_repeat('f', 64))
+        ->assertRedirect(route('issues.index'));
+
+    expect(User::count())->toBe($before)
+        ->and(WorkspaceMember::where('workspace_id', $this->workspace->id)->where('user_id', $existing->id)->exists())->toBeTrue();
+});
+
+it('asks an existing account to log in when not authenticated as that user', function () {
+    User::factory()->create(['email' => 'invitee@example.com']);
+    makeInvite($this->workspace->id, $this->owner->id, ['token' => str_repeat('g', 64)]);
+
+    $this->post('/invite/'.str_repeat('g', 64))
+        ->assertRedirect(route('login'));
+});
