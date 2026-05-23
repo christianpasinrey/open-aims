@@ -81,7 +81,10 @@ it('lets an owner invite an email and sends the notification', function () {
         ->and(strlen($inv->token))->toBe(64)
         ->and($inv->expires_at->isFuture())->toBeTrue();
 
-    Notification::assertSentOnDemand(WorkspaceInvitationNotification::class);
+    Notification::assertSentOnDemand(
+        WorkspaceInvitationNotification::class,
+        fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === 'invitee@example.com',
+    );
 });
 
 it('forbids a plain member from inviting', function () {

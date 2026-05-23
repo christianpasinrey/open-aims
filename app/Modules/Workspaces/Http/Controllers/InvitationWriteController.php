@@ -41,6 +41,7 @@ final class InvitationWriteController
             'role' => 'required|in:admin,member,guest',
         ]);
 
+        // lowercase here too: the email mutator runs on save, not on the lookup key
         $invitation = WorkspaceInvitation::updateOrCreate(
             ['workspace_id' => $workspace->id, 'email' => strtolower($data['email'])],
             [
