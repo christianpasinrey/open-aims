@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Workspaces\Http\Controllers\InvitationAcceptController;
 use App\Modules\Workspaces\Http\Controllers\InvitationWriteController;
 use App\Modules\Workspaces\Http\Controllers\OnboardingController;
+use App\Modules\Workspaces\Http\Controllers\WorkspaceDiscoveryController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceMembersPageController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceSettingsController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceWriteController;
@@ -48,4 +49,12 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     // Send a workspace invitation.
     Route::post('workspace/invitations', [InvitationWriteController::class, 'store'])
         ->name('workspace.invitations.store');
+
+    // Workspace discovery search.
+    Route::get('workspaces/search', [WorkspaceDiscoveryController::class, 'search'])->name('workspaces.search');
+
+    // Join a workspace (open/request/private).
+    Route::post('workspaces/{slug}/join', [WorkspaceDiscoveryController::class, 'join'])
+        ->where('slug', '[A-Za-z0-9\-]+')
+        ->name('workspaces.join');
 });
