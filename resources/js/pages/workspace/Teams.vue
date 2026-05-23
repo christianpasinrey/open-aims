@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { Loader2, Users, Settings } from 'lucide-vue-next';
-import { defineAsyncComponent, onMounted } from 'vue';
+import { computed, defineAsyncComponent, onMounted } from 'vue';
 import { useTeams } from '@/composables/useTeams';
 
 const CreateTeamForm = defineAsyncComponent(
@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const { teams, loading, refetch } = useTeams();
 
-const canManage = props.currentRole === 'owner' || props.currentRole === 'admin';
+const canManage = computed(() => props.currentRole === 'owner' || props.currentRole === 'admin');
 
 onMounted(() => {
     if (typeof window === 'undefined') return;

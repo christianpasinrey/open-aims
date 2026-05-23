@@ -25,10 +25,16 @@ function submit(): void {
     if (key.value.trim()) payload.key = key.value.trim();
     if (color.value) payload.color = color.value;
 
-    create(payload, (errs) => {
-        errors.value = errs;
-        processing.value = false;
-    });
+    create(
+        payload,
+        (errs) => {
+            errors.value = errs;
+            processing.value = false;
+        },
+        () => {
+            processing.value = false;
+        },
+    );
 }
 </script>
 

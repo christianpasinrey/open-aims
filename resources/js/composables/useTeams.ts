@@ -39,6 +39,7 @@ export function useTeams() {
     function create(
         payload: CreateTeamPayload,
         onError?: (errors: Record<string, string>) => void,
+        onFinish?: () => void,
     ): void {
         router.post('/teams', payload, {
             preserveScroll: true,
@@ -47,6 +48,9 @@ export function useTeams() {
             },
             onError: (errors) => {
                 onError?.(errors as Record<string, string>);
+            },
+            onFinish: () => {
+                onFinish?.();
             },
         });
     }
