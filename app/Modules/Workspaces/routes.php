@@ -29,6 +29,10 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::get('workspace/settings', [WorkspaceSettingsController::class, 'index'])
         ->name('workspace.settings');
 
+    // Create a new workspace.
+    Route::post('workspaces', [WorkspaceWriteController::class, 'store'])
+        ->name('workspaces.store');
+
     // Switch the session's active workspace.
     Route::post('workspace/switch', [WorkspaceWriteController::class, 'switch'])
         ->name('workspace.switch');

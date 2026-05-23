@@ -8,6 +8,8 @@ use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -23,6 +25,58 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 final class WorkspaceWriteController
 {
+    public function store(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if ($user === null) {
+            abort(401);
+        }
+
+        $data = $request->validate([
+            'name' => 'required|string|max:60',
+            'join_policy' => 'sometimes|in:open,request,private',
+            'color' => 'sometimes|nullable|string|max:9|regex:/^#?[0-9A-Fa-f]{3,8}$/',
+        ]);
+
+        $workspace = DB::transaction(function () use ($data, $user): Workspace {
+            $workspace = Workspace::create([
+                'name' => $data['name'],
+                'slug' => $this->uniqueSlug($data['name']),
+                'owner_user_id' => $user->getKey(),
+                'join_policy' => $data['join_policy'] ?? 'request',
+            ]);
+
+            WorkspaceMember::create([
+                'workspace_id' => $workspace->id,
+                'user_id' => $user->getKey(),
+                'role' => 'owner',
+                'joined_at' => now(),
+            ]);
+
+            return $workspace;
+        });
+
+        $request->session()->put('current_workspace_id', $workspace->id);
+
+        return redirect()->route('issues.index');
+    }
+
+    private function uniqueSlug(string $name): string
+    {
+        $base = Str::slug($name);
+        if ($base === '') {
+            $base = 'workspace';
+        }
+        for ($i = 0; $i < 5; $i++) {
+            $slug = $base.'-'.Str::lower(Str::random(6));
+            if (! Workspace::query()->where('slug', $slug)->exists()) {
+                return $slug;
+            }
+        }
+
+        return $base.'-'.now()->format('YmdHis');
+    }
+
     public function update(Request $request, string $slug): RedirectResponse
     {
         $workspace = Workspace::query()->where('slug', $slug)->first();
