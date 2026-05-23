@@ -17,6 +17,7 @@ class Workspace extends Model
         'slug',
         'logo_url',
         'owner_user_id',
+        'join_policy',
         'settings',
     ];
 
