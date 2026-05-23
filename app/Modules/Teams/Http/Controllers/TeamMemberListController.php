@@ -8,13 +8,14 @@ use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\TeamMember;
 use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceMember;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class TeamMemberListController
 {
-    public function index(string $key): Response
+    public function index(Request $request, string $key): Response
     {
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
         if (! $workspace instanceof Workspace) {
@@ -37,7 +38,7 @@ final class TeamMemberListController
 
         $currentRole = WorkspaceMember::query()
             ->where('workspace_id', $workspace->id)
-            ->where('user_id', request()->user()?->getKey())
+            ->where('user_id', $request->user()?->getKey())
             ->value('role');
 
         return Inertia::render('teams/Members', [

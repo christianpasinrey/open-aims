@@ -36,8 +36,11 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
         ->where('key', '[A-Za-z0-9]+')
         ->name('teams.members');
 
-    Route::post('teams/{key}/members', [TeamMemberWriteController::class, 'store'])->name('teams.members.store');
+    Route::post('teams/{key}/members', [TeamMemberWriteController::class, 'store'])
+        ->where('key', '[A-Za-z0-9]+')
+        ->name('teams.members.store');
     Route::delete('teams/{key}/members/{userId}', [TeamMemberWriteController::class, 'destroy'])
+        ->where('key', '[A-Za-z0-9]+')
         ->whereNumber('userId')
         ->name('teams.members.destroy');
 

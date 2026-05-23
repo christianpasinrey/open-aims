@@ -66,3 +66,16 @@ it('forbids a plain member from managing team membership', function () {
         ->post(route('teams.members.store', ['key' => 'ENG']), ['user_id' => $this->member->id, 'role' => 'member'])
         ->assertForbidden();
 });
+
+it('forbids a plain member from removing a team member', function () {
+    TeamMember::create(['team_id' => $this->team->id, 'user_id' => $this->member->id, 'role' => 'member']);
+    $plain = User::factory()->create();
+    WorkspaceMember::create(['workspace_id' => $this->workspace->id, 'user_id' => $plain->id, 'role' => 'member', 'joined_at' => now()]);
+
+    $this->actingAs($plain)
+        ->withSession(['current_workspace_id' => $this->workspace->id])
+        ->delete(route('teams.members.destroy', ['key' => 'ENG', 'userId' => $this->member->id]))
+        ->assertForbidden();
+
+    expect(TeamMember::where('team_id', $this->team->id)->where('user_id', $this->member->id)->exists())->toBeTrue();
+});

@@ -21,7 +21,7 @@ final class TeamMemberWriteController
         [$workspace, $team] = $this->authorize($request, $key);
 
         $data = $request->validate([
-            'user_id' => 'required|integer',
+            'user_id' => 'required|integer|min:1',
             'role' => 'required|in:lead,member',
         ]);
 
