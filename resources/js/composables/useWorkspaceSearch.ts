@@ -15,7 +15,7 @@ export function useWorkspaceSearch() {
     // Track latest request to discard out-of-order responses.
     let requestSeq = 0;
 
-    watch(query, (val) => {
+    watch(query, (val, _old, onCleanup) => {
         const trimmed = val.trim();
 
         if (!trimmed) {
@@ -24,10 +24,10 @@ export function useWorkspaceSearch() {
             return;
         }
 
-        const seq = ++requestSeq;
         loading.value = true;
 
         const timer = setTimeout(() => {
+            const seq = ++requestSeq;
             fetch('/workspaces/search?q=' + encodeURIComponent(trimmed), {
                 headers: { Accept: 'application/json' },
             })
@@ -45,8 +45,8 @@ export function useWorkspaceSearch() {
                 });
         }, 300);
 
-        // Clean up the previous timer when query changes again before firing.
-        return () => clearTimeout(timer);
+        // Cancel the pending timer when query changes again before it fires.
+        onCleanup(() => clearTimeout(timer));
     });
 
     function join(slug: string): void {
