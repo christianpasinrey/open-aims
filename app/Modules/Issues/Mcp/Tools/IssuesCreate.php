@@ -8,6 +8,7 @@ use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
 use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Support\IssueActivityRecorder;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
@@ -143,6 +144,11 @@ class IssuesCreate extends Tool
                 $issue->labels()->sync($labelIds);
             }
         }
+
+        app(IssueActivityRecorder::class)->created(
+            $issue,
+            $user->getAuthIdentifier() !== null ? (int) $user->getAuthIdentifier() : null,
+        );
 
         $planSummary = null;
         if ($planContent !== null && $planContent !== '') {

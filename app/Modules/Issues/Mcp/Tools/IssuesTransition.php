@@ -6,6 +6,7 @@ namespace App\Modules\Issues\Mcp\Tools;
 
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Support\IssueActivityRecorder;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\WorkflowState;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -74,7 +75,18 @@ class IssuesTransition extends Tool
         } elseif ($newState->type === 'canceled') {
             $changes['canceled_at'] = now();
         }
+
+        $recorder = app(IssueActivityRecorder::class);
+        $snapshot = $recorder->snapshot($issue);
+
         $issue->fill($changes)->save();
+
+        $recorder->record(
+            $issue->fresh(['labels']),
+            $snapshot['before'],
+            $snapshot['labelIds'],
+            auth()->id(),
+        );
 
         return Response::json([
             'identifier' => $team->key.'-'.$issue->number,

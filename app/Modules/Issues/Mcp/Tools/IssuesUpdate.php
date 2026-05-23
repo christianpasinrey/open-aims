@@ -8,6 +8,7 @@ use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
 use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Support\IssueActivityRecorder;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
@@ -140,6 +141,9 @@ class IssuesUpdate extends Tool
                 : null;
         }
 
+        $recorder = app(IssueActivityRecorder::class);
+        $snapshot = $recorder->snapshot($issue);
+
         $issue->fill($changes)->save();
 
         if (array_key_exists('labels', $data)) {
@@ -149,6 +153,13 @@ class IssuesUpdate extends Tool
                 ->pluck('id');
             $issue->labels()->sync($labelIds);
         }
+
+        $recorder->record(
+            $issue->fresh(['labels']),
+            $snapshot['before'],
+            $snapshot['labelIds'],
+            $user?->getAuthIdentifier() !== null ? (int) $user->getAuthIdentifier() : null,
+        );
 
         $planSummary = null;
         if ($planContent !== null && $planContent !== '') {

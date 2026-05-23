@@ -7,6 +7,7 @@ namespace App\Modules\Projects\Mcp\Tools;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Support\ProjectActivityRecorder;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Mcp\Request;
@@ -92,7 +93,16 @@ class ProjectsUpdate extends Tool
                 : null;
         }
 
+        $recorder = app(ProjectActivityRecorder::class);
+        $snapshot = $recorder->snapshot($project);
+
         $project->fill($changes)->save();
+
+        $recorder->record(
+            $project->fresh(),
+            $snapshot,
+            $user?->getAuthIdentifier() !== null ? (int) $user->getAuthIdentifier() : null,
+        );
 
         $planSummary = null;
         if ($planContent !== null && $planContent !== '') {

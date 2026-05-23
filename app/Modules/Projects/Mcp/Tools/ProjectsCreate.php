@@ -7,6 +7,7 @@ namespace App\Modules\Projects\Mcp\Tools;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Support\ProjectActivityRecorder;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\DB;
@@ -108,6 +109,8 @@ class ProjectsCreate extends Tool
 
             return $project;
         });
+
+        app(ProjectActivityRecorder::class)->created($project, $creatorId);
 
         $planSummary = null;
         if ($planContent !== null && $planContent !== '') {

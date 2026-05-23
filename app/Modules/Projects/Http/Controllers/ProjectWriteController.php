@@ -10,6 +10,7 @@ use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectActivity;
 use App\Modules\Projects\Models\ProjectMember;
 use App\Modules\Projects\Models\ProjectMilestone;
+use App\Modules\Projects\Support\ProjectActivityRecorder;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
@@ -30,6 +31,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 final class ProjectWriteController
 {
+    public function __construct(
+        private readonly ProjectActivityRecorder $recorder,
+    ) {}
+
     public function store(Request $request): RedirectResponse
     {
         $workspace = $this->workspace();
@@ -89,13 +94,7 @@ final class ProjectWriteController
                 $project->teams()->sync($teamIds);
             }
 
-            ProjectActivity::create([
-                'project_id' => $project->id,
-                'actor_user_id' => request()->user()?->getKey(),
-                'kind' => 'created',
-                'payload' => null,
-                'occurred_at' => now(),
-            ]);
+            $this->recorder->created($project, $creatorId);
 
             return $project;
         });
@@ -133,19 +132,11 @@ final class ProjectWriteController
             }
         }
 
-        $before = [
-            'name' => $project->name,
-            'description' => $project->description,
-            'state' => $project->state?->value,
-            'priority' => (int) ($project->priority ?? 0),
-            'lead_user_id' => $project->lead_user_id,
-            'start_date' => $project->start_date?->toDateString(),
-            'target_date' => $project->target_date?->toDateString(),
-        ];
+        $before = $this->recorder->snapshot($project);
 
         DB::transaction(function () use ($project, $data, $before, $request): void {
             $project->fill($data)->save();
-            $this->recordProjectChanges($project->fresh(), $before, $request->user()?->getKey());
+            $this->recorder->record($project->fresh(), $before, $request->user()?->getKey());
         });
 
         return back();
@@ -413,100 +404,6 @@ final class ProjectWriteController
         }
 
         return back();
-    }
-
-    /**
-     * Diff before/after of a project update and emit one ProjectActivity row
-     * per significant change.
-     *
-     * @param  array<string,mixed>  $before
-     */
-    private function recordProjectChanges(Project $project, array $before, ?int $actorId): void
-    {
-        $now = now();
-        $base = [
-            'project_id' => $project->id,
-            'actor_user_id' => $actorId,
-            'occurred_at' => $now,
-        ];
-
-        if ($before['name'] !== $project->name) {
-            ProjectActivity::create($base + [
-                'kind' => 'name_changed',
-                'payload' => ['from' => $before['name'], 'to' => $project->name],
-            ]);
-        }
-
-        if (($before['description'] ?? null) !== $project->description) {
-            ProjectActivity::create($base + [
-                'kind' => 'description_changed',
-                'payload' => null,
-            ]);
-        }
-
-        $newState = $project->state?->value;
-        if ($before['state'] !== $newState) {
-            ProjectActivity::create($base + [
-                'kind' => 'state_changed',
-                'payload' => ['from' => $before['state'], 'to' => $newState],
-            ]);
-        }
-
-        $newPriority = (int) ($project->priority ?? 0);
-        if ((int) $before['priority'] !== $newPriority) {
-            $labels = [
-                0 => 'No priority',
-                1 => 'Urgent',
-                2 => 'High',
-                3 => 'Medium',
-                4 => 'Low',
-            ];
-            ProjectActivity::create($base + [
-                'kind' => 'priority_changed',
-                'payload' => [
-                    'from' => (int) $before['priority'],
-                    'from_label' => $labels[(int) $before['priority']] ?? '—',
-                    'to' => $newPriority,
-                    'to_label' => $labels[$newPriority] ?? '—',
-                ],
-            ]);
-        }
-
-        if ($before['lead_user_id'] !== $project->lead_user_id) {
-            if ($project->lead_user_id === null) {
-                ProjectActivity::create($base + [
-                    'kind' => 'lead_unset',
-                    'payload' => null,
-                ]);
-            } else {
-                $u = User::query()->find($project->lead_user_id);
-                ProjectActivity::create($base + [
-                    'kind' => 'lead_set',
-                    'payload' => [
-                        'user_id' => $project->lead_user_id,
-                        'user_name' => $u?->name,
-                    ],
-                ]);
-            }
-        }
-
-        $beforeStart = $before['start_date'];
-        $afterStart = $project->start_date?->toDateString();
-        if ($beforeStart !== $afterStart) {
-            ProjectActivity::create($base + [
-                'kind' => 'start_date_changed',
-                'payload' => ['from' => $beforeStart, 'to' => $afterStart],
-            ]);
-        }
-
-        $beforeTarget = $before['target_date'];
-        $afterTarget = $project->target_date?->toDateString();
-        if ($beforeTarget !== $afterTarget) {
-            ProjectActivity::create($base + [
-                'kind' => 'target_date_changed',
-                'payload' => ['from' => $beforeTarget, 'to' => $afterTarget],
-            ]);
-        }
     }
 
     private function resolveProject(string $slug): Project
