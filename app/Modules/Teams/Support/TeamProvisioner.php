@@ -75,7 +75,7 @@ final class TeamProvisioner
                 }
             }
         } else {
-            $base = substr($words[0] ?? 'TEAM', 0, 3);
+            $base = substr($words[0] ?? '', 0, 3);
         }
 
         $base = preg_replace('/[^A-Z0-9]/', '', $base) ?: 'TEAM';

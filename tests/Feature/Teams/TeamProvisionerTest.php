@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-use App\Modules\Teams\Models\Team;
+use App\Models\User;
 use App\Modules\Teams\Models\WorkflowState;
 use App\Modules\Teams\Support\TeamProvisioner;
 use App\Modules\Workspaces\Models\Workspace;
-use App\Models\User;
 
 beforeEach(function () {
     $this->workspace = Workspace::factory()->create(['owner_user_id' => User::factory()->create()->id]);
@@ -38,4 +37,9 @@ it('disambiguates a colliding auto-generated key with a numeric suffix', functio
 it('normalizes an explicit key (uppercase, alphanumeric, max 8)', function () {
     $team = app(TeamProvisioner::class)->create($this->workspace, 'Whatever', 'my-key!');
     expect($team->key)->toBe('MYKEY');
+});
+
+it('falls back to TEAM for a symbols-only name', function () {
+    $team = app(TeamProvisioner::class)->create($this->workspace, '!!!');
+    expect($team->key)->toBe('TEAM');
 });
