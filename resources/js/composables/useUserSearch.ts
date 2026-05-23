@@ -24,9 +24,8 @@ export function useUserSearch() {
             return;
         }
 
-        loading.value = true;
-
         const timer = setTimeout(() => {
+            loading.value = true;
             const seq = ++requestSeq;
             fetch('/workspace/users/search?q=' + encodeURIComponent(trimmed), {
                 headers: { Accept: 'application/json' },

@@ -12,6 +12,8 @@ const role = ref<'admin' | 'member' | 'guest'>('member');
 // without waiting for a page reload.
 const locallyInvited = ref<Set<string>>(new Set());
 
+const errorMessage = ref<string | null>(null);
+
 function isInvited(row: UserSearchResult): boolean {
     return row.invited || locallyInvited.value.has(row.email);
 }
@@ -25,7 +27,11 @@ function invite(row: UserSearchResult): void {
         {
             preserveScroll: true,
             onSuccess: () => {
+                errorMessage.value = null;
                 locallyInvited.value = new Set([...locallyInvited.value, row.email]);
+            },
+            onError: (errors) => {
+                errorMessage.value = (errors.email ?? errors.role ?? errors.invitation ?? 'No se pudo invitar.') as string;
             },
         },
     );
@@ -99,5 +105,8 @@ function invite(row: UserSearchResult): void {
         >
             Sin resultados para &ldquo;{{ query.trim() }}&rdquo;.
         </p>
+
+        <!-- Invite error feedback -->
+        <p v-if="errorMessage" class="text-sm text-red-500">{{ errorMessage }}</p>
     </div>
 </template>
