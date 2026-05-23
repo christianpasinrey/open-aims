@@ -8,6 +8,7 @@ use App\Core\Contracts\ModuleManifest;
 use App\Core\Contracts\ProvidesMcpTools;
 use App\Modules\Workspaces\Mcp\Tools\Current;
 use App\Modules\Workspaces\Mcp\Tools\Search;
+use App\Modules\Workspaces\Mcp\Tools\WorkspacesList;
 
 final class WorkspacesModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
@@ -61,6 +62,7 @@ final class WorkspacesModuleManifest implements ModuleManifest, ProvidesMcpTools
     {
         return [
             Current::class,
+            WorkspacesList::class,
             Search::class,
         ];
     }
