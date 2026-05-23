@@ -42,7 +42,7 @@ The app is now reachable at `http://localhost:8000`.
 A one-shot importer pulls a snapshot of repo JSON exports into a aims workspace. Snapshots live under `database/seed-data/{slug}/`:
 
 ```
-database/seed-data/repo/
+database/seed-data/example/
   team.json
   users.json
   statuses.json
@@ -57,9 +57,9 @@ Run the importer:
 
 ```bash
 php artisan aims:import-snapshot \
-  --snapshot=repo \
-  --workspace-slug=repo \
-  --workspace-name="repo"
+  --snapshot=example \
+  --workspace-slug=workspace \
+  --workspace-name="Workspace"
 ```
 
 The command is idempotent — re-running matches on natural keys (email, slug, key, number) and updates in place rather than duplicating.
@@ -110,7 +110,7 @@ Create the GitHub App at <https://github.com/settings/apps/new>:
 Map a repository to a workspace via env (one variable per workspace), e.g.:
 
 ```
-GITHUB_APP_REPO_LAM=repo-lab/repo
+GITHUB_APP_REPO_LAM=your-org/your-repo
 ```
 
 Install the App on the configured repo using `GITHUB_APP_INSTALL_URL`. PRs and pushes that reference an issue key (e.g. `LAM-42` in title, branch, or commit message) will be auto-linked.
