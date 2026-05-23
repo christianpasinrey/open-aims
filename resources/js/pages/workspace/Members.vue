@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Users, UserPlus, Search, Loader2 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
+
+const JoinRequestsTray = defineAsyncComponent(
+    () => import('@/components/workspace/JoinRequestsTray.vue'),
+);
 import Avatar from '@/components/repo/Avatar.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -144,6 +148,10 @@ function openInviteDialog(): void {
                 placeholder="Filter members…"
                 class="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
             />
+        </div>
+
+        <div class="shrink-0 px-5 pt-3">
+            <JoinRequestsTray :current-role="currentRole ?? null" />
         </div>
 
         <div v-if="filtered.length" class="flex-1 overflow-y-auto">

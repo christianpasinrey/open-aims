@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
 import { Loader2 } from 'lucide-vue-next';
+import { defineAsyncComponent } from 'vue';
+
+const WorkspaceJoinSearch = defineAsyncComponent(
+    () => import('@/components/workspace/WorkspaceJoinSearch.vue'),
+);
 
 defineOptions({
     layout: {
@@ -96,22 +101,16 @@ function submit(): void {
         </button>
     </form>
 
-    <!-- Join existing workspace — placeholder (Phase 3) -->
+    <!-- Join existing workspace -->
     <div class="my-5 flex items-center gap-3 text-[12px] text-muted-foreground">
         <span class="h-px flex-1 bg-border"></span>
         <span>o</span>
         <span class="h-px flex-1 bg-border"></span>
     </div>
 
-    <div
-        class="rounded-md border border-dashed border-border px-4 py-4 text-center"
-    >
-        <p class="text-[13px] font-medium text-foreground">
-            Unirse a un workspace existente
-        </p>
-        <p class="mt-1 text-[12px] text-muted-foreground">
-            La búsqueda y solicitud de acceso a workspaces estará disponible
-            próximamente.
-        </p>
-    </div>
+    <p class="mb-3 text-[13px] font-medium text-foreground">
+        Unirse a un workspace existente
+    </p>
+
+    <WorkspaceJoinSearch />
 </template>
