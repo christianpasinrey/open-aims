@@ -41,3 +41,15 @@ it('forbids a plain member from creating a team', function () {
         ->post(route('teams.store'), ['name' => 'Nope'])
         ->assertForbidden();
 });
+
+it('lets an admin create a team', function () {
+    $admin = User::factory()->create();
+    WorkspaceMember::create(['workspace_id' => $this->workspace->id, 'user_id' => $admin->id, 'role' => 'admin', 'joined_at' => now()]);
+
+    $this->actingAs($admin)
+        ->withSession(['current_workspace_id' => $this->workspace->id])
+        ->post(route('teams.store'), ['name' => 'Ops'])
+        ->assertRedirect();
+
+    expect(Team::where('workspace_id', $this->workspace->id)->where('name', 'Ops')->exists())->toBeTrue();
+});

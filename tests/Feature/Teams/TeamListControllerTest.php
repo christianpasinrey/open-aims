@@ -26,5 +26,5 @@ it('renders the teams Inertia page', function () {
         ->withSession(['current_workspace_id' => $this->workspace->id])
         ->get('/workspace/teams')
         ->assertOk()
-        ->assertInertia(fn ($page) => $page->component('workspace/Teams'));
+        ->assertInertia(fn ($page) => $page->component('workspace/Teams')->where('currentRole', 'owner'));
 });

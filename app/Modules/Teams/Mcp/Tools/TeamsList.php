@@ -12,7 +12,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('List the teams in the active workspace (key, name, color, issue count).')]
+#[Description('List the teams in the active workspace (key, name, color, and a live count of issues in each team).')]
 class TeamsList extends Tool
 {
     use ResolvesWorkspace;
@@ -26,15 +26,16 @@ class TeamsList extends Tool
 
         $teams = Team::query()
             ->where('workspace_id', $workspace->id)
+            ->withCount('issues')
             ->orderBy('name')
-            ->get(['id', 'key', 'name', 'color', 'issue_counter']);
+            ->get(['id', 'key', 'name', 'color']);
 
         return Response::json([
             'data' => $teams->map(fn (Team $t): array => [
                 'key' => $t->key,
                 'name' => $t->name,
                 'color' => $t->color,
-                'issue_counter' => (int) $t->issue_counter,
+                'issue_count' => (int) $t->issues_count,
             ])->all(),
         ]);
     }
