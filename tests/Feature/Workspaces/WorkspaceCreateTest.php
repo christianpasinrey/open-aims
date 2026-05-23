@@ -53,3 +53,10 @@ it('requires a name', function () {
         ->post(route('workspaces.store'), [])
         ->assertSessionHasErrors('name');
 });
+
+it('rejects an unknown join_policy', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user)->from('/onboarding')
+        ->post(route('workspaces.store'), ['name' => 'X', 'join_policy' => 'superadmin'])
+        ->assertSessionHasErrors('join_policy');
+});

@@ -35,7 +35,6 @@ final class WorkspaceWriteController
         $data = $request->validate([
             'name' => 'required|string|max:60',
             'join_policy' => 'sometimes|in:open,request,private',
-            'color' => 'sometimes|nullable|string|max:9|regex:/^#?[0-9A-Fa-f]{3,8}$/',
         ]);
 
         $workspace = DB::transaction(function () use ($data, $user): Workspace {
