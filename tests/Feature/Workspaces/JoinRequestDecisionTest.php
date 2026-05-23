@@ -39,8 +39,17 @@ it('lets an owner reject a request: no membership + notify', function () {
         ->post("/workspace/requests/{$this->jr->id}/reject")
         ->assertRedirect();
     expect(WorkspaceMember::where('workspace_id', $this->workspace->id)->where('user_id', $this->requester->id)->exists())->toBeFalse()
-        ->and($this->jr->fresh()->status)->toBe('rejected');
+        ->and($this->jr->fresh()->status)->toBe('rejected')
+        ->and($this->jr->fresh()->responded_by_user_id)->toBe($this->owner->id);
     Notification::assertSentTo($this->requester, WorkspaceJoinDecisionNotification::class);
+});
+
+it('forbids the owner of another workspace from approving', function () {
+    $otherFix = makeWorkspaceFixture();
+    $this->actingAs($otherFix['user'])
+        ->withSession(['current_workspace_id' => $otherFix['workspace']->id])
+        ->post("/workspace/requests/{$this->jr->id}/approve")
+        ->assertForbidden();
 });
 
 it('forbids a non-admin from approving', function () {

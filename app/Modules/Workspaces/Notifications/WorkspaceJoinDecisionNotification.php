@@ -35,8 +35,8 @@ final class WorkspaceJoinDecisionNotification extends Notification implements Sh
                     'meta' => [],
                     'statusFrom' => null,
                     'statusTo' => null,
-                    'actionUrl' => url('/workspace/switch?workspace='.$this->workspace->slug),
-                    'actionText' => 'Ir al workspace',
+                    'actionUrl' => url('/issues'),
+                    'actionText' => 'Ir a la app',
                     'footnote' => null,
                 ]);
         }
