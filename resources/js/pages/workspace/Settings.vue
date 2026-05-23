@@ -13,6 +13,8 @@ type Workspace = {
     slug: string;
     color: string;
     logo_url: string | null;
+    telegram: { enabled: boolean; chat_id: string | null } | null;
+    current_role: string | null;
 };
 
 const props = defineProps<{ ws: Workspace | null }>();
@@ -29,15 +31,23 @@ const submitting = ref(false);
 const errorMessage = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
 
+const telegramEnabled = ref<boolean>(props.ws?.telegram?.enabled ?? false);
+const telegramChatId = ref<string>(props.ws?.telegram?.chat_id ?? '');
+
 watch(
     () => props.ws,
     (next) => {
         name.value = next?.name ?? '';
         color.value = next?.color ?? '#6366f1';
+        telegramEnabled.value = next?.telegram?.enabled ?? false;
+        telegramChatId.value = next?.telegram?.chat_id ?? '';
     },
 );
 
 const slug = computed(() => props.ws?.slug ?? '');
+const canManage = computed(() =>
+    props.ws?.current_role === 'owner' || props.ws?.current_role === 'admin',
+);
 
 function save() {
     if (!props.ws || submitting.value) {
@@ -198,6 +208,66 @@ function save() {
                                 Uploads aren&rsquo;t wired up yet. Coming soon.
                             </p>
                         </div>
+
+                        <template v-if="canManage">
+                            <Separator />
+
+                            <Heading
+                                variant="small"
+                                title="Telegram"
+                                description="Publicación de actividad del workspace en Telegram."
+                            />
+                            <div class="space-y-6">
+                                <div class="grid gap-2">
+                                    <div class="flex items-center gap-3">
+                                        <input
+                                            id="tg-enabled"
+                                            v-model="telegramEnabled"
+                                            type="checkbox"
+                                            class="h-4 w-4 cursor-pointer rounded border border-input accent-primary"
+                                        />
+                                        <Label for="tg-enabled" class="cursor-pointer">
+                                            Enviar la actividad de este workspace a Telegram
+                                        </Label>
+                                    </div>
+                                    <p class="text-[12px] text-muted-foreground">
+                                        Si está desactivado, la actividad de este workspace no se publica en el canal de Telegram.
+                                    </p>
+                                </div>
+
+                                <div class="grid gap-2">
+                                    <Label for="tg-chat-id">Chat ID</Label>
+                                    <Input
+                                        id="tg-chat-id"
+                                        v-model="telegramChatId"
+                                        name="telegram_chat_id"
+                                        placeholder="–100123456789"
+                                        class="font-mono text-[12.5px]"
+                                    />
+                                    <p class="text-[12px] text-muted-foreground">
+                                        Déjalo vacío para usar el canal por defecto.
+                                    </p>
+                                </div>
+
+                                <div class="flex items-center gap-4">
+                                    <Button
+                                        type="button"
+                                        @click="
+                                            router.patch(
+                                                `/workspace/${ws!.slug}`,
+                                                {
+                                                    telegram_enabled: telegramEnabled,
+                                                    telegram_chat_id: telegramChatId,
+                                                },
+                                                { preserveScroll: true },
+                                            )
+                                        "
+                                    >
+                                        Guardar
+                                    </Button>
+                                </div>
+                            </div>
+                        </template>
 
                         <Separator />
 
