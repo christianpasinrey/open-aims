@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Teams;
 
 use App\Core\Contracts\ModuleManifest;
+use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Teams\Mcp\Tools\TeamsCreate;
+use App\Modules\Teams\Mcp\Tools\TeamsList;
 
-final class TeamsModuleManifest implements ModuleManifest
+final class TeamsModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
     public function slug(): string
     {
@@ -51,5 +54,13 @@ final class TeamsModuleManifest implements ModuleManifest
     public function dependencies(): array
     {
         return ['workspaces'];
+    }
+
+    public function mcpTools(): array
+    {
+        return [
+            TeamsCreate::class,
+            TeamsList::class,
+        ];
     }
 }
