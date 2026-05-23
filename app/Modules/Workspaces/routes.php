@@ -9,6 +9,7 @@ use App\Modules\Workspaces\Http\Controllers\OnboardingController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceDiscoveryController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceMembersPageController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceSettingsController;
+use App\Modules\Workspaces\Http\Controllers\WorkspaceUserSearchController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceWriteController;
 use Illuminate\Support\Facades\Route;
 
@@ -50,6 +51,9 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     // Send a workspace invitation.
     Route::post('workspace/invitations', [InvitationWriteController::class, 'store'])
         ->name('workspace.invitations.store');
+
+    // Search registered users for the invite picker.
+    Route::get('workspace/users/search', [WorkspaceUserSearchController::class, 'index'])->name('workspace.users.search');
 
     // Workspace discovery search.
     Route::get('workspaces/search', [WorkspaceDiscoveryController::class, 'search'])->name('workspaces.search');
