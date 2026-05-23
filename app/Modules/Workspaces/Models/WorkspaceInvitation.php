@@ -19,11 +19,13 @@ class WorkspaceInvitation extends Model
         'invited_by_user_id',
         'expires_at',
         'accepted_at',
+        'declined_at',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
         'accepted_at' => 'datetime',
+        'declined_at' => 'datetime',
     ];
 
     protected function email(): Attribute
@@ -43,6 +45,9 @@ class WorkspaceInvitation extends Model
 
     public function isAcceptable(): bool
     {
-        return $this->accepted_at === null && $this->expires_at !== null && $this->expires_at->isFuture();
+        return $this->accepted_at === null
+            && $this->declined_at === null
+            && $this->expires_at !== null
+            && $this->expires_at->isFuture();
     }
 }
