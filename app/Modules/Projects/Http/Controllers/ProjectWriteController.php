@@ -62,7 +62,9 @@ final class ProjectWriteController
                 ->all();
         }
 
-        $project = DB::transaction(function () use ($workspace, $data, $teamIds): Project {
+        $creatorId = $request->user()?->getKey();
+
+        $project = DB::transaction(function () use ($workspace, $data, $teamIds, $creatorId): Project {
             $slug = $this->uniqueSlug($workspace->id, $data['name']);
 
             $state = $data['state'] ?? 'backlog';
@@ -75,6 +77,7 @@ final class ProjectWriteController
                 'description' => $data['description'] ?? null,
                 'state' => $state,
                 'lead_user_id' => $data['lead_user_id'] ?? null,
+                'creator_user_id' => $creatorId,
                 'start_date' => $data['start_date'] ?? null,
                 'target_date' => $data['target_date'] ?? null,
                 'color' => $data['color'] ?? '#6366f1',

@@ -6,6 +6,8 @@ namespace App\Modules\Issues;
 
 use App\Core\Registries\ModuleRegistry;
 use App\Core\Support\ModuleServiceProvider;
+use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Observers\IssueObserver;
 
 final class IssuesServiceProvider extends ModuleServiceProvider
 {
@@ -19,5 +21,7 @@ final class IssuesServiceProvider extends ModuleServiceProvider
         parent::boot();
 
         $this->app->make(ModuleRegistry::class)->register(new IssuesModuleManifest);
+
+        Issue::observe(IssueObserver::class);
     }
 }

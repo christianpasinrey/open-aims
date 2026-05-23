@@ -31,6 +31,7 @@ class Project extends Model
         'state',
         'priority',
         'lead_user_id',
+        'creator_user_id',
         'start_date',
         'target_date',
         'color',
@@ -51,6 +52,11 @@ class Project extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(User::class, 'lead_user_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'creator_user_id');
     }
 
     public function milestones(): HasMany

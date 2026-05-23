@@ -82,7 +82,9 @@ class ProjectsCreate extends Tool
 
         $slug = Str::slug($data['name']).'-'.Str::random(6);
 
-        $project = DB::transaction(function () use ($workspace, $teams, $leadId, $slug, $data) {
+        $creatorId = $user?->getAuthIdentifier();
+
+        $project = DB::transaction(function () use ($workspace, $teams, $leadId, $slug, $data, $creatorId) {
             $project = Project::create([
                 'workspace_id' => $workspace->id,
                 'name' => $data['name'],
@@ -90,6 +92,7 @@ class ProjectsCreate extends Tool
                 'description' => $data['description'] ?? null,
                 'state' => $data['state'] ?? 'backlog',
                 'lead_user_id' => $leadId,
+                'creator_user_id' => $creatorId,
                 'color' => $data['color'] ?? '#6366f1',
                 'icon' => $data['icon'] ?? null,
                 'start_date' => $data['start_date'] ?? null,
