@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Workspaces\Http\Controllers\InvitationAcceptController;
 use App\Modules\Workspaces\Http\Controllers\InvitationWriteController;
+use App\Modules\Workspaces\Http\Controllers\JoinRequestController;
 use App\Modules\Workspaces\Http\Controllers\OnboardingController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceDiscoveryController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceMembersPageController;
@@ -57,4 +58,9 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::post('workspaces/{slug}/join', [WorkspaceDiscoveryController::class, 'join'])
         ->where('slug', '[A-Za-z0-9\-]+')
         ->name('workspaces.join');
+
+    // Join request decisions + pending list.
+    Route::get('workspace/requests', [JoinRequestController::class, 'index'])->name('workspace.requests.index');
+    Route::post('workspace/requests/{id}/approve', [JoinRequestController::class, 'approve'])->whereNumber('id')->name('workspace.requests.approve');
+    Route::post('workspace/requests/{id}/reject', [JoinRequestController::class, 'reject'])->whereNumber('id')->name('workspace.requests.reject');
 });
