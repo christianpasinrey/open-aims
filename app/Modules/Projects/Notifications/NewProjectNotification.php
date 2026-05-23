@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Notifications;
 
+use App\Modules\Projects\Enums\ProjectState;
 use App\Modules\Projects\Models\Project;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -30,13 +31,31 @@ final class NewProjectNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $url = url('/projects/'.$this->project->slug);
-        $by = $this->actorName !== null ? " por {$this->actorName}" : '';
+
+        $meta = [];
+        if ($this->actorName !== null) {
+            $meta[] = ['label' => 'Creado por', 'value' => $this->actorName];
+        }
+        $stateLabel = ProjectState::labelFor($this->project->state?->value);
+        if ($stateLabel !== null) {
+            $meta[] = ['label' => 'Estado', 'value' => $stateLabel];
+        }
 
         return (new MailMessage)
             ->subject('Nuevo proyecto: '.$this->project->name)
-            ->greeting('Hola')
-            ->line("Se ha creado un nuevo proyecto{$by}: **{$this->project->name}**.")
-            ->action('Ver proyecto', $url)
-            ->line('Gracias por usar la plataforma.');
+            ->view('emails.notification', [
+                'heading' => 'Nuevo proyecto',
+                'intro' => $this->actorName !== null
+                    ? "{$this->actorName} ha creado un proyecto nuevo."
+                    : 'Se ha creado un proyecto nuevo.',
+                'badge' => null,
+                'headline' => $this->project->name,
+                'meta' => $meta,
+                'statusFrom' => null,
+                'statusTo' => null,
+                'actionUrl' => $url,
+                'actionText' => 'Ver proyecto',
+                'footnote' => null,
+            ]);
     }
 }

@@ -33,13 +33,25 @@ final class IssueStatusChangedNotification extends Notification implements Shoul
     {
         $identifier = $this->issue->identifier();
         $url = url('/issues/'.$identifier);
-        $by = $this->actorName !== null ? " ({$this->actorName})" : '';
+
+        $meta = [];
+        if ($this->actorName !== null) {
+            $meta[] = ['label' => 'Cambiado por', 'value' => $this->actorName];
+        }
 
         return (new MailMessage)
             ->subject("Cambio de estado en {$identifier}: {$this->issue->title}")
-            ->greeting('Hola')
-            ->line("El estado de la incidencia **{$identifier} — {$this->issue->title}** ha cambiado{$by}.")
-            ->line('De: '.($this->fromState ?? '—').' → A: '.($this->toState ?? '—'))
-            ->action('Ver incidencia', $url);
+            ->view('emails.notification', [
+                'heading' => 'Cambio de estado',
+                'intro' => 'El estado de una incidencia que creaste ha cambiado.',
+                'badge' => $identifier,
+                'headline' => $this->issue->title,
+                'meta' => $meta,
+                'statusFrom' => $this->fromState,
+                'statusTo' => $this->toState,
+                'actionUrl' => $url,
+                'actionText' => 'Ver incidencia',
+                'footnote' => null,
+            ]);
     }
 }

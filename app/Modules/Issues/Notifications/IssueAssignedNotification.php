@@ -31,12 +31,31 @@ final class IssueAssignedNotification extends Notification implements ShouldQueu
     {
         $identifier = $this->issue->identifier();
         $url = url('/issues/'.$identifier);
-        $by = $this->actorName !== null ? " por {$this->actorName}" : '';
+
+        $meta = [];
+        if ($this->actorName !== null) {
+            $meta[] = ['label' => 'Asignada por', 'value' => $this->actorName];
+        }
+        $stateName = $this->issue->workflowState?->name;
+        if ($stateName !== null) {
+            $meta[] = ['label' => 'Estado', 'value' => $stateName];
+        }
 
         return (new MailMessage)
             ->subject("Se te ha asignado {$identifier}: {$this->issue->title}")
-            ->greeting('Hola')
-            ->line("Se te ha asignado una incidencia{$by}: **{$identifier} — {$this->issue->title}**.")
-            ->action('Ver incidencia', $url);
+            ->view('emails.notification', [
+                'heading' => 'Se te ha asignado una incidencia',
+                'intro' => $this->actorName !== null
+                    ? "{$this->actorName} te ha asignado esta incidencia."
+                    : 'Se te ha asignado esta incidencia.',
+                'badge' => $identifier,
+                'headline' => $this->issue->title,
+                'meta' => $meta,
+                'statusFrom' => null,
+                'statusTo' => null,
+                'actionUrl' => $url,
+                'actionText' => 'Ver incidencia',
+                'footnote' => null,
+            ]);
     }
 }
