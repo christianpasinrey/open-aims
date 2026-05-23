@@ -50,6 +50,7 @@ final class InvitationWriteController
                 'invited_by_user_id' => $user->getKey(),
                 'expires_at' => now()->addDays(3),
                 'accepted_at' => null,
+                'declined_at' => null,
             ],
         );
 

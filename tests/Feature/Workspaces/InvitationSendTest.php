@@ -126,3 +126,22 @@ it('regenerates the token when re-inviting the same email', function () {
         ->and($first->role)->toBe('admin');
     expect(WorkspaceInvitation::where('email', 'again@example.com')->count())->toBe(1);
 });
+
+it('clears declined_at when re-inviting a previously declined email', function () {
+    \Illuminate\Support\Facades\Notification::fake();
+    $inv = \App\Modules\Workspaces\Models\WorkspaceInvitation::create([
+        'workspace_id' => $this->workspace->id,
+        'email' => 'redo@example.com',
+        'role' => 'member',
+        'token' => str_repeat('z', 64),
+        'invited_by_user_id' => $this->user->id,
+        'expires_at' => now()->addDay(),
+        'declined_at' => now()->subHour(),
+    ]);
+
+    $this->actingAs($this->user)
+        ->withSession(['current_workspace_id' => $this->workspace->id])
+        ->post(route('workspace.invitations.store'), ['email' => 'redo@example.com', 'role' => 'member']);
+
+    expect($inv->fresh()->declined_at)->toBeNull();
+});
