@@ -7,6 +7,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Passport\Events\AccessTokenCreated;
@@ -66,6 +67,14 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         Date::use(CarbonImmutable::class);
+
+        // Stop Laravel emitting the Vite asset-preload `Link` response header.
+        // On full page loads it lists every chunk and overflows nginx's proxy
+        // header buffer behind Plesk (which we can't reliably enlarge), 502'ing
+        // deep links to asset-heavy pages. Async components shrink it but don't
+        // guarantee it fits; dropping the header removes the failure mode for
+        // good. Assets still load normally — we just lose the preload hint.
+        Vite::usePreloadTagAttributes(false);
 
         DB::prohibitDestructiveCommands(
             app()->isProduction(),
