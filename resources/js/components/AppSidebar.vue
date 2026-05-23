@@ -33,8 +33,12 @@ import {
 } from 'lucide-vue-next';
 import { resolveEmoji } from '@/lib/emoji';
 import type { Favourite, FavouriteKind } from '@/composables/useFavourites';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
+
+const WorkspaceJoinSearch = defineAsyncComponent(
+    () => import('@/components/workspace/WorkspaceJoinSearch.vue'),
+);
 import Avatar from '@/components/repo/Avatar.vue';
 import TeamIcon from '@/components/repo/TeamIcon.vue';
 import { Button } from '@/components/ui/button';
@@ -1002,6 +1006,16 @@ function logout() {
                 >
                     No matches.
                 </div>
+
+                <!-- Workspace search group (only when user has typed a query) -->
+                <template v-if="searchQuery.trim()">
+                    <div class="border-t border-border px-3 pb-1 pt-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Workspaces
+                    </div>
+                    <div class="px-3 pb-3">
+                        <WorkspaceJoinSearch @joined="searchOpen = false" />
+                    </div>
+                </template>
             </DialogContent>
         </Dialog>
 
