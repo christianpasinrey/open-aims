@@ -2,7 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
 use App\Modules\Workspaces\Models\WorkspaceInvitation;
+use App\Modules\Workspaces\Models\WorkspaceMember;
+use App\Modules\Workspaces\Notifications\WorkspaceInvitationNotification;
+use Illuminate\Notifications\AnonymousNotifiable;
+use Illuminate\Support\Facades\Notification;
 
 beforeEach(function () {
     $fix = makeWorkspaceFixture();
@@ -52,10 +57,67 @@ it('builds an invitation mail with the accept link', function () {
         'expires_at' => now()->addDays(3),
     ]);
 
-    $mail = (new \App\Modules\Workspaces\Notifications\WorkspaceInvitationNotification($invitation, $this->workspace->name, $this->user->name))
-        ->toMail(new \Illuminate\Notifications\AnonymousNotifiable);
+    $mail = (new WorkspaceInvitationNotification($invitation, $this->workspace->name, $this->user->name))
+        ->toMail(new AnonymousNotifiable);
 
     $rendered = $mail->render();
     expect($rendered)->toContain('/invite/'.str_repeat('d', 64))
         ->and($rendered)->toContain($this->workspace->name);
+});
+
+it('lets an owner invite an email and sends the notification', function () {
+    Notification::fake();
+
+    $this->actingAs($this->user)
+        ->withSession(['current_workspace_id' => $this->workspace->id])
+        ->post(route('workspace.invitations.store'), [
+            'email' => 'invitee@example.com',
+            'role' => 'member',
+        ])->assertRedirect();
+
+    $inv = WorkspaceInvitation::where('email', 'invitee@example.com')->first();
+    expect($inv)->not->toBeNull()
+        ->and($inv->workspace_id)->toBe($this->workspace->id)
+        ->and(strlen($inv->token))->toBe(64)
+        ->and($inv->expires_at->isFuture())->toBeTrue();
+
+    Notification::assertSentOnDemand(WorkspaceInvitationNotification::class);
+});
+
+it('forbids a plain member from inviting', function () {
+    $member = User::factory()->create();
+    WorkspaceMember::create([
+        'workspace_id' => $this->workspace->id,
+        'user_id' => $member->id,
+        'role' => 'member',
+        'joined_at' => now(),
+    ]);
+
+    $this->actingAs($member)
+        ->withSession(['current_workspace_id' => $this->workspace->id])
+        ->post(route('workspace.invitations.store'), [
+            'email' => 'x@example.com',
+            'role' => 'member',
+        ])->assertForbidden();
+});
+
+it('regenerates the token when re-inviting the same email', function () {
+    Notification::fake();
+    $first = WorkspaceInvitation::create([
+        'workspace_id' => $this->workspace->id,
+        'email' => 'again@example.com',
+        'role' => 'member',
+        'token' => str_repeat('e', 64),
+        'invited_by_user_id' => $this->user->id,
+        'expires_at' => now()->addDay(),
+    ]);
+
+    $this->actingAs($this->user)
+        ->withSession(['current_workspace_id' => $this->workspace->id])
+        ->post(route('workspace.invitations.store'), ['email' => 'again@example.com', 'role' => 'admin']);
+
+    $first->refresh();
+    expect($first->token)->not->toBe(str_repeat('e', 64))
+        ->and($first->role)->toBe('admin');
+    expect(WorkspaceInvitation::where('email', 'again@example.com')->count())->toBe(1);
 });

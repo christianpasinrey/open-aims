@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Workspaces\Http\Controllers\InvitationWriteController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceMembersPageController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceSettingsController;
 use App\Modules\Workspaces\Http\Controllers\WorkspaceWriteController;
@@ -26,4 +27,8 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::patch('workspace/{slug}', [WorkspaceWriteController::class, 'update'])
         ->where('slug', '[A-Za-z0-9\-]+')
         ->name('workspace.update');
+
+    // Send a workspace invitation.
+    Route::post('workspace/invitations', [InvitationWriteController::class, 'store'])
+        ->name('workspace.invitations.store');
 });
