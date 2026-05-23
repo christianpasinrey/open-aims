@@ -1,19 +1,13 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { UserPlus, Search } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { Search, UserPlus, X } from 'lucide-vue-next';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import Avatar from '@/components/repo/Avatar.vue';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
+const AddMemberDialog = defineAsyncComponent(
+    () => import('@/pages/teams/partials/AddMemberDialog.vue'),
+);
 
 type Member = {
     id: number;
@@ -24,10 +18,20 @@ type Member = {
 const props = defineProps<{
     team: { id: number; name: string; key: string; color: string | null };
     members: Member[];
+    currentRole: string | null;
 }>();
 
 const query = ref('');
-const inviteOpen = ref(false);
+const addOpen = ref(false);
+
+const canManage = computed(
+    () => props.currentRole === 'owner' || props.currentRole === 'admin',
+);
+
+const roleLabels: Record<string, string> = {
+    lead: 'Lead',
+    member: 'Miembro',
+};
 
 const filtered = computed<Member[]>(() => {
     const q = query.value.trim().toLowerCase();
@@ -42,10 +46,24 @@ const filtered = computed<Member[]>(() => {
             m.user.email.toLowerCase().includes(q),
     );
 });
+
+function removeMember(m: Member) {
+    if (!canManage.value) {
+        return;
+    }
+
+    if (!window.confirm(`¿Quitar a ${m.user.name} del equipo?`)) {
+        return;
+    }
+
+    router.delete(`/teams/${props.team.key}/members/${m.user.id}`, {
+        preserveScroll: true,
+    });
+}
 </script>
 
 <template>
-    <Head :title="`${team.name} · Members`" />
+    <Head :title="`${team.name} · Miembros`" />
 
     <div class="flex h-full flex-1 flex-col overflow-hidden">
         <header
@@ -59,7 +77,7 @@ const filtered = computed<Member[]>(() => {
             </span>
             <h1 class="text-[13px] font-medium">{{ team.name }}</h1>
             <span class="text-[12px] text-muted-foreground uppercase"
-                >Members</span
+                >Miembros</span
             >
             <span class="text-[12px] text-muted-foreground">{{
                 members.length
@@ -77,9 +95,9 @@ const filtered = computed<Member[]>(() => {
                 >
                     Settings
                 </Link>
-                <Button size="sm" @click="inviteOpen = true">
+                <Button v-if="canManage" size="sm" @click="addOpen = true">
                     <UserPlus class="mr-1 size-3.5" />
-                    Invite
+                    Añadir miembro
                 </Button>
             </div>
         </header>
@@ -103,7 +121,7 @@ const filtered = computed<Member[]>(() => {
             <li
                 v-for="m in filtered"
                 :key="m.id"
-                class="flex items-center gap-3 px-5 py-2.5 hover:bg-accent/40"
+                class="group flex items-center gap-3 px-5 py-2.5 hover:bg-accent/40"
             >
                 <Avatar :name="m.user.name" :email="m.user.email" :size="28" />
                 <div class="min-w-0 flex-1">
@@ -116,39 +134,30 @@ const filtered = computed<Member[]>(() => {
                 </div>
                 <span
                     v-if="m.role"
-                    class="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] text-muted-foreground capitalize"
-                    >{{ m.role }}</span
+                    class="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] text-muted-foreground"
+                    >{{ roleLabels[m.role] ?? m.role }}</span
                 >
+                <button
+                    v-if="canManage"
+                    type="button"
+                    title="Quitar"
+                    class="flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors group-hover:opacity-100 hover:bg-accent hover:text-foreground focus:opacity-100 focus:outline-none"
+                    @click="removeMember(m)"
+                >
+                    <X class="size-3.5" />
+                    <span class="sr-only">Quitar</span>
+                </button>
             </li>
         </ul>
         <div v-else class="flex flex-1 items-center justify-center px-6 py-12">
             <p class="text-sm text-muted-foreground">No matching members.</p>
         </div>
 
-        <Dialog v-model:open="inviteOpen">
-            <DialogContent class="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Invite to {{ team.name }}</DialogTitle>
-                    <DialogDescription>
-                        Invitations aren&rsquo;t wired up yet. Coming soon.
-                    </DialogDescription>
-                </DialogHeader>
-                <div class="grid gap-2">
-                    <Label for="invite-email">Email address</Label>
-                    <Input
-                        id="invite-email"
-                        type="email"
-                        placeholder="teammate@company.com"
-                        disabled
-                    />
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" @click="inviteOpen = false"
-                        >Close</Button
-                    >
-                    <Button disabled>Send invite</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <AddMemberDialog
+            v-if="canManage"
+            v-model:open="addOpen"
+            :team-key="team.key"
+            :members="members"
+        />
     </div>
 </template>
