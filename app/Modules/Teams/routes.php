@@ -10,6 +10,7 @@ use App\Modules\Teams\Http\Controllers\TeamWriteController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
+    Route::post('teams', [TeamWriteController::class, 'store'])->name('teams.store');
     Route::get('labels/{id}/preview', [LabelPreviewController::class, 'show'])
         ->where('id', '\d+')
         ->name('labels.preview');

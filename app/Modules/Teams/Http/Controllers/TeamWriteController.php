@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Teams\Http\Controllers;
 
 use App\Modules\Teams\Models\Team;
+use App\Modules\Teams\Support\TeamProvisioner;
 use App\Modules\Workspaces\Models\Workspace;
+use App\Modules\Workspaces\Models\WorkspaceMember;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -17,6 +21,41 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 final class TeamWriteController
 {
+    public function store(Request $request, TeamProvisioner $provisioner): RedirectResponse
+    {
+        $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
+        if (! $workspace instanceof Workspace) {
+            throw new NotFoundHttpException('No active workspace.');
+        }
+
+        $user = $request->user();
+        $membership = $user === null ? null : WorkspaceMember::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('user_id', $user->getKey())
+            ->first();
+        if ($membership === null || ! in_array($membership->role, ['owner', 'admin'], true)) {
+            throw new AccessDeniedHttpException('Only owners or admins can create teams.');
+        }
+
+        if ($request->filled('key')) {
+            $request->merge(['key' => strtoupper((string) $request->input('key'))]);
+        }
+
+        $data = $request->validate([
+            'name' => 'required|string|max:80',
+            'key' => [
+                'sometimes', 'nullable', 'string', 'max:8',
+                Rule::unique('teams', 'key')->where(fn ($q) => $q->where('workspace_id', $workspace->id)),
+            ],
+            'color' => 'sometimes|nullable|string|max:9|regex:/^#?[0-9A-Fa-f]{3,8}$/',
+            'icon' => 'sometimes|nullable|string|max:32',
+        ]);
+
+        $provisioner->create($workspace, $data['name'], $data['key'] ?? null, $data['color'] ?? null, $data['icon'] ?? null);
+
+        return back();
+    }
+
     public function update(Request $request, string $key): RedirectResponse
     {
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
