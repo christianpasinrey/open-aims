@@ -3,10 +3,13 @@
 declare(strict_types=1);
 
 use App\Jobs\SendTelegramMessage;
+use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\IssueActivity;
+use App\Modules\Issues\Support\CommentTelegramFormatter;
 use App\Modules\Issues\Support\IssueActivityTelegramFormatter;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectActivity;
+use App\Modules\Projects\Support\ProjectActivityRecorder;
 use App\Modules\Projects\Support\ProjectActivityTelegramFormatter;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -136,5 +139,53 @@ describe('dispatch on activity', function () {
         ]);
 
         Bus::assertNotDispatched(SendTelegramMessage::class);
+    });
+});
+
+describe('comments', function () {
+    it('formats a comment with an excerpt and a link', function () {
+        $issue = makeIssue($this->team, $this->workspace, $this->states['Todo']);
+        $comment = Comment::create([
+            'issue_id' => $issue->id,
+            'user_id' => $this->user->id,
+            'parent_comment_id' => null,
+            'body' => 'Esto está casi listo, solo falta el QA.',
+        ]);
+
+        $text = CommentTelegramFormatter::format($comment);
+
+        expect($text)->toContain('ENG-'.$issue->number)
+            ->and($text)->toContain('Comentario:')
+            ->and($text)->toContain('solo falta el QA')
+            ->and($text)->toContain('/issues/ENG-'.$issue->number);
+    });
+
+    it('dispatches a telegram job when a comment is created', function () {
+        Bus::fake();
+
+        $issue = makeIssue($this->team, $this->workspace, $this->states['Todo']);
+        Comment::create([
+            'issue_id' => $issue->id,
+            'user_id' => $this->user->id,
+            'parent_comment_id' => null,
+            'body' => 'Un comentario.',
+        ]);
+
+        Bus::assertDispatched(SendTelegramMessage::class);
+    });
+});
+
+describe('milestones', function () {
+    it('logs a milestone_added activity and posts it to the feed', function () {
+        Bus::fake();
+
+        $project = Project::factory()->create(['workspace_id' => $this->workspace->id]);
+        $milestone = $project->milestones()->create(['name' => 'Beta', 'sort_order' => 1]);
+
+        app(ProjectActivityRecorder::class)->milestoneAdded($project, $milestone, $this->user->id);
+
+        expect(ProjectActivity::where('project_id', $project->id)->where('kind', 'milestone_added')->exists())
+            ->toBeTrue();
+        Bus::assertDispatched(SendTelegramMessage::class);
     });
 });

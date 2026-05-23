@@ -7,6 +7,7 @@ namespace App\Modules\Projects\Support;
 use App\Models\User;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectActivity;
+use App\Modules\Projects\Models\ProjectMilestone;
 
 /**
  * Single source of truth for project activity logging, shared by the UI
@@ -22,6 +23,20 @@ final class ProjectActivityRecorder
             'actor_user_id' => $actorId,
             'kind' => 'created',
             'payload' => null,
+            'occurred_at' => now(),
+        ]);
+    }
+
+    public function milestoneAdded(Project $project, ProjectMilestone $milestone, ?int $actorId): void
+    {
+        ProjectActivity::create([
+            'project_id' => $project->id,
+            'actor_user_id' => $actorId,
+            'kind' => 'milestone_added',
+            'payload' => [
+                'milestone_id' => $milestone->id,
+                'milestone_name' => $milestone->name,
+            ],
             'occurred_at' => now(),
         ]);
     }

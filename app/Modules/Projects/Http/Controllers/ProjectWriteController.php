@@ -168,16 +168,7 @@ final class ProjectWriteController
             'sort_order' => $sortOrder,
         ]);
 
-        ProjectActivity::create([
-            'project_id' => $project->id,
-            'actor_user_id' => $request->user()?->getKey(),
-            'kind' => 'milestone_added',
-            'payload' => [
-                'milestone_id' => $milestone->id,
-                'milestone_name' => $milestone->name,
-            ],
-            'occurred_at' => now(),
-        ]);
+        $this->recorder->milestoneAdded($project, $milestone, $request->user()?->getKey());
 
         return back();
     }

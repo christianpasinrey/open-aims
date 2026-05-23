@@ -6,8 +6,10 @@ namespace App\Modules\Issues;
 
 use App\Core\Registries\ModuleRegistry;
 use App\Core\Support\ModuleServiceProvider;
+use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Issues\Models\IssueActivity;
+use App\Modules\Issues\Observers\CommentTelegramObserver;
 use App\Modules\Issues\Observers\IssueActivityTelegramObserver;
 use App\Modules\Issues\Observers\IssueObserver;
 
@@ -26,5 +28,6 @@ final class IssuesServiceProvider extends ModuleServiceProvider
 
         Issue::observe(IssueObserver::class);
         IssueActivity::observe(IssueActivityTelegramObserver::class);
+        Comment::observe(CommentTelegramObserver::class);
     }
 }

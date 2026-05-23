@@ -7,6 +7,7 @@ namespace App\Modules\Projects\Mcp\Tools;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectMilestone;
+use App\Modules\Projects\Support\ProjectActivityRecorder;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Mcp\Request;
@@ -49,6 +50,8 @@ class ProjectsAddMilestone extends Tool
             'target_date' => $data['target_date'] ?? null,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
         ]);
+
+        app(ProjectActivityRecorder::class)->milestoneAdded($project, $milestone, auth()->id());
 
         return Response::json([
             'milestone_id' => $milestone->id,
