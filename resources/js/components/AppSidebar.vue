@@ -401,19 +401,6 @@ function logout() {
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                class="cursor-pointer"
-                                @select="(e: Event) => e.preventDefault()"
-                            >
-                                <a
-                                    href="https://the app/download"
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    class="flex w-full items-center"
-                                    >Download desktop app</a
-                                >
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger
                                     class="flex w-full items-center justify-between"
