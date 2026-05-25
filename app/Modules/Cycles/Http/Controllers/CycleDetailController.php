@@ -39,10 +39,14 @@ final class CycleDetailController
             throw new NotFoundHttpException('No active workspace.');
         }
 
-        $teamQuery = Team::query()->where('workspace_id', $workspace->id);
-        $team = $teamKey !== null
-            ? $teamQuery->where('key', $teamKey)->first()
-            : $teamQuery->orderBy('name')->first();
+        if ($teamKey === null) {
+            throw new NotFoundHttpException('Team is required.');
+        }
+
+        $team = Team::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('key', $teamKey)
+            ->first();
 
         if ($team === null) {
             throw new NotFoundHttpException('Team not found.');

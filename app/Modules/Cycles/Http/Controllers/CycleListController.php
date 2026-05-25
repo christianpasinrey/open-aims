@@ -126,6 +126,22 @@ final class CycleListController
             return $payload;
         })->all();
 
+        // Optional server-side filtering by lifecycle state and sorting.
+        // Without these params the full, chronologically-ordered list is
+        // returned (the default the timeline UI relies on).
+        $view = $request->query('view');
+        if (in_array($view, ['current', 'upcoming', 'completed'], true)) {
+            $cyclesPayload = array_values(array_filter(
+                $cyclesPayload,
+                static fn (array $c): bool => $c['state'] === $view,
+            ));
+        }
+
+        $sort = $request->query('sort');
+        if ($sort === 'number_desc') {
+            usort($cyclesPayload, static fn (array $a, array $b): int => $b['number'] <=> $a['number']);
+        }
+
         return Inertia::render('cycles/Index', [
             'team' => [
                 'id' => $team->id,
@@ -136,6 +152,8 @@ final class CycleListController
             'cycles' => $cyclesPayload,
             'filters' => [
                 'team' => $team->key,
+                'view' => is_string($view) ? $view : 'all',
+                'sort' => is_string($sort) ? $sort : null,
             ],
         ]);
     }

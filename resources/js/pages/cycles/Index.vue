@@ -322,7 +322,7 @@ function scopeDeltaSign(burndown: NonNullable<Burndown>): string {
                         >
                             <header class="flex items-center justify-between gap-3 px-4 py-3">
                                 <Link
-                                    :href="`/cycles/${row.cycle.number}`"
+                                    :href="`/cycles/${row.cycle.number}?team=${teamKey}`"
                                     class="flex min-w-0 items-center gap-2"
                                 >
                                     <Play

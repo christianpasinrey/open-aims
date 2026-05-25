@@ -127,8 +127,8 @@ describe('IssueDetailController::show', function () {
             ->get(route('issues.show', ['identifier' => 'ENG-'.$issue->number]));
 
         $response->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('linked_pull_requests', 1)
-            ->where('linked_pull_requests.0.number', 42)
+            ->has('legacy_linked_pull_requests', 1)
+            ->where('legacy_linked_pull_requests.0.number', 42)
         );
     });
 });
