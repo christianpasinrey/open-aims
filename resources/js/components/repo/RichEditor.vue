@@ -14,7 +14,6 @@ import { Markdown } from 'tiptap-markdown';
 import {
     Bold,
     Code,
-    Heading1,
     Heading2,
     Heading3,
     Italic,

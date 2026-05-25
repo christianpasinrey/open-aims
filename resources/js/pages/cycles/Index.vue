@@ -94,9 +94,6 @@ function fmtMonthDay(iso: string | null): string {
     const d = new Date(iso);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
-function fmtDay(iso: string): string {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 function fmtCooldown(days: number): string {
     if (days >= 7 && days % 7 === 0) {
         return `${days / 7} week${days / 7 === 1 ? '' : 's'} cooldown`;
@@ -125,93 +122,6 @@ function ringStrokeFor(percent: number): string {
     if (percent >= 70) return '#facc15';
     if (percent >= 30) return '#a855f7';
     return '#64748b';
-}
-
-// ---- Burndown chart geometry
-type Series = { date: string; value: number; projected?: boolean };
-
-function pathForSeries(series: Series[], width: number, height: number, max: number): string {
-    if (series.length < 2) return '';
-    const stepX = width / (series.length - 1);
-    return series
-        .map((p, i) => {
-            const x = i * stepX;
-            const y = height - (max <= 0 ? 0 : (p.value / max) * height);
-            return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-        })
-        .join(' ');
-}
-function areaForSeries(series: Series[], width: number, height: number, max: number): string {
-    if (series.length < 2) return '';
-    const stepX = width / (series.length - 1);
-    const top = series
-        .map((p, i) => {
-            const x = i * stepX;
-            const y = height - (max <= 0 ? 0 : (p.value / max) * height);
-            return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-        })
-        .join(' ');
-    return `${top} L${width.toFixed(2)},${height} L0,${height} Z`;
-}
-type ChartGeo = {
-    width: number;
-    height: number;
-    max: number;
-    scopePath: string;
-    startedPath: string;
-    startedArea: string;
-    completedPath: string;
-    completedArea: string;
-    idealPath: string;
-    todayX: number | null;
-    xLabels: { x: number; label: string }[];
-};
-
-function buildChart(burndown: NonNullable<Burndown>): ChartGeo {
-    const width = 760;
-    const height = 200;
-    const points = burndown.points;
-    const max = Math.max(burndown.finalScope, ...points.map((p) => p.scope), 1);
-
-    const scopeSeries: Series[] = points.map((p) => ({ date: p.date, value: p.scope, projected: p.projected }));
-    const startedSeries: Series[] = points.map((p) => ({ date: p.date, value: p.completed + p.started, projected: p.projected }));
-    const completedSeries: Series[] = points.map((p) => ({ date: p.date, value: p.completed, projected: p.projected }));
-    const idealSeries: Series[] = burndown.ideal.map((p) => ({ date: p.date, value: max - p.value }));
-
-    // Today marker — last non-projected point.
-    const todayIdx = (() => {
-        let last = -1;
-        points.forEach((p, i) => {
-            if (!p.projected) {
-                last = i;
-            }
-        });
-        return last >= 0 ? last : null;
-    })();
-    const stepX = width / Math.max(1, points.length - 1);
-    const todayX = todayIdx !== null ? todayIdx * stepX : null;
-
-    // x-axis labels: every ~7 days
-    const xLabels: { x: number; label: string }[] = [];
-    points.forEach((p, i) => {
-        if (i === 0 || i === points.length - 1 || i % 7 === 0) {
-            xLabels.push({ x: i * stepX, label: fmtDay(p.date) });
-        }
-    });
-
-    return {
-        width,
-        height,
-        max,
-        scopePath: pathForSeries(scopeSeries, width, height, max),
-        startedPath: pathForSeries(startedSeries, width, height, max),
-        startedArea: areaForSeries(startedSeries, width, height, max),
-        completedPath: pathForSeries(completedSeries, width, height, max),
-        completedArea: areaForSeries(completedSeries, width, height, max),
-        idealPath: pathForSeries(idealSeries, width, height, max),
-        todayX,
-        xLabels,
-    };
 }
 
 // ---- Per-cycle deltas for the legend

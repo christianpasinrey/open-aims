@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { computed, h, type VNode } from 'vue';
+import { computed } from 'vue';
 import IssueRefHoverCard from '@/components/repo/IssueRefHoverCard.vue';
 import { renderMarkdown } from '@/lib/markdown';
 
@@ -16,8 +16,6 @@ const props = defineProps<{
     class?: string;
 }>();
 
-const SPLIT_RE = /<<ISSUE-REF:([A-Z][A-Z0-9]*-\d+)>>/g;
-
 type Segment = { kind: 'html'; html: string } | { kind: 'ref'; identifier: string };
 
 const segments = computed<Segment[]>(() => {
@@ -29,9 +27,9 @@ const segments = computed<Segment[]>(() => {
     const out: Segment[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
-    SPLIT_RE.lastIndex = 0;
+    const re = /<<ISSUE-REF:([A-Z][A-Z0-9]*-\d+)>>/g;
 
-    while ((match = SPLIT_RE.exec(html)) !== null) {
+    while ((match = re.exec(html)) !== null) {
         if (match.index > lastIndex) {
             out.push({ kind: 'html', html: html.slice(lastIndex, match.index) });
         }

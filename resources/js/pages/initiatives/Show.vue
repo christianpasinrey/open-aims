@@ -124,11 +124,6 @@ function tabHref(tab: 'overview' | 'projects' | 'activity') {
         : `/initiatives/${props.initiative.slug}?tab=${tab}`;
 }
 
-const ringR = 5;
-const ringC = 2 * Math.PI * ringR;
-const ringDashOffset = computed(
-    () => ringC * (1 - props.progress.percent / 100),
-);
 const ringStroke = computed(() => {
     if (props.initiative.state === 'canceled') return '#a1a1aa';
     if (props.progress.percent >= 100 || props.initiative.state === 'completed')

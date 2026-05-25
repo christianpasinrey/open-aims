@@ -31,6 +31,9 @@ defineOptions({
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
+const githubError = computed(
+    () => (page.props.errors as Record<string, string> | undefined)?.github,
+);
 </script>
 
 <template>
@@ -115,10 +118,10 @@ const user = computed(() => page.props.auth.user);
         />
 
         <p
-            v-if="(page.props.errors as Record<string, string>).github"
+            v-if="githubError"
             class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive"
         >
-            {{ (page.props.errors as Record<string, string>).github }}
+            {{ githubError }}
         </p>
 
         <div

@@ -28,8 +28,6 @@ import {
     Trash2,
     Layers,
     Star,
-    Eye,
-    Circle,
 } from 'lucide-vue-next';
 import { resolveEmoji } from '@/lib/emoji';
 import type { Favourite, FavouriteKind } from '@/composables/useFavourites';
