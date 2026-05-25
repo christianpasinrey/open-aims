@@ -558,12 +558,12 @@ function onIdentifierClick(e: MouseEvent, identifier: string): void {
                     No issues yet
                 </h2>
                 <p class="mt-2 text-sm text-muted-foreground">
-                    Run
-                    <code
+                    Press
+                    <kbd
                         class="rounded bg-muted px-1.5 py-0.5 font-mono text-[12px]"
-                        >php artisan aims:import-snapshot</code
+                        >C</kbd
                     >
-                    to populate the workspace.
+                    to create your first issue.
                 </p>
             </div>
         </div>

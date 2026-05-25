@@ -37,35 +37,6 @@ npm run dev
 
 The app is now reachable at `http://localhost:8000`.
 
-## Importing data
-
-AIMS ships with a one-shot importer that ingests issue-tracker JSON exports into a workspace. It currently understands the export format used by [repo](https://the app). Drop the exported snapshot under `database/seed-data/{slug}/`:
-
-```
-database/seed-data/example/
-  team.json
-  users.json
-  statuses.json
-  labels.json
-  projects.json
-  cycles.json
-  issues.json
-  comments.json
-```
-
-Run the importer:
-
-```bash
-php artisan aims:import-snapshot \
-  --snapshot=example \
-  --workspace-slug=workspace \
-  --workspace-name="Workspace"
-```
-
-The command is idempotent — re-running matches on natural keys (email, slug, key, number) and updates in place rather than duplicating.
-
-> AIMS is an independent project and is **not affiliated with, endorsed by, or sponsored by repo**. "repo" is a trademark of its respective owner; it is referenced here only to describe the supported import format.
-
 ## GitHub integration
 
 AIMS supports two GitHub flows:
@@ -160,7 +131,6 @@ app/
     Cycles/                     Cycle planning + transitions
     Workspace/                  Settings, members, invitations
     Integrations/
-      repo/                   One-shot import command + service
       Github/                   OAuth, App service, webhook handler
 resources/js/
   pages/                        Inertia pages — one per route

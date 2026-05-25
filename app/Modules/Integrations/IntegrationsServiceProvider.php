@@ -6,7 +6,6 @@ namespace App\Modules\Integrations;
 
 use App\Core\Registries\ModuleRegistry;
 use App\Core\Support\ModuleServiceProvider;
-use App\Modules\Integrations\repo\Console\ImportFromrepoCommand;
 
 final class IntegrationsServiceProvider extends ModuleServiceProvider
 {
@@ -27,12 +26,6 @@ final class IntegrationsServiceProvider extends ModuleServiceProvider
         $githubMigrations = __DIR__.'/Github/Database/Migrations';
         if (is_dir($githubMigrations)) {
             $this->loadMigrationsFrom($githubMigrations);
-        }
-
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                ImportFromrepoCommand::class,
-            ]);
         }
     }
 }
