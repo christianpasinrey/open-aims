@@ -1,6 +1,6 @@
-# aims
+# AIMS — Advanced Issue Management System
 
-A self-hosted, opinionated repo clone for tracking issues, projects, and cycles. Built as a fast, keyboard-driven workspace for small teams that want the repo feel without the repo bill.
+A self-hosted, keyboard-driven issue tracker for managing issues, projects, and cycles. Built as a fast workspace for small teams that want to run their own planning tool on their own infrastructure.
 
 ## Stack
 
@@ -37,9 +37,9 @@ npm run dev
 
 The app is now reachable at `http://localhost:8000`.
 
-## Importing data from repo
+## Importing data
 
-A one-shot importer pulls a snapshot of repo JSON exports into a aims workspace. Snapshots live under `database/seed-data/{slug}/`:
+AIMS ships with a one-shot importer that ingests issue-tracker JSON exports into a workspace. It currently understands the export format used by [repo](https://the app). Drop the exported snapshot under `database/seed-data/{slug}/`:
 
 ```
 database/seed-data/example/
@@ -64,9 +64,11 @@ php artisan aims:import-snapshot \
 
 The command is idempotent — re-running matches on natural keys (email, slug, key, number) and updates in place rather than duplicating.
 
+> AIMS is an independent project and is **not affiliated with, endorsed by, or sponsored by repo**. "repo" is a trademark of its respective owner; it is referenced here only to describe the supported import format.
+
 ## GitHub integration
 
-aims supports two GitHub flows:
+AIMS supports two GitHub flows:
 
 ### 1. OAuth — sign-in and account linking
 
@@ -87,7 +89,7 @@ Create an OAuth App at <https://github.com/settings/developers>:
 
 ### 2. GitHub App — webhook ingestion
 
-Connects a repo (or org) so that PR / commit references like `LAM-123` auto-link to the matching aims issue.
+Connects a repo (or org) so that PR / commit references like `LAM-123` auto-link to the matching AIMS issue.
 
 In `.env`:
 
@@ -162,7 +164,7 @@ app/
       Github/                   OAuth, App service, webhook handler
 resources/js/
   pages/                        Inertia pages — one per route
-  components/repo/            repo-style atomic components (StatusIcon, ProjectIcon, ...)
+  components/repo/            Atomic issue-tracker components (StatusIcon, ProjectIcon, ...)
   components/ui/                shadcn-vue primitives
   composables/                  Reusable logic (keyboard shortcuts, theme, ...)
   layouts/                      Inertia persistent layouts

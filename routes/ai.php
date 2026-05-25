@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Mcp\Servers\AIMSServer;
+use App\Mcp\Servers\AimsServer;
 use Laravel\Mcp\Facades\Mcp;
 
 // OAuth 2.1 discovery endpoints (.well-known/oauth-protected-resource and
@@ -13,4 +13,4 @@ Mcp::oauthRoutes();
 
 // Public MCP endpoint — protected by Passport bearer auth + the `mcp`
 // scope (see Passport scope registration in AppServiceProvider).
-Mcp::web('/mcp', AIMSServer::class)->middleware(['auth:api']);
+Mcp::web('/mcp', AimsServer::class)->middleware(['auth:api']);
