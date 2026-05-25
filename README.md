@@ -145,4 +145,4 @@ routes/
 
 ## License
 
-Private — do not redistribute.
+Released under the [MIT License](LICENSE).
