@@ -15,6 +15,7 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/issues')->name('dashboard');
     Route::get('inbox', [InboxController::class, 'index'])->name('inbox.index');
+    Route::get('/plans/{plan}/raw', \App\Http\Controllers\PlanRawController::class)->name('plans.raw');
 });
 
 // GitHub OAuth — sign in and account linking.
