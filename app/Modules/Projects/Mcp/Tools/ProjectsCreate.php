@@ -24,7 +24,7 @@ use Laravel\Mcp\Server\Tool;
     .'Auto-generates a unique slug from the name. '
     .'Always attach a plan unless skip_plan is true. Plans live with the project, not in the codebase. '
     .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html"). '
-    .'The plan is stored as a project resource and rendered inline on the project page; '
+    .'The plan is stored with the project and rendered inline on the project page; '
     .'future MCP read calls (projects.get) return the full plan body so later sessions '
     .'can pick up the work without scanning the repo. '
     .'Plans render in an isolated sandboxed iframe (scripts run but cannot access the AIMS session/API). '
