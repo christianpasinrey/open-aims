@@ -65,3 +65,23 @@ it('rejects plan_libs when plan_format is md', function () {
         'plan_content' => 'plain', 'plan_format' => 'md', 'plan_libs' => ['mermaid'],
     ])->assertHasErrors();
 });
+
+it('creates a project with an HTML plan and stores libs', function () {
+    $fix = makeWorkspaceFixture();
+
+    AimsServer::actingAs($fix['user'])->tool(
+        \App\Modules\Projects\Mcp\Tools\ProjectsCreate::class, [
+            'name' => 'Rich project',
+            'team_keys' => ['ENG'],
+            'plan_content' => '<canvas id="c"></canvas>',
+            'plan_format' => 'html',
+            'plan_libs' => ['chart'],
+        ]
+    )->assertOk();
+
+    $project = \App\Modules\Projects\Models\Project::where('name', 'Rich project')->firstOrFail();
+    $plan = \App\Models\Plan::where('planable_type', $project->getMorphClass())
+        ->where('planable_id', $project->id)->where('is_current', true)->firstOrFail();
+
+    expect($plan->format)->toBe('html')->and($plan->libs)->toBe(['chart']);
+});
