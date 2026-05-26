@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Issues\Mcp\Tools;
 
+use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
 use App\Modules\Cycles\Models\Cycle;
@@ -25,11 +26,14 @@ use Laravel\Mcp\Server\Tool;
     .'State transitions auto-set started_at / completed_at / canceled_at. '
     .'Always attach a plan unless skip_plan is true. Plans live with the issue, not in the codebase. '
     .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html") to refresh '
-    .'the issue plan; previous plan rows are preserved as history but flagged inactive.'
+    .'the issue plan; previous plan rows are preserved as history but flagged inactive. '
+    .'Plans render in an isolated sandboxed iframe (scripts run but cannot access the AIMS session/API). '
+    .'For diagrams/charts pass plan_format="html" + plan_libs (e.g. ["mermaid"]) and use the documented markup; '
+    .'you may also load your own external CDNs inside the HTML if needed.'
 )]
 class IssuesUpdate extends Tool
 {
-    use AttachesIssuePlan;
+    use AttachesPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -55,6 +59,8 @@ class IssuesUpdate extends Tool
             'labels.*' => 'string|max:64',
             'plan_content' => 'sometimes|nullable|string',
             'plan_format' => 'sometimes|nullable|string|in:md,html',
+            'plan_libs' => 'sometimes|nullable|array',
+            'plan_libs.*' => 'string|in:mermaid,chart',
             'skip_plan' => 'sometimes|nullable|boolean',
         ])->validate();
 
@@ -63,6 +69,9 @@ class IssuesUpdate extends Tool
             ? $data['plan_content']
             : null;
         $planFormat = $data['plan_format'] ?? 'md';
+        $planLibs = isset($data['plan_libs']) && is_array($data['plan_libs'])
+            ? array_values(array_unique($data['plan_libs']))
+            : null;
 
         if (! $skipPlan && ($planContent === null || $planContent === '')) {
             return Response::error(
@@ -163,13 +172,11 @@ class IssuesUpdate extends Tool
 
         $planSummary = null;
         if ($planContent !== null && $planContent !== '') {
-            $planResource = $this->attachPlanToIssue(
-                $issue,
-                $planContent,
-                $planFormat,
+            $plan = $this->attachPlan(
+                $issue, $planContent, $planFormat, $planLibs,
                 $user?->getAuthIdentifier() !== null ? (int) $user->getAuthIdentifier() : null,
             );
-            $planSummary = $this->planSummary($planResource);
+            $planSummary = $this->planSummary($plan);
         }
 
         return Response::json([
@@ -215,6 +222,12 @@ class IssuesUpdate extends Tool
                 .'Required unless skip_plan=true.'
             ),
             'plan_format' => $schema->string()->description('"md" (default) or "html". Required if plan_content is set.'),
+            'plan_libs' => $schema->array()->items($schema->string())->description(
+                'Local libraries to inject into the rendered plan iframe (no CDN needed): '
+                .'"mermaid" (diagrams: graph/sequence/gantt — write <pre class="mermaid">...</pre>), '
+                .'"chart" (Chart.js — write a <canvas id="..."> and a small init script). '
+                .'Only valid with plan_format=html.'
+            ),
             'skip_plan' => $schema->boolean()->description('Set true to bypass the plan requirement (default false).'),
             'workspace_slug' => $schema->string(),
         ];
