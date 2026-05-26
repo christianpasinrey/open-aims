@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Projects\Models;
 
 use App\Core\Concerns\BelongsToWorkspace;
+use App\Models\Plan;
 use App\Models\User;
 use App\Modules\Integrations\Github\Models\GithubLink;
 use App\Modules\Issues\Models\Issue;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
@@ -100,5 +102,10 @@ class Project extends Model
     public function githubLinks(): MorphMany
     {
         return $this->morphMany(GithubLink::class, 'linkable');
+    }
+
+    public function plan(): MorphOne
+    {
+        return $this->morphOne(Plan::class, 'planable')->where('is_current', true);
     }
 }
