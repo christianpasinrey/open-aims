@@ -65,7 +65,7 @@ class IssuesCreate extends Tool
             'labels.*' => 'string|max:64',
             'plan_content' => 'nullable|string',
             'plan_format' => 'nullable|string|in:md,html',
-            'plan_libs' => 'nullable|array',
+            'plan_libs' => 'nullable|array|prohibited_unless:plan_format,html',
             'plan_libs.*' => 'string|in:mermaid,chart',
             'skip_plan' => 'nullable|boolean',
         ])->validate();

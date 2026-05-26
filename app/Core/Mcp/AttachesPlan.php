@@ -6,6 +6,7 @@ namespace App\Core\Mcp;
 
 use App\Models\Plan;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Attaches a plan document to any planable model (Issue, Project, ...).
@@ -21,28 +22,32 @@ trait AttachesPlan
     {
         $format = $format === 'html' ? 'html' : 'md';
         $type = $planable->getMorphClass();
+        $id = $planable->getKey();
 
-        $nextVersion = (int) Plan::query()
-            ->where('planable_type', $type)
-            ->where('planable_id', $planable->getKey())
-            ->max('version') + 1;
+        return DB::transaction(function () use ($type, $id, $content, $format, $libs, $userId) {
+            $nextVersion = (int) Plan::query()
+                ->where('planable_type', $type)
+                ->where('planable_id', $id)
+                ->lockForUpdate()
+                ->max('version') + 1;
 
-        Plan::query()
-            ->where('planable_type', $type)
-            ->where('planable_id', $planable->getKey())
-            ->where('is_current', true)
-            ->update(['is_current' => false]);
+            Plan::query()
+                ->where('planable_type', $type)
+                ->where('planable_id', $id)
+                ->where('is_current', true)
+                ->update(['is_current' => false]);
 
-        return Plan::create([
-            'planable_type' => $type,
-            'planable_id' => $planable->getKey(),
-            'format' => $format,
-            'content' => $content,
-            'libs' => ! empty($libs) ? array_values($libs) : null,
-            'version' => $nextVersion,
-            'is_current' => true,
-            'created_by_user_id' => $userId,
-        ]);
+            return Plan::create([
+                'planable_type' => $type,
+                'planable_id' => $id,
+                'format' => $format,
+                'content' => $content,
+                'libs' => ! empty($libs) ? array_values($libs) : null,
+                'version' => $nextVersion,
+                'is_current' => true,
+                'created_by_user_id' => $userId,
+            ]);
+        });
     }
 
     /**

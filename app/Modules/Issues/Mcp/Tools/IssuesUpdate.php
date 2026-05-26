@@ -59,7 +59,7 @@ class IssuesUpdate extends Tool
             'labels.*' => 'string|max:64',
             'plan_content' => 'sometimes|nullable|string',
             'plan_format' => 'sometimes|nullable|string|in:md,html',
-            'plan_libs' => 'sometimes|nullable|array',
+            'plan_libs' => 'sometimes|nullable|array|prohibited_unless:plan_format,html',
             'plan_libs.*' => 'string|in:mermaid,chart',
             'skip_plan' => 'sometimes|nullable|boolean',
         ])->validate();

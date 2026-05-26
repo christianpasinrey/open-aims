@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Mcp\Servers\AimsServer;
 use App\Models\Plan;
 use App\Modules\Issues\Mcp\Tools\IssuesCreate;
+use App\Modules\Issues\Mcp\Tools\IssuesUpdate;
 use App\Modules\Issues\Models\Issue;
 
 it('creates an issue with an HTML plan and stores libs', function () {
@@ -34,7 +35,7 @@ it('demotes the previous plan when a new one is attached', function () {
     ])->assertOk();
     $issue = Issue::where('title', 'demo')->firstOrFail();
 
-    AimsServer::actingAs($fix['user'])->tool(\App\Modules\Issues\Mcp\Tools\IssuesUpdate::class, [
+    AimsServer::actingAs($fix['user'])->tool(IssuesUpdate::class, [
         'identifier' => 'ENG-'.$issue->number, 'plan_content' => 'v2', 'plan_format' => 'md',
     ])->assertOk();
 
@@ -43,6 +44,10 @@ it('demotes the previous plan when a new one is attached', function () {
         ->and($current->first()->content)->toBe('v2')
         ->and($current->first()->version)->toBe(2)
         ->and(Plan::where('planable_id', $issue->id)->count())->toBe(2);
+
+    $archived = Plan::where('planable_id', $issue->id)->where('is_current', false)->get();
+    expect($archived)->toHaveCount(1)
+        ->and($archived->first()->version)->toBe(1);
 });
 
 it('rejects an invalid plan_libs value', function () {
@@ -50,5 +55,13 @@ it('rejects an invalid plan_libs value', function () {
     AimsServer::actingAs($fix['user'])->tool(IssuesCreate::class, [
         'team_key' => 'ENG', 'title' => 'bad libs',
         'plan_content' => '<p>x</p>', 'plan_format' => 'html', 'plan_libs' => ['d3'],
+    ])->assertHasErrors();
+});
+
+it('rejects plan_libs when plan_format is md', function () {
+    $fix = makeWorkspaceFixture();
+    AimsServer::actingAs($fix['user'])->tool(IssuesCreate::class, [
+        'team_key' => 'ENG', 'title' => 'md with libs',
+        'plan_content' => 'plain', 'plan_format' => 'md', 'plan_libs' => ['mermaid'],
     ])->assertHasErrors();
 });
