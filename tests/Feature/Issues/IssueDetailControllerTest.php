@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Plan;
 use App\Modules\Integrations\Github\Models\GithubInstallation;
 use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
 use App\Modules\Issues\Models\Issue;
@@ -134,11 +135,11 @@ describe('IssueDetailController::show', function () {
 
     it('passes the current plan props with libs to the issue page', function () {
         $fix = makeWorkspaceFixture();
-        $issue = \App\Modules\Issues\Models\Issue::factory()->create([
+        $issue = Issue::factory()->create([
             'workspace_id' => $fix['workspace']->id, 'team_id' => $fix['team']->id,
             'workflow_state_id' => $fix['states']['Triage']->id, 'number' => 1,
         ]);
-        \App\Models\Plan::create([
+        Plan::create([
             'planable_type' => $issue->getMorphClass(), 'planable_id' => $issue->id,
             'format' => 'html', 'content' => '<p>plan body</p>', 'libs' => ['mermaid'],
             'version' => 1, 'is_current' => true,

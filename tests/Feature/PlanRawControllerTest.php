@@ -1,7 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 use App\Models\Plan;
+use App\Models\User;
 use App\Modules\Issues\Models\Issue;
 
 it('serves the raw plan body to a workspace member', function () {
@@ -32,6 +34,6 @@ it('denies a non-member', function () {
         'format' => 'html', 'content' => '<h1>secret</h1>', 'version' => 1, 'is_current' => true,
     ]);
 
-    $outsider = \App\Models\User::factory()->create();
+    $outsider = User::factory()->create();
     $this->actingAs($outsider)->get("/plans/{$plan->id}/raw")->assertForbidden();
 });

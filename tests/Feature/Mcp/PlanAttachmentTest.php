@@ -7,6 +7,8 @@ use App\Models\Plan;
 use App\Modules\Issues\Mcp\Tools\IssuesCreate;
 use App\Modules\Issues\Mcp\Tools\IssuesUpdate;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Projects\Mcp\Tools\ProjectsCreate;
+use App\Modules\Projects\Models\Project;
 
 it('creates an issue with an HTML plan and stores libs', function () {
     $fix = makeWorkspaceFixture();
@@ -70,7 +72,7 @@ it('creates a project with an HTML plan and stores libs', function () {
     $fix = makeWorkspaceFixture();
 
     AimsServer::actingAs($fix['user'])->tool(
-        \App\Modules\Projects\Mcp\Tools\ProjectsCreate::class, [
+        ProjectsCreate::class, [
             'name' => 'Rich project',
             'team_keys' => ['ENG'],
             'plan_content' => '<canvas id="c"></canvas>',
@@ -79,8 +81,8 @@ it('creates a project with an HTML plan and stores libs', function () {
         ]
     )->assertOk();
 
-    $project = \App\Modules\Projects\Models\Project::where('name', 'Rich project')->firstOrFail();
-    $plan = \App\Models\Plan::where('planable_type', $project->getMorphClass())
+    $project = Project::where('name', 'Rich project')->firstOrFail();
+    $plan = Plan::where('planable_type', $project->getMorphClass())
         ->where('planable_id', $project->id)->where('is_current', true)->firstOrFail();
 
     expect($plan->format)->toBe('html')->and($plan->libs)->toBe(['chart']);

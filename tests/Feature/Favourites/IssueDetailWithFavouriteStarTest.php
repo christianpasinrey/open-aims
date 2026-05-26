@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Favourites\Models\UserFavourite;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Views\Models\IssueView;
 use Inertia\Testing\AssertableInertia;
 
 beforeEach(function () {
@@ -59,7 +60,7 @@ describe('Issue detail star → /favourites/toggle → sidebar payload', functio
     });
 
     it('starring a view also flips IssueView.is_favorite for backwards compat', function () {
-        $view = \App\Modules\Views\Models\IssueView::create([
+        $view = IssueView::create([
             'workspace_id' => $this->workspace->id,
             'name' => 'My in-progress',
             'description' => null,
@@ -79,7 +80,7 @@ describe('Issue detail star → /favourites/toggle → sidebar payload', functio
                 'href' => '/views/'.$view->id,
                 'label' => $view->name,
                 'icon' => 'Eye',
-                'target_type' => \App\Modules\Views\Models\IssueView::class,
+                'target_type' => IssueView::class,
                 'target_id' => $view->id,
             ]);
 
@@ -94,7 +95,7 @@ describe('Issue detail star → /favourites/toggle → sidebar payload', functio
                 'href' => '/views/'.$view->id,
                 'label' => $view->name,
                 'icon' => 'Eye',
-                'target_type' => \App\Modules\Views\Models\IssueView::class,
+                'target_type' => IssueView::class,
                 'target_id' => $view->id,
             ]);
 

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Models\Plan;
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Issues\Models\IssueResource;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectResource;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -72,8 +74,8 @@ return new class extends Migration
     private function resourceClassFor(string $table): string
     {
         return $table === 'issue_resources'
-            ? \App\Modules\Issues\Models\IssueResource::class
-            : \App\Modules\Projects\Models\ProjectResource::class;
+            ? IssueResource::class
+            : ProjectResource::class;
     }
 
     public function down(): void

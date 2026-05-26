@@ -128,8 +128,8 @@ it('regenerates the token when re-inviting the same email', function () {
 });
 
 it('clears declined_at when re-inviting a previously declined email', function () {
-    \Illuminate\Support\Facades\Notification::fake();
-    $inv = \App\Modules\Workspaces\Models\WorkspaceInvitation::create([
+    Notification::fake();
+    $inv = WorkspaceInvitation::create([
         'workspace_id' => $this->workspace->id,
         'email' => 'redo@example.com',
         'role' => 'member',

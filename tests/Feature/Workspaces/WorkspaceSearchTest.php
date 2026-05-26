@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Workspaces\Models\Workspace;
 use App\Modules\Workspaces\Models\WorkspaceJoinRequest;
 use App\Modules\Workspaces\Models\WorkspaceMember;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     $this->user = User::factory()->create(['email_verified_at' => now()]);
@@ -15,7 +16,7 @@ function ws(string $name, string $policy): Workspace
 {
     return Workspace::create([
         'name' => $name,
-        'slug' => \Illuminate\Support\Str::slug($name).'-'.uniqid(),
+        'slug' => Str::slug($name).'-'.uniqid(),
         'owner_user_id' => User::factory()->create()->id,
         'join_policy' => $policy,
     ]);
