@@ -106,6 +106,7 @@ type Project = {
               url: string | null;
               content_preview: string;
               uploaded_at: string | null;
+              libs?: string[] | null;
           }
         | null;
     latest_plan_content: string | null;
@@ -179,6 +180,10 @@ const ProjectActivityRow = defineAsyncComponent(
 
 const MarkdownContent = defineAsyncComponent(
     () => import('@/components/repo/MarkdownContent.vue'),
+);
+
+const PlanRenderer = defineAsyncComponent(
+    () => import('@/components/repo/PlanRenderer.vue'),
 );
 
 const props = defineProps<{
@@ -517,18 +522,22 @@ const labelMenuOpen = ref<boolean>(false);
 
 const filteredAvailableLabels = computed(() => {
     const q = labelQuery.value.trim().toLowerCase();
+
     if (!q) {
         return props.available_labels;
     }
+
     return props.available_labels.filter((l) =>
         l.name.toLowerCase().includes(q),
     );
 });
 const exactLabelMatch = computed(() => {
     const q = labelQuery.value.trim().toLowerCase();
+
     if (!q) {
         return false;
     }
+
     return [...props.available_labels, ...props.labels].some(
         (l) => l.name.toLowerCase() === q,
     );
@@ -537,11 +546,13 @@ const exactLabelMatch = computed(() => {
 async function quickCreateLabel() {
     const name = labelQuery.value.trim();
     const teamKey = props.project.teams[0]?.key;
+
     if (!name || !teamKey || labelCreating.value) {
         return;
     }
 
     labelCreating.value = true;
+
     try {
         const res = await fetch(`/teams/${teamKey}/labels`, {
             method: 'POST',
@@ -559,14 +570,17 @@ async function quickCreateLabel() {
             },
             body: JSON.stringify({ name }),
         });
+
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             toast.error(
                 (err?.message as string | undefined) ??
                     'Could not create label',
             );
+
             return;
         }
+
         const created = (await res.json()) as { id: number; name: string };
         labelQuery.value = '';
         // Attach right away — server reload via Inertia will refresh the list.
@@ -610,51 +624,24 @@ const planFormat = computed<'md' | 'html'>(
 );
 const planUploadedLabel = computed<string | null>(() => {
     const at = props.project.latest_plan?.uploaded_at;
+
     if (!at) {
         return null;
     }
+
     try {
         return new Date(at).toLocaleString();
     } catch {
         return at;
     }
 });
-const planHtmlSrcdoc = computed<string>(() => {
-    if (
-        props.project.latest_plan?.format !== 'html' ||
-        !props.project.latest_plan_content
-    ) {
-        return '';
-    }
-    // Wrap user HTML in a minimal scaffold so links open in a new tab and
-    // the body inherits a sane base style. The iframe is sandboxed with no
-    // allow-* flags — no JS, no same-origin, no top navigation, no forms.
-    const body = props.project.latest_plan_content;
-    return [
-        '<!doctype html>',
-        '<html><head><meta charset="utf-8">',
-        '<base target="_blank">',
-        '<style>',
-        'html,body{margin:0;padding:12px 14px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:13px;line-height:1.55;color:#0f172a;background:transparent;}',
-        '@media (prefers-color-scheme: dark){html,body{color:#e2e8f0;}}',
-        'h1,h2,h3,h4{font-weight:600;line-height:1.3;}',
-        'pre,code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;}',
-        'pre{padding:8px;border-radius:6px;background:rgba(127,127,127,0.12);overflow-x:auto;}',
-        'img{max-width:100%;height:auto;}',
-        'a{color:#6366f1;text-decoration:underline;}',
-        '</style>',
-        '</head><body>',
-        body,
-        '</body></html>',
-    ].join('');
-});
-
 function pickFile() {
     resourceFileInput.value?.click();
 }
 function onResourceFile(e: Event) {
     const target = e.target as HTMLInputElement;
     const file = target.files?.[0];
+
     if (!file) {
         return;
     }
@@ -681,6 +668,7 @@ function onResourceFile(e: Event) {
             },
             onFinish: () => {
                 resourceUploading.value = false;
+
                 if (resourceFileInput.value) {
                     resourceFileInput.value.value = '';
                 }
@@ -702,8 +690,10 @@ function openLinkDialog() {
 function submitLink() {
     const name = linkForm.value.name.trim();
     const url = linkForm.value.url.trim();
+
     if (!name || !url) {
         linkError.value = 'Name and URL are required.';
+
         return;
     }
 
@@ -742,13 +732,17 @@ function fmtBytes(bytes: number | null): string {
     if (bytes === null || bytes === undefined) {
         return '';
     }
+
     if (bytes < 1024) {
         return `${bytes} B`;
     }
+
     const kb = bytes / 1024;
+
     if (kb < 1024) {
         return `${kb.toFixed(1)} KB`;
     }
+
     return `${(kb / 1024).toFixed(1)} MB`;
 }
 
@@ -1091,14 +1085,17 @@ onMounted(() => {
         }
 
         const railRaw = window.localStorage.getItem(RAIL_KEY);
+
         if (railRaw) {
             const parsed = JSON.parse(railRaw) as {
                 collapsed?: boolean;
                 sections?: Record<string, boolean>;
             };
+
             if (typeof parsed.collapsed === 'boolean') {
                 railCollapsed.value = parsed.collapsed;
             }
+
             if (parsed.sections) {
                 sectionCollapsed.value = {
                     ...sectionCollapsed.value,
@@ -1563,46 +1560,13 @@ watch(
                                 </a>
                             </div>
 
-                            <div
-                                v-if="project.plan_too_large"
-                                class="px-3 py-3 text-[12.5px] text-muted-foreground"
-                            >
-                                Plan is too large to render inline — download
-                                the file to read it.
-                            </div>
-
-                            <MarkdownContent
-                                v-else-if="
-                                    planFormat === 'md' &&
-                                    project.latest_plan_content
-                                "
-                                :source="project.latest_plan_content"
-                                :interactive-tasks="false"
-                                class="px-3 py-2"
+                            <PlanRenderer
+                                :format="planFormat"
+                                :content="project.latest_plan_content"
+                                :libs="project.latest_plan?.libs ?? null"
+                                :too-large="project.plan_too_large"
+                                :download-url="project.latest_plan?.url ?? null"
                             />
-
-                            <iframe
-                                v-else-if="
-                                    planFormat === 'html' &&
-                                    project.latest_plan_content
-                                "
-                                :srcdoc="planHtmlSrcdoc"
-                                sandbox=""
-                                title="Project plan"
-                                class="block w-full border-0"
-                                style="
-                                    min-height: 400px;
-                                    max-height: 800px;
-                                    height: 520px;
-                                "
-                            />
-
-                            <div
-                                v-else
-                                class="px-3 py-3 text-[12.5px] text-muted-foreground"
-                            >
-                                Plan content unavailable.
-                            </div>
                         </div>
                     </div>
 
