@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Issues\Mcp\Tools;
 
+use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Modules\Issues\Models\Issue;
-use App\Modules\Issues\Models\IssueResource;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
@@ -24,7 +24,7 @@ use Laravel\Mcp\Server\Tool;
 )]
 class IssuesList extends Tool
 {
-    use AttachesIssuePlan;
+    use AttachesPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -56,6 +56,7 @@ class IssuesList extends Tool
                 'assignee:id,name,email',
                 'project:id,name,slug',
                 'labels:id,name,color',
+                'plan',
             ]);
 
         if (! empty($data['team'])) {
@@ -111,18 +112,6 @@ class IssuesList extends Tool
             ->limit($limit)
             ->get();
 
-        // Preload the latest plan per issue to avoid N+1 lookups.
-        $latestPlans = IssueResource::query()
-            ->whereIn('issue_id', $issues->pluck('id'))
-            ->where('is_plan', true)
-            ->orderBy('issue_id')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->with('media')
-            ->get()
-            ->groupBy('issue_id')
-            ->map(fn ($group) => $group->first());
-
         return Response::json([
             'count' => $issues->count(),
             'issues' => $issues->map(fn (Issue $i) => [
@@ -135,7 +124,7 @@ class IssuesList extends Tool
                 'project' => $i->project?->name,
                 'labels' => $i->labels->pluck('name')->all(),
                 'updated_at' => $i->updated_at?->toIso8601String(),
-                'plan' => $this->planSummary($latestPlans->get($i->id)),
+                'plan' => $this->planSummary($i->plan),
                 'url' => '/issues/'.$i->team->key.'-'.$i->number,
             ])->all(),
         ]);

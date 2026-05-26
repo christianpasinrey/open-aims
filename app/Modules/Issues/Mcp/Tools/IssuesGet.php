@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Issues\Mcp\Tools;
 
+use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
+use App\Models\Plan;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\Issue;
-use App\Modules\Issues\Models\IssueResource;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
@@ -26,7 +27,7 @@ use Laravel\Mcp\Server\Tool;
 )]
 class IssuesGet extends Tool
 {
-    use AttachesIssuePlan;
+    use AttachesPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -82,13 +83,14 @@ class IssuesGet extends Tool
             $truncated = true;
         }
 
-        $planResource = IssueResource::query()
-            ->where('issue_id', $issue->id)
-            ->where('is_plan', true)
-            ->latest()
+        $plan = Plan::query()
+            ->where('planable_type', $issue->getMorphClass())
+            ->where('planable_id', $issue->getKey())
+            ->where('is_current', true)
+            ->latest('id')
             ->first();
-        $planSummary = $this->planSummary($planResource);
-        $planFullContent = $this->planFullContent($planResource);
+        $planSummary = $this->planSummary($plan);
+        $planFullContent = $this->planFullContent($plan);
 
         return Response::json([
             'identifier' => $team->key.'-'.$issue->number,
