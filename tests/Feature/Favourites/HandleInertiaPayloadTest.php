@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
 use App\Modules\Favourites\Models\UserFavourite;
 use Inertia\Testing\AssertableInertia;
 
@@ -60,7 +61,7 @@ describe('HandleInertiaRequests::workspacePayload', function () {
     });
 
     it('only exposes the current user\'s favourites (not other users\')', function () {
-        $other = \App\Models\User::factory()->create();
+        $other = User::factory()->create();
         UserFavourite::create([
             'user_id' => $other->id,
             'workspace_id' => $this->workspace->id,

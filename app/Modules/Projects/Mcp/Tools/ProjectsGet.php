@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Mcp\Tools;
 
+use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
+use App\Models\Plan;
 use App\Modules\Projects\Models\Project;
-use App\Modules\Projects\Models\ProjectResource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Mcp\Request;
@@ -23,7 +24,7 @@ use Laravel\Mcp\Server\Tool;
 )]
 class ProjectsGet extends Tool
 {
-    use AttachesProjectPlan;
+    use AttachesPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -68,13 +69,14 @@ class ProjectsGet extends Tool
         $total = (int) $project->total_issues;
         $completed = (int) $project->completed_issues;
 
-        $planResource = ProjectResource::query()
-            ->where('project_id', $project->id)
-            ->where('is_plan', true)
-            ->latest()
+        $plan = Plan::query()
+            ->where('planable_type', $project->getMorphClass())
+            ->where('planable_id', $project->getKey())
+            ->where('is_current', true)
+            ->latest('id')
             ->first();
-        $planSummary = $this->planSummary($planResource);
-        $planFullContent = $this->planFullContent($planResource);
+        $planSummary = $this->planSummary($plan);
+        $planFullContent = $this->planFullContent($plan);
 
         return Response::json([
             'slug' => $project->slug,

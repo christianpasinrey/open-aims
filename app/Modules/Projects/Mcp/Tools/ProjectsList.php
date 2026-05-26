@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Mcp\Tools;
 
+use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
 use App\Models\User;
 use App\Modules\Projects\Models\Project;
-use App\Modules\Projects\Models\ProjectResource;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
@@ -24,7 +24,7 @@ use Laravel\Mcp\Server\Tool;
 )]
 class ProjectsList extends Tool
 {
-    use AttachesProjectPlan;
+    use AttachesPlan;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
@@ -44,7 +44,7 @@ class ProjectsList extends Tool
 
         $query = Project::query()
             ->where('workspace_id', $workspace->id)
-            ->with(['lead:id,name,email', 'teams:id,key,name'])
+            ->with(['lead:id,name,email', 'teams:id,key,name', 'plan'])
             ->withCount([
                 'issues as total_issues',
                 'issues as completed_issues' => fn ($q) => $q->whereHas(
@@ -77,21 +77,9 @@ class ProjectsList extends Tool
         $limit = (int) ($data['limit'] ?? 50);
         $projects = $query->orderBy('name')->limit($limit)->get();
 
-        // Preload the latest plan per project to avoid N+1 lookups.
-        $latestPlans = ProjectResource::query()
-            ->whereIn('project_id', $projects->pluck('id'))
-            ->where('is_plan', true)
-            ->orderBy('project_id')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->with('media')
-            ->get()
-            ->groupBy('project_id')
-            ->map(fn ($group) => $group->first());
-
         return Response::json([
             'count' => $projects->count(),
-            'projects' => $projects->map(function (Project $p) use ($latestPlans) {
+            'projects' => $projects->map(function (Project $p) {
                 $total = (int) $p->total_issues;
                 $completed = (int) $p->completed_issues;
                 $percent = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
@@ -106,7 +94,7 @@ class ProjectsList extends Tool
                     'completed_issues' => $completed,
                     'progress_percent' => $percent,
                     'target_date' => $p->target_date?->toDateString(),
-                    'plan' => $this->planSummary($latestPlans->get($p->id)),
+                    'plan' => $this->planSummary($p->plan),
                     'url' => '/projects/'.$p->slug,
                 ];
             })->all(),

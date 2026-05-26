@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\View\View;
 use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
 
@@ -55,7 +56,7 @@ class AppServiceProvider extends ServiceProvider
         // it already styles the OAuth approval UI for MCP flows. Without
         // this binding, Passport's AuthorizationViewResponse is not
         // instantiable and /oauth/authorize 500s.
-        Passport::authorizationView(fn (array $parameters): \Illuminate\View\View => view(
+        Passport::authorizationView(fn (array $parameters): View => view(
             'mcp::authorize',
             $parameters,
         ));

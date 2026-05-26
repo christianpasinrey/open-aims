@@ -18,6 +18,20 @@ import {
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
+
+import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
+import CyclePicker from '@/components/repo/issues/CyclePicker.vue';
+import DueDatePicker from '@/components/repo/issues/DueDatePicker.vue';
+import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
+import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
+import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
+import IssueActions from '@/components/repo/issues/IssueActions.vue';
+import IssueActivityRow from '@/components/repo/issues/IssueActivityRow.vue';
+import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
+import PriorityPicker from '@/components/repo/issues/PriorityPicker.vue';
+import ProjectPicker from '@/components/repo/issues/ProjectPicker.vue';
+import StatusPicker from '@/components/repo/issues/StatusPicker.vue';
+import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
     Dialog,
     DialogClose,
@@ -36,26 +50,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { useFavourites } from '@/composables/useFavourites';
 
-import AssigneePicker from '@/components/repo/issues/AssigneePicker.vue';
-import CyclePicker from '@/components/repo/issues/CyclePicker.vue';
-import DueDatePicker from '@/components/repo/issues/DueDatePicker.vue';
-import EstimatePicker from '@/components/repo/issues/EstimatePicker.vue';
-import InlineDescriptionEditor from '@/components/repo/issues/InlineDescriptionEditor.vue';
-import InlineTitleEditor from '@/components/repo/issues/InlineTitleEditor.vue';
-import IssueActions from '@/components/repo/issues/IssueActions.vue';
-import IssueActivityRow from '@/components/repo/issues/IssueActivityRow.vue';
-import LabelsPicker from '@/components/repo/issues/LabelsPicker.vue';
-import PriorityPicker from '@/components/repo/issues/PriorityPicker.vue';
-import ProjectPicker from '@/components/repo/issues/ProjectPicker.vue';
-import StatusPicker from '@/components/repo/issues/StatusPicker.vue';
-import StatusIcon from '@/components/repo/StatusIcon.vue';
-
 // Heavy / non-critical-path components are loaded asynchronously so they stay
 // out of the page's static import graph — and therefore out of Vite's asset
 // preload `Link` header, which otherwise overflows nginx's proxy header buffer
 // and 502s on full page loads (in-app Inertia visits never carry that header).
 const MarkdownContent = defineAsyncComponent(
     () => import('@/components/repo/MarkdownContent.vue'),
+);
+const PlanRenderer = defineAsyncComponent(
+    () => import('@/components/repo/PlanRenderer.vue'),
 );
 const GithubLinksPanel = defineAsyncComponent(
     () => import('@/components/repo/github/GithubLinksPanel.vue'),
@@ -132,6 +135,7 @@ type Issue = {
               url: string | null;
               content_preview: string;
               uploaded_at: string | null;
+              libs?: string[] | null;
           }
         | null;
     latest_plan_content: string | null;
@@ -233,9 +237,11 @@ type FeedItem =
 
 const activityFeed = computed<FeedItem[]>(() => {
     const items: FeedItem[] = [];
+
     for (const c of props.comments ?? []) {
         items.push({ kind: 'comment', id: c.id, at: c.created_at, comment: c });
     }
+
     for (const a of props.activities ?? []) {
         items.push({
             kind: 'activity',
@@ -244,11 +250,14 @@ const activityFeed = computed<FeedItem[]>(() => {
             activity: a,
         });
     }
+
     items.sort((x, y) => {
         const xt = x.at ? new Date(x.at).getTime() : 0;
         const yt = y.at ? new Date(y.at).getTime() : 0;
+
         return xt - yt;
     });
+
     return items;
 });
 
@@ -363,18 +372,23 @@ onMounted(() => {
     if (typeof window === 'undefined') {
         return;
     }
+
     try {
         const raw = window.localStorage.getItem(RAIL_KEY);
+
         if (!raw) {
             return;
         }
+
         const parsed = JSON.parse(raw) as {
             collapsed?: boolean;
             sections?: Record<string, boolean>;
         };
+
         if (typeof parsed.collapsed === 'boolean') {
             railCollapsed.value = parsed.collapsed;
         }
+
         if (parsed.sections) {
             sectionCollapsed.value = {
                 ...sectionCollapsed.value,
@@ -424,51 +438,24 @@ const planFormat = computed<'md' | 'html'>(
 );
 const planUploadedLabel = computed<string | null>(() => {
     const at = props.issue.latest_plan?.uploaded_at;
+
     if (!at) {
         return null;
     }
+
     try {
         return new Date(at).toLocaleString();
     } catch {
         return at;
     }
 });
-const planHtmlSrcdoc = computed<string>(() => {
-    if (
-        props.issue.latest_plan?.format !== 'html' ||
-        !props.issue.latest_plan_content
-    ) {
-        return '';
-    }
-    // Wrap user HTML in a minimal scaffold so links open in a new tab and
-    // the body inherits a sane base style. The iframe is sandboxed with no
-    // allow-* flags — no JS, no same-origin, no top navigation, no forms.
-    const body = props.issue.latest_plan_content;
-    return [
-        '<!doctype html>',
-        '<html><head><meta charset="utf-8">',
-        '<base target="_blank">',
-        '<style>',
-        'html,body{margin:0;padding:12px 14px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:13px;line-height:1.55;color:#0f172a;background:transparent;}',
-        '@media (prefers-color-scheme: dark){html,body{color:#e2e8f0;}}',
-        'h1,h2,h3,h4{font-weight:600;line-height:1.3;}',
-        'pre,code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;}',
-        'pre{padding:8px;border-radius:6px;background:rgba(127,127,127,0.12);overflow-x:auto;}',
-        'img{max-width:100%;height:auto;}',
-        'a{color:#6366f1;text-decoration:underline;}',
-        '</style>',
-        '</head><body>',
-        body,
-        '</body></html>',
-    ].join('');
-});
-
 function pickFile() {
     resourceFileInput.value?.click();
 }
 function onResourceFile(e: Event) {
     const target = e.target as HTMLInputElement;
     const file = target.files?.[0];
+
     if (!file) {
         return;
     }
@@ -495,6 +482,7 @@ function onResourceFile(e: Event) {
             },
             onFinish: () => {
                 resourceUploading.value = false;
+
                 if (resourceFileInput.value) {
                     resourceFileInput.value.value = '';
                 }
@@ -516,8 +504,10 @@ function openLinkDialog() {
 function submitLink() {
     const name = linkForm.value.name.trim();
     const url = linkForm.value.url.trim();
+
     if (!name || !url) {
         linkError.value = 'Name and URL are required.';
+
         return;
     }
 
@@ -556,13 +546,17 @@ function fmtBytes(bytes: number | null): string {
     if (bytes === null || bytes === undefined) {
         return '';
     }
+
     if (bytes < 1024) {
         return `${bytes} B`;
     }
+
     const kb = bytes / 1024;
+
     if (kb < 1024) {
         return `${kb.toFixed(1)} KB`;
     }
+
     return `${(kb / 1024).toFixed(1)} MB`;
 }
 </script>
@@ -715,46 +709,13 @@ function fmtBytes(bytes: number | null): string {
                                 </a>
                             </div>
 
-                            <div
-                                v-if="issue.plan_too_large"
-                                class="px-3 py-3 text-[12.5px] text-muted-foreground"
-                            >
-                                Plan is too large to render inline — download
-                                the file to read it.
-                            </div>
-
-                            <MarkdownContent
-                                v-else-if="
-                                    planFormat === 'md' &&
-                                    issue.latest_plan_content
-                                "
-                                :source="issue.latest_plan_content"
-                                :interactive-tasks="false"
-                                class="px-3 py-2"
+                            <PlanRenderer
+                                :format="planFormat"
+                                :content="issue.latest_plan_content"
+                                :libs="issue.latest_plan?.libs ?? null"
+                                :too-large="issue.plan_too_large"
+                                :download-url="issue.latest_plan?.url ?? null"
                             />
-
-                            <iframe
-                                v-else-if="
-                                    planFormat === 'html' &&
-                                    issue.latest_plan_content
-                                "
-                                :srcdoc="planHtmlSrcdoc"
-                                sandbox=""
-                                title="Issue plan"
-                                class="block w-full border-0"
-                                style="
-                                    min-height: 400px;
-                                    max-height: 800px;
-                                    height: 520px;
-                                "
-                            />
-
-                            <div
-                                v-else
-                                class="px-3 py-3 text-[12.5px] text-muted-foreground"
-                            >
-                                Plan content unavailable.
-                            </div>
                         </div>
                     </section>
 

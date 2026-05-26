@@ -20,9 +20,7 @@ use Laravel\Passport\Events\AccessTokenCreated;
  */
 final class CaptureMcpClientMetadata
 {
-    public function __construct(private readonly Request $request)
-    {
-    }
+    public function __construct(private readonly Request $request) {}
 
     public function handle(AccessTokenCreated $event): void
     {
@@ -54,12 +52,24 @@ final class CaptureMcpClientMetadata
     private function detectPlatform(string $ua): string
     {
         $ua = strtolower($ua);
-        if (str_contains($ua, 'mac os x') || str_contains($ua, 'macintosh')) return 'macOS';
-        if (str_contains($ua, 'windows')) return 'Windows';
-        if (str_contains($ua, 'iphone')) return 'iOS';
-        if (str_contains($ua, 'ipad')) return 'iPadOS';
-        if (str_contains($ua, 'android')) return 'Android';
-        if (str_contains($ua, 'linux')) return 'Linux';
+        if (str_contains($ua, 'mac os x') || str_contains($ua, 'macintosh')) {
+            return 'macOS';
+        }
+        if (str_contains($ua, 'windows')) {
+            return 'Windows';
+        }
+        if (str_contains($ua, 'iphone')) {
+            return 'iOS';
+        }
+        if (str_contains($ua, 'ipad')) {
+            return 'iPadOS';
+        }
+        if (str_contains($ua, 'android')) {
+            return 'Android';
+        }
+        if (str_contains($ua, 'linux')) {
+            return 'Linux';
+        }
 
         return 'Unknown';
     }
@@ -68,13 +78,27 @@ final class CaptureMcpClientMetadata
     {
         $ua = strtolower($ua);
         // Specific clients first.
-        if (str_contains($ua, 'claude')) return 'Claude';
-        if (str_contains($ua, 'cursor')) return 'Cursor';
-        if (str_contains($ua, 'vscode')) return 'VS Code';
-        if (str_contains($ua, 'edg/')) return 'Edge';
-        if (str_contains($ua, 'firefox')) return 'Firefox';
-        if (str_contains($ua, 'chrome')) return 'Chrome';
-        if (str_contains($ua, 'safari')) return 'Safari';
+        if (str_contains($ua, 'claude')) {
+            return 'Claude';
+        }
+        if (str_contains($ua, 'cursor')) {
+            return 'Cursor';
+        }
+        if (str_contains($ua, 'vscode')) {
+            return 'VS Code';
+        }
+        if (str_contains($ua, 'edg/')) {
+            return 'Edge';
+        }
+        if (str_contains($ua, 'firefox')) {
+            return 'Firefox';
+        }
+        if (str_contains($ua, 'chrome')) {
+            return 'Chrome';
+        }
+        if (str_contains($ua, 'safari')) {
+            return 'Safari';
+        }
 
         return 'Other';
     }

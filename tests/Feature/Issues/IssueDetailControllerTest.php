@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Plan;
 use App\Modules\Integrations\Github\Models\GithubInstallation;
 use App\Modules\Integrations\Github\Models\GithubLinkedPullRequest;
 use App\Modules\Issues\Models\Issue;
@@ -130,5 +131,26 @@ describe('IssueDetailController::show', function () {
             ->has('legacy_linked_pull_requests', 1)
             ->where('legacy_linked_pull_requests.0.number', 42)
         );
+    });
+
+    it('passes the current plan props with libs to the issue page', function () {
+        $fix = makeWorkspaceFixture();
+        $issue = Issue::factory()->create([
+            'workspace_id' => $fix['workspace']->id, 'team_id' => $fix['team']->id,
+            'workflow_state_id' => $fix['states']['Triage']->id, 'number' => 1,
+        ]);
+        Plan::create([
+            'planable_type' => $issue->getMorphClass(), 'planable_id' => $issue->id,
+            'format' => 'html', 'content' => '<p>plan body</p>', 'libs' => ['mermaid'],
+            'version' => 1, 'is_current' => true,
+        ]);
+
+        $this->actingAs($fix['user'])
+            ->withSession(['current_workspace_id' => $fix['workspace']->id])
+            ->get('/issues/ENG-'.$issue->number)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('issue.latest_plan.format', 'html')
+                ->where('issue.latest_plan.libs', ['mermaid'])
+                ->where('issue.latest_plan_content', '<p>plan body</p>'));
     });
 });
