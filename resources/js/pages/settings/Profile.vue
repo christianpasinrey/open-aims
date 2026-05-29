@@ -82,6 +82,22 @@ const githubError = computed(
                 <InputError class="mt-2" :message="errors.email" />
             </div>
 
+            <div class="grid gap-2">
+                <Label for="telegram_username">Telegram username</Label>
+                <Input
+                    id="telegram_username"
+                    class="mt-1 block w-full"
+                    name="telegram_username"
+                    :default-value="user.telegram_username ?? ''"
+                    autocomplete="off"
+                    placeholder="@your_handle"
+                />
+                <p class="text-[12px] text-muted-foreground">
+                    Used to @-mention you in Telegram notifications (e.g. when an issue is assigned to you).
+                </p>
+                <InputError class="mt-2" :message="errors.telegram_username" />
+            </div>
+
             <div v-if="mustVerifyEmail && !user.email_verified_at">
                 <p class="-mt-4 text-sm text-muted-foreground">
                     Your email address is unverified.
