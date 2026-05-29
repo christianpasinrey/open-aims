@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Issues\Observers;
 
-use App\Jobs\SendTelegramMessage;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Support\CommentTelegramFormatter;
+use App\Modules\Issues\Support\IssueMentionResolver;
 use App\Modules\Workspaces\Support\WorkspaceTelegram;
+use App\Support\Telegram\TelegramBatcher;
 
 final class CommentTelegramObserver
 {
@@ -27,6 +28,11 @@ final class CommentTelegramObserver
             return;
         }
 
-        SendTelegramMessage::dispatch($text, $chatId)->afterCommit();
+        app(TelegramBatcher::class)->enqueue(
+            (int) $issue->workspace_id,
+            $chatId,
+            $text,
+            IssueMentionResolver::forComment($comment),
+        );
     }
 }

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Observers;
 
-use App\Jobs\SendTelegramMessage;
 use App\Modules\Projects\Models\ProjectActivity;
 use App\Modules\Projects\Support\ProjectActivityTelegramFormatter;
 use App\Modules\Workspaces\Support\WorkspaceTelegram;
+use App\Support\Telegram\TelegramBatcher;
 
 final class ProjectActivityTelegramObserver
 {
@@ -27,6 +27,6 @@ final class ProjectActivityTelegramObserver
             return;
         }
 
-        SendTelegramMessage::dispatch($text, $chatId)->afterCommit();
+        app(TelegramBatcher::class)->enqueue((int) $project->workspace_id, $chatId, $text, null);
     }
 }
