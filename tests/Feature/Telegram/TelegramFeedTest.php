@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Jobs\FlushTelegramBatchJob;
 use App\Jobs\SendTelegramMessage;
+use App\Models\TelegramBatch;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\IssueActivity;
 use App\Modules\Issues\Support\CommentTelegramFormatter;
@@ -123,7 +125,8 @@ describe('dispatch on activity', function () {
             'occurred_at' => now(),
         ]);
 
-        Bus::assertDispatched(SendTelegramMessage::class);
+        Bus::assertDispatched(FlushTelegramBatchJob::class);
+        expect(TelegramBatch::where('workspace_id', $this->workspace->id)->first()?->pendingEvents)->toHaveCount(1);
     });
 
     it('does not dispatch when telegram is not configured', function () {
@@ -139,7 +142,7 @@ describe('dispatch on activity', function () {
             'occurred_at' => now(),
         ]);
 
-        Bus::assertNotDispatched(SendTelegramMessage::class);
+        Bus::assertNotDispatched(FlushTelegramBatchJob::class);
     });
 });
 
@@ -173,7 +176,7 @@ describe('comments', function () {
             'body' => 'Un comentario.',
         ]);
 
-        Bus::assertDispatched(SendTelegramMessage::class);
+        Bus::assertDispatched(FlushTelegramBatchJob::class);
     });
 });
 
@@ -189,7 +192,7 @@ describe('milestones', function () {
 
         expect(ProjectActivity::where('project_id', $project->id)->where('kind', 'milestone_added')->exists())
             ->toBeTrue();
-        Bus::assertDispatched(SendTelegramMessage::class);
+        Bus::assertDispatched(FlushTelegramBatchJob::class);
     });
 });
 
@@ -209,7 +212,7 @@ it('does not post issue activity when the workspace has telegram disabled', func
         'issue_id' => $issue->id, 'actor_user_id' => $this->user->id,
         'kind' => 'created', 'payload' => null, 'occurred_at' => now(),
     ]);
-    Bus::assertNotDispatched(SendTelegramMessage::class);
+    Bus::assertNotDispatched(FlushTelegramBatchJob::class);
 });
 
 it('posts issue activity with the resolved chat id when the workspace enables telegram', function () {
@@ -220,5 +223,6 @@ it('posts issue activity with the resolved chat id when the workspace enables te
         'issue_id' => $issue->id, 'actor_user_id' => $this->user->id,
         'kind' => 'created', 'payload' => null, 'occurred_at' => now(),
     ]);
-    Bus::assertDispatched(SendTelegramMessage::class, fn ($job) => $job->chatId === '-100WS');
+    Bus::assertDispatched(FlushTelegramBatchJob::class);
+    expect(TelegramBatch::where('workspace_id', $this->workspace->id)->value('chat_id'))->toBe('-100WS');
 });
