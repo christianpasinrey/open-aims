@@ -17,7 +17,7 @@ beforeEach(function () {
 });
 
 it('mentions the assignee on an assigned activity when they have a handle', function () {
-    $assignee = User::factory()->create(['telegram_username' => 'ana']);
+    $assignee = User::factory()->create(['telegram_username' => 'ana_lopez']);
     $activity = IssueActivity::create([
         'issue_id' => $this->issue->id,
         'actor_user_id' => $this->user->id,
@@ -26,11 +26,11 @@ it('mentions the assignee on an assigned activity when they have a handle', func
         'occurred_at' => now(),
     ]);
 
-    expect(IssueMentionResolver::forActivity($activity))->toBe('@ana');
+    expect(IssueMentionResolver::forActivity($activity))->toBe('@ana_lopez');
 });
 
 it('does not mention on self-assignment', function () {
-    $self = User::factory()->create(['telegram_username' => 'ana']);
+    $self = User::factory()->create(['telegram_username' => 'ana_lopez']);
     $activity = IssueActivity::create([
         'issue_id' => $this->issue->id,
         'actor_user_id' => $self->id,
@@ -68,7 +68,7 @@ it('returns null for non-assignment activities', function () {
 });
 
 it('mentions the parent comment author on a reply', function () {
-    $parentAuthor = User::factory()->create(['telegram_username' => '@luis']);
+    $parentAuthor = User::factory()->create(['telegram_username' => '@luis_mora']);
     $parent = Comment::create([
         'issue_id' => $this->issue->id,
         'user_id' => $parentAuthor->id,
@@ -82,7 +82,7 @@ it('mentions the parent comment author on a reply', function () {
         'body' => 'reply',
     ]);
 
-    expect(IssueMentionResolver::forComment($reply))->toBe('@luis');
+    expect(IssueMentionResolver::forComment($reply))->toBe('@luis_mora');
 });
 
 it('returns null for a top-level comment', function () {
@@ -97,7 +97,7 @@ it('returns null for a top-level comment', function () {
 });
 
 it('does not mention on a self-reply', function () {
-    $author = User::factory()->create(['telegram_username' => 'luis']);
+    $author = User::factory()->create(['telegram_username' => 'luis_mora']);
     $parent = Comment::create([
         'issue_id' => $this->issue->id,
         'user_id' => $author->id,

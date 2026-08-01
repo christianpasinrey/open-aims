@@ -15,11 +15,11 @@ it('persists a valid telegram username', function () {
         ])
         ->assertRedirect();
 
-    expect($user->fresh()->telegram_username)->toBe('@ana_lopez');
+    expect((string) $user->fresh()->telegram_username)->toBe('@ana_lopez');
 });
 
 it('accepts an empty telegram username (clears it)', function () {
-    $user = User::factory()->create(['telegram_username' => 'ana']);
+    $user = User::factory()->create(['telegram_username' => 'ana_lopez']);
 
     $this->actingAs($user)
         ->patch('/settings/profile', [
