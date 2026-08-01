@@ -38,6 +38,8 @@ return [
     'telegram' => [
         'token' => env('TELEGRAM_BOT_TOKEN'),
         'channel' => env('TELEGRAM_AIMS_CHAT_ID'),
+        'batch_window' => (int) env('TELEGRAM_BATCH_WINDOW', 60),
+        'batch_max_wait' => (int) env('TELEGRAM_BATCH_MAX_WAIT', 300),
     ],
 
     'github' => [

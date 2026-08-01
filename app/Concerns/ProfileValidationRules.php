@@ -18,7 +18,18 @@ trait ProfileValidationRules
         return [
             'name' => $this->nameRules(),
             'email' => $this->emailRules($userId),
+            'telegram_username' => $this->telegramUsernameRules(),
         ];
+    }
+
+    /**
+     * Telegram handle: optional, 5–32 chars of [A-Za-z0-9_], leading @ allowed.
+     *
+     * @return array<int, ValidationRule|array<mixed>|string>
+     */
+    protected function telegramUsernameRules(): array
+    {
+        return ['nullable', 'string', 'regex:/^@?[A-Za-z0-9_]{5,32}$/'];
     }
 
     /**
