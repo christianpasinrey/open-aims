@@ -15,8 +15,9 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
 #[Description(
-    'List cycles for a team. View filter selects subset: all, current '
-    .'(in-progress now), upcoming (starts in the future), completed.'
+    'List cycles (sprints) for a team. View filter selects subset: all, current '
+    .'(in-progress now), upcoming (starts in the future), completed. '
+    .'Call `cycles-get` with (team_key, number) for progress totals and the issues in a cycle.'
 )]
 class CyclesList extends Tool
 {
@@ -26,7 +27,7 @@ class CyclesList extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
 
         $data = Validator::make($request->all(), [
@@ -89,7 +90,11 @@ class CyclesList extends Tool
         return [
             'team_key' => $schema->string()->required(),
             'view' => $schema->string()->description('all|current|upcoming|completed'),
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

@@ -16,8 +16,12 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
 #[Description(
-    'Fetch a cycle with progress totals (total/started/completed) and '
-    .'breakdowns by assignee, label, priority, project.'
+    'Fetch a cycle (a sprint) with everything needed for sprint review and planning '
+    .'in one call: progress totals (total/started/completed), a per-assignee breakdown, '
+    .'and `issues` — the issues committed to the cycle as '
+    .'{identifier, title, state, estimate, assignee}. '
+    .'Cycles are addressed as (team_key, number); list them with `cycles-list`. '
+    .'Move issues in or out with `issues-update` and its `cycle_number` parameter.'
 )]
 class CyclesGet extends Tool
 {
@@ -27,7 +31,7 @@ class CyclesGet extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
 
         $data = Validator::make($request->all(), [
@@ -54,7 +58,15 @@ class CyclesGet extends Tool
         $issues = Issue::query()
             ->where('cycle_id', $cycle->id)
             ->whereNull('archived_at')
-            ->with(['workflowState:id,type', 'assignee:id,name', 'project:id,name', 'labels:id,name'])
+            ->with([
+                'workflowState:id,name,type,position',
+                'assignee:id,name',
+                'project:id,name',
+                'labels:id,name',
+                'team:id,key',
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('number')
             ->get();
 
         $total = $issues->count();
@@ -90,6 +102,13 @@ class CyclesGet extends Tool
                 'percent' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
             ],
             'assignees' => $assigneeBreakdown,
+            'issues' => $issues->map(fn (Issue $i) => [
+                'identifier' => ($i->team?->key ?? $team->key).'-'.$i->number,
+                'title' => $i->title,
+                'state' => $i->workflowState?->name,
+                'estimate' => $i->estimate,
+                'assignee' => $i->assignee?->name,
+            ])->values()->all(),
             'url' => "/cycles/{$cycle->number}?team={$team->key}",
         ]);
     }
@@ -98,8 +117,12 @@ class CyclesGet extends Tool
     {
         return [
             'team_key' => $schema->string()->required(),
-            'number' => $schema->integer()->required(),
-            'workspace_slug' => $schema->string(),
+            'number' => $schema->integer()->required()->description('Cycle (sprint) number within the team.'),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

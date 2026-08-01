@@ -12,9 +12,12 @@ use App\Modules\Issues\Mcp\Tools\IssuesComment;
 use App\Modules\Issues\Mcp\Tools\IssuesCreate;
 use App\Modules\Issues\Mcp\Tools\IssuesDelete;
 use App\Modules\Issues\Mcp\Tools\IssuesGet;
+use App\Modules\Issues\Mcp\Tools\IssuesLink;
 use App\Modules\Issues\Mcp\Tools\IssuesList;
 use App\Modules\Issues\Mcp\Tools\IssuesTransition;
 use App\Modules\Issues\Mcp\Tools\IssuesUpdate;
+use App\Modules\Issues\Mcp\Tools\LabelsEnsure;
+use App\Modules\Issues\Mcp\Tools\LabelsList;
 
 final class IssuesModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
@@ -72,6 +75,9 @@ final class IssuesModuleManifest implements ModuleManifest, ProvidesMcpTools
             IssuesArchive::class,
             IssuesDelete::class,
             IssuesComment::class,
+            IssuesLink::class,
+            LabelsList::class,
+            LabelsEnsure::class,
         ];
     }
 }

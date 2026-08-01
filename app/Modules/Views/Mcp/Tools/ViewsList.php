@@ -25,7 +25,7 @@ class ViewsList extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
         $userId = (int) (auth()->user()?->getAuthIdentifier() ?? 0);
 
@@ -59,7 +59,7 @@ class ViewsList extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description('Workspace slug. Omit only when the user belongs to a single workspace — when omitted the FIRST membership by id is used, which may not be the one the user means. Get valid slugs from the `current` tool.'),
         ];
     }
 }

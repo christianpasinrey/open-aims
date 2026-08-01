@@ -7,6 +7,7 @@ namespace App\Modules\Issues\Support;
 use App\Models\User;
 use App\Modules\Issues\Models\Comment;
 use App\Modules\Issues\Models\IssueActivity;
+use App\ValueObjects\TelegramUsername;
 
 /**
  * Resolves the Telegram @mention for an event, or null when nobody should be pinged.
@@ -47,13 +48,15 @@ final class IssueMentionResolver
         return self::handleFor((int) $parent->user_id);
     }
 
+    /**
+     * `value()` runs the attribute through the model's casts, so this is a
+     * TelegramUsername (which already renders itself with the leading @), not a
+     * raw string. Checking for a string here would silently mention nobody.
+     */
     private static function handleFor(int $userId): ?string
     {
         $handle = User::query()->whereKey($userId)->value('telegram_username');
-        if (! is_string($handle) || trim($handle) === '') {
-            return null;
-        }
 
-        return '@'.ltrim(trim($handle), '@');
+        return $handle instanceof TelegramUsername ? (string) $handle : null;
     }
 }

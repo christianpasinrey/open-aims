@@ -15,7 +15,9 @@ use Laravel\Mcp\Server\Tool;
 
 #[Description(
     'List initiatives in the workspace. Optional state filter (planned, '
-    .'active, completed, canceled).'
+    .'active, completed, canceled). Each row carries `project_count`; use '
+    .'`projects-list` for the projects themselves and `projects-get` to confirm '
+    .'which initiative a given project rolls up to.'
 )]
 class InitiativesList extends Tool
 {
@@ -25,7 +27,7 @@ class InitiativesList extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
 
         $data = Validator::make($request->all(), [
@@ -63,7 +65,11 @@ class InitiativesList extends Tool
         return [
             'state' => $schema->string()->description('planned|active|completed|canceled'),
             'limit' => $schema->integer(),
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }
