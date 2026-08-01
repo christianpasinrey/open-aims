@@ -29,7 +29,7 @@ class Search extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
 
         $data = Validator::make($request->all(), [
@@ -109,7 +109,7 @@ class Search extends Tool
             'limit' => $schema->integer()
                 ->description('Maximum results (1..50, default 10).'),
             'workspace_slug' => $schema->string()
-                ->description('Optional workspace override.'),
+                ->description('Workspace slug. Omit only when the user belongs to a single workspace — when omitted the FIRST membership by id is used, which may not be the one the user means. Get valid slugs from the `current` tool.'),
         ];
     }
 }

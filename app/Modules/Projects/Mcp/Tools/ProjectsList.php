@@ -6,7 +6,6 @@ namespace App\Modules\Projects\Mcp\Tools;
 
 use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
-use App\Models\User;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Teams\Models\Team;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -20,7 +19,9 @@ use Laravel\Mcp\Server\Tool;
     'List projects in the workspace. Optional filters: team key (only '
     .'projects linked to that team), status, lead ("me"|user_id|email). '
     .'Each project includes a `plan` summary (or null) so callers can tell '
-    .'at a glance which projects have a plan attached.'
+    .'at a glance which projects have a plan attached. Call `projects-get` '
+    .'with a slug from this list for the full planning graph (initiative, '
+    .'milestones, issue breakdown by workflow state, full plan body).'
 )]
 class ProjectsList extends Tool
 {
@@ -31,7 +32,7 @@ class ProjectsList extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
         $user = auth()->user();
 
@@ -67,11 +68,14 @@ class ProjectsList extends Tool
             $query->where('state', $data['status']);
         }
 
-        if (! empty($data['lead'])) {
-            $leadId = $this->resolveUser($data['lead'], (int) $user?->getAuthIdentifier());
-            if ($leadId !== null) {
-                $query->where('lead_user_id', $leadId);
-            }
+        $leadId = $this->resolveWorkspaceMember($data['lead'] ?? null, $workspace, (int) $user?->getAuthIdentifier());
+        if ($leadId === false) {
+            return Response::error(
+                "Lead '{$data['lead']}' is not a member of workspace '{$workspace->slug}'."
+            );
+        }
+        if ($leadId !== null) {
+            $query->where('lead_user_id', $leadId);
         }
 
         $limit = (int) ($data['limit'] ?? 50);
@@ -101,27 +105,18 @@ class ProjectsList extends Tool
         ]);
     }
 
-    private function resolveUser(string $value, int $currentUserId): ?int
-    {
-        if ($value === 'me') {
-            return $currentUserId;
-        }
-        if (is_numeric($value)) {
-            return (int) $value;
-        }
-        $id = User::query()->where('email', $value)->value('id');
-
-        return $id !== null ? (int) $id : null;
-    }
-
     public function schema(JsonSchema $schema): array
     {
         return [
             'team' => $schema->string()->description('Team key — only projects linked to this team.'),
             'status' => $schema->string()->description('backlog|planned|started|paused|completed|canceled'),
-            'lead' => $schema->string()->description('"me", numeric user id, or email.'),
+            'lead' => $schema->string()->description('"me", numeric user id, or email. Must be a member of the workspace.'),
             'limit' => $schema->integer(),
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

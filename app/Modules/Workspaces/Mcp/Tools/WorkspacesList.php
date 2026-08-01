@@ -15,7 +15,8 @@ use Laravel\Mcp\Server\Tool;
 #[Description(
     'List every workspace the authenticated user belongs to (id, name, slug, '
     .'the user\'s role, and member count). Use this when the user has more than '
-    .'one workspace, or to discover a slug to pass to workspace.current.'
+    .'one workspace, or to discover a slug to pass as `workspace_slug`. The '
+    .'`current` tool also returns this list as `available_workspaces`.'
 )]
 class WorkspacesList extends Tool
 {

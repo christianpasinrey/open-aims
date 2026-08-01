@@ -19,6 +19,7 @@ it('creates an issue with an HTML plan and stores libs', function () {
         'plan_content' => '<pre class="mermaid">graph TD; A-->B</pre>',
         'plan_format' => 'html',
         'plan_libs' => ['mermaid'],
+        'skip_scrum' => true,
     ])->assertOk();
 
     $issue = Issue::where('title', 'rich plan')->firstOrFail();
@@ -34,6 +35,7 @@ it('demotes the previous plan when a new one is attached', function () {
     $fix = makeWorkspaceFixture();
     AimsServer::actingAs($fix['user'])->tool(IssuesCreate::class, [
         'team_key' => 'ENG', 'title' => 'demo', 'plan_content' => 'v1', 'plan_format' => 'md',
+        'skip_scrum' => true,
     ])->assertOk();
     $issue = Issue::where('title', 'demo')->firstOrFail();
 
@@ -57,6 +59,7 @@ it('rejects an invalid plan_libs value', function () {
     AimsServer::actingAs($fix['user'])->tool(IssuesCreate::class, [
         'team_key' => 'ENG', 'title' => 'bad libs',
         'plan_content' => '<p>x</p>', 'plan_format' => 'html', 'plan_libs' => ['d3'],
+        'skip_scrum' => true,
     ])->assertHasErrors();
 });
 
@@ -65,6 +68,7 @@ it('rejects plan_libs when plan_format is md', function () {
     AimsServer::actingAs($fix['user'])->tool(IssuesCreate::class, [
         'team_key' => 'ENG', 'title' => 'md with libs',
         'plan_content' => 'plain', 'plan_format' => 'md', 'plan_libs' => ['mermaid'],
+        'skip_scrum' => true,
     ])->assertHasErrors();
 });
 
@@ -78,6 +82,7 @@ it('creates a project with an HTML plan and stores libs', function () {
             'plan_content' => '<canvas id="c"></canvas>',
             'plan_format' => 'html',
             'plan_libs' => ['chart'],
+            'skip_scrum' => true,
         ]
     )->assertOk();
 

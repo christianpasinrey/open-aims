@@ -6,12 +6,10 @@ namespace App\Modules\Issues\Mcp\Tools;
 
 use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
-use App\Models\User;
 use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Issues\Support\IssueActivityRecorder;
 use App\Modules\Projects\Models\Project;
-use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\WorkflowState;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -24,23 +22,31 @@ use Laravel\Mcp\Server\Tool;
 #[Description(
     'Partial update of an issue. Send only the fields you want to change. '
     .'State transitions auto-set started_at / completed_at / canceled_at. '
+    .'Supports Scrum fields: `estimate` (story points) and `parent` (issue identifier — '
+    .'set to attach the issue to an epic, pass null to detach). '
     .'Always attach a plan unless skip_plan is true. Plans live with the issue, not in the codebase. '
     .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html") to refresh '
     .'the issue plan; previous plan rows are preserved as history but flagged inactive. '
     .'Plans render in an isolated sandboxed iframe (scripts run but cannot access the AIMS session/API). '
-    .'For diagrams/charts pass plan_format="html" + plan_libs (e.g. ["mermaid"]) and use the documented markup; '
-    .'you may also load your own external CDNs inside the HTML if needed.'
+    .'DIAGRAMS REQUIRE plan_format="html": Mermaid and Chart.js only render for HTML plans. '
+    .'A markdown plan silently renders NO diagrams even if plan_libs is set, so pass '
+    .'plan_format="html" + plan_libs (e.g. ["mermaid"]) whenever the plan contains a diagram or chart; '
+    .'you may also load your own external CDNs inside the HTML if needed. '
+    .'Label names that do not exist in the team are NOT created — the response reports them in '
+    .'`labels_unknown` (use `labels-ensure` to create them first). '
+    .'Returns `labels_applied` and `labels_unknown`.'
 )]
 class IssuesUpdate extends Tool
 {
     use AttachesPlan;
+    use ResolvesIssueRefs;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
         $user = auth()->user();
 
@@ -54,6 +60,7 @@ class IssuesUpdate extends Tool
             'project_slug' => 'sometimes|nullable|string|max:200',
             'cycle_number' => 'sometimes|nullable|integer|min:1',
             'estimate' => 'sometimes|nullable|numeric|min:0',
+            'parent' => 'sometimes|nullable|string|regex:/^[A-Za-z]+-\d+$/',
             'due_date' => 'sometimes|nullable|date',
             'labels' => 'sometimes|array',
             'labels.*' => 'string|max:64',
@@ -135,7 +142,34 @@ class IssuesUpdate extends Tool
         }
 
         if (array_key_exists('assignee', $data)) {
-            $changes['assignee_user_id'] = $this->resolveAssignee($data['assignee'], (int) $user?->getAuthIdentifier());
+            $assigneeId = $this->resolveWorkspaceMember(
+                $data['assignee'],
+                $workspace,
+                (int) $user?->getAuthIdentifier(),
+            );
+            if ($assigneeId === false) {
+                return Response::error(sprintf(
+                    "Assignee '%s' is not a member of workspace '%s'. Only workspace members can be assigned.",
+                    (string) $data['assignee'],
+                    $workspace->slug,
+                ));
+            }
+            $changes['assignee_user_id'] = $assigneeId;
+        }
+
+        if (array_key_exists('parent', $data)) {
+            if (empty($data['parent'])) {
+                $changes['parent_issue_id'] = null;
+            } else {
+                [$parent, $parentError] = $this->findIssueByIdentifier($workspace, $data['parent']);
+                if ($parent === null) {
+                    return Response::error('Parent issue: '.$parentError);
+                }
+                if ($parent->getKey() === $issue->getKey()) {
+                    return Response::error('An issue cannot be its own parent.');
+                }
+                $changes['parent_issue_id'] = $parent->getKey();
+            }
         }
 
         if (array_key_exists('project_slug', $data)) {
@@ -155,12 +189,10 @@ class IssuesUpdate extends Tool
 
         $issue->fill($changes)->save();
 
+        $labels = ['ids' => [], 'applied' => [], 'unknown' => []];
         if (array_key_exists('labels', $data)) {
-            $labelIds = Label::query()
-                ->where('team_id', $team->id)
-                ->whereIn('name', $data['labels'])
-                ->pluck('id');
-            $issue->labels()->sync($labelIds);
+            $labels = $this->resolveTeamLabels((int) $team->id, $data['labels']);
+            $issue->labels()->sync($labels['ids']);
         }
 
         $recorder->record(
@@ -181,26 +213,15 @@ class IssuesUpdate extends Tool
 
         return Response::json([
             'identifier' => $team->key.'-'.$issue->number,
-            'updated_fields' => array_keys($changes) + (array_key_exists('labels', $data) ? ['labels'] : []),
+            'updated_fields' => array_merge(
+                array_keys($changes),
+                array_key_exists('labels', $data) ? ['labels'] : [],
+            ),
+            'labels_applied' => $labels['applied'],
+            'labels_unknown' => $labels['unknown'],
             'url' => '/issues/'.$team->key.'-'.$issue->number,
             'plan' => $planSummary,
         ]);
-    }
-
-    private function resolveAssignee(?string $value, int $currentUserId): ?int
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        if ($value === 'me') {
-            return $currentUserId;
-        }
-        if (is_numeric($value)) {
-            return (int) $value;
-        }
-        $id = User::query()->where('email', $value)->value('id');
-
-        return $id !== null ? (int) $id : null;
     }
 
     public function schema(JsonSchema $schema): array
@@ -211,25 +232,43 @@ class IssuesUpdate extends Tool
             'description' => $schema->string(),
             'state' => $schema->string()->description('State name to transition to.'),
             'priority' => $schema->integer(),
-            'assignee' => $schema->string(),
+            'assignee' => $schema->string()->description(
+                '"me", numeric user id, or email. Must be a member of the target workspace. '
+                .'Pass null to unassign.'
+            ),
             'project_slug' => $schema->string(),
             'cycle_number' => $schema->integer(),
-            'estimate' => $schema->number(),
+            'estimate' => $schema->number()->description('Story points for Scrum planning (e.g. 1, 2, 3, 5, 8).'),
+            'parent' => $schema->string()->description(
+                'Parent issue identifier (e.g. "LAM-275") to attach this issue to an epic. '
+                .'Must live in the same workspace. Pass null to detach.'
+            ),
             'due_date' => $schema->string()->description('YYYY-MM-DD.'),
-            'labels' => $schema->array()->items($schema->string()),
+            'labels' => $schema->array()->items($schema->string())->description(
+                'Label names — replaces the current set. They must already exist in the team; unknown '
+                .'names are reported back in `labels_unknown` and are NOT created. Use `labels-ensure` first.'
+            ),
             'plan_content' => $schema->string()->description(
                 'Full plan body. Markdown or HTML depending on plan_format. '
                 .'Required unless skip_plan=true.'
             ),
-            'plan_format' => $schema->string()->description('"md" (default) or "html". Required if plan_content is set.'),
+            'plan_format' => $schema->string()->description(
+                '"md" (default) or "html". Required if plan_content is set. '
+                .'Use "html" for ANY plan containing diagrams or charts — plan_libs is ignored for "md".'
+            ),
             'plan_libs' => $schema->array()->items($schema->string())->description(
                 'Local libraries to inject into the rendered plan iframe (no CDN needed): '
                 .'"mermaid" (diagrams: graph/sequence/gantt — write <pre class="mermaid">...</pre>), '
                 .'"chart" (Chart.js — write a <canvas id="..."> and a small init script). '
-                .'Only valid with plan_format=html.'
+                .'REQUIRES plan_format="html". With plan_format="md" the renderer skips the iframe entirely '
+                .'and NO diagram is drawn.'
             ),
             'skip_plan' => $schema->boolean()->description('Set true to bypass the plan requirement (default false).'),
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — '
+                .'when omitted the FIRST membership by id is used, which may not be the one '
+                .'the user means. Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

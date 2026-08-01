@@ -21,6 +21,11 @@ use Laravel\Mcp\Server\Tool;
     'Fetch the full detail for a single issue: description (markdown), '
     .'state, priority, assignee, creator, project, cycle, labels, comments, '
     .'parent and sub-issues. Use the LAM-N identifier. '
+    .'Also returns the issue RELATION GRAPH as four separate lists — `blocks` '
+    .'(issues this one blocks), `blocked_by` (issues blocking this one), '
+    .'`related`, and `duplicate_of` — each entry being {identifier, title, state}. '
+    .'Use those to reason about dependency order before scheduling work; edit '
+    .'them with the `issues-link` tool. Hierarchy is separate: see `parent` / `children`. '
     .'Also returns the latest plan attached to the issue — `plan` (summary) '
     .'and `plan_full_content` (full markdown/HTML body) so future Claude '
     .'sessions can read the plan without scanning the codebase.'
@@ -28,13 +33,14 @@ use Laravel\Mcp\Server\Tool;
 class IssuesGet extends Tool
 {
     use AttachesPlan;
+    use ReadsIssueGraph;
     use ResolvesWorkspace;
 
     public function handle(Request $request): Response
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
 
         $data = Validator::make($request->all(), [
@@ -62,6 +68,7 @@ class IssuesGet extends Tool
                 'cycle:id,number,name,starts_at,ends_at',
                 'labels:id,name,color',
                 'parent:id,team_id,number,title',
+                'parent.team:id,key',
                 'children:id,team_id,parent_issue_id,number,title,workflow_state_id',
                 'children.workflowState:id,name,type',
             ])
@@ -91,6 +98,8 @@ class IssuesGet extends Tool
             ->first();
         $planSummary = $this->planSummary($plan);
         $planFullContent = $this->planFullContent($plan);
+
+        $graph = $this->issueGraph($issue);
 
         return Response::json([
             'identifier' => $team->key.'-'.$issue->number,
@@ -125,12 +134,18 @@ class IssuesGet extends Tool
                 'name' => $issue->cycle->name,
             ] : null,
             'labels' => $issue->labels->pluck('name')->all(),
-            'parent' => $issue->parent ? $team->key.'-'.$issue->parent->number : null,
+            'parent' => $issue->parent
+                ? ($issue->parent->team?->key ?? $team->key).'-'.$issue->parent->number
+                : null,
             'children' => $issue->children->map(fn ($c) => [
                 'identifier' => $team->key.'-'.$c->number,
                 'title' => $c->title,
                 'state' => $c->workflowState?->name,
             ])->all(),
+            'blocks' => $graph['blocks'],
+            'blocked_by' => $graph['blocked_by'],
+            'related' => $graph['related'],
+            'duplicate_of' => $graph['duplicate_of'],
             'git_branch_name' => $issue->git_branch_name ?? null,
             'comments' => $comments->map(fn (Comment $c) => [
                 'user' => $c->user?->name,
@@ -150,7 +165,11 @@ class IssuesGet extends Tool
         return [
             'identifier' => $schema->string()->required()
                 ->description('Issue identifier (e.g. "LAM-275").'),
-            'workspace_slug' => $schema->string()->description('Optional workspace override.'),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — '
+                .'when omitted the FIRST membership by id is used, which may not be the one '
+                .'the user means. Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

@@ -15,8 +15,15 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
 #[Description(
-    'Create a new cycle for a team. Auto-numbers within the team if no '
-    .'number is supplied. Defaults the name to "Cycle N" if missing.'
+    'Create a new cycle for a team. A CYCLE IS A SPRINT: a fixed time window '
+    .'(starts_at → ends_at) that a team commits a set of issues to. '
+    .'Typical use: create the cycle for the sprint window, then attach issues to it '
+    .'with `issues-create` or `issues-update` passing `cycle_number` (plus the same '
+    .'`team_key`) — cycles are addressed as (team_key, number), never by id. '
+    .'Use `cycles-get` for sprint review and planning: it returns progress totals, '
+    .'per-assignee breakdown and the issues in the cycle. '
+    .'Auto-numbers within the team if no number is supplied. '
+    .'Defaults the name to "Cycle N" if missing.'
 )]
 class CyclesCreate extends Tool
 {
@@ -26,7 +33,7 @@ class CyclesCreate extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
 
         $data = Validator::make($request->all(), [
@@ -69,13 +76,20 @@ class CyclesCreate extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'team_key' => $schema->string()->required(),
-            'starts_at' => $schema->string()->required()->description('YYYY-MM-DD.'),
-            'ends_at' => $schema->string()->required()->description('YYYY-MM-DD.'),
+            'team_key' => $schema->string()->required()->description('Team the sprint belongs to, e.g. "ENG".'),
+            'starts_at' => $schema->string()->required()->description('YYYY-MM-DD. First day of the sprint window.'),
+            'ends_at' => $schema->string()->required()->description('YYYY-MM-DD. Last day of the sprint window.'),
             'name' => $schema->string()->description('Defaults to "Cycle N".'),
-            'number' => $schema->integer()->description('Auto-incremented per team if omitted.'),
-            'description' => $schema->string(),
-            'workspace_slug' => $schema->string(),
+            'number' => $schema->integer()->description(
+                'Sprint number within the team. Auto-incremented if omitted. This is the '
+                .'`cycle_number` you pass to `issues-create` / `issues-update` to attach issues.'
+            ),
+            'description' => $schema->string()->description('Sprint goal / commitment for this window.'),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

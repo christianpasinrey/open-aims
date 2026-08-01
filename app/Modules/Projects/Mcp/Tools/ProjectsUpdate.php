@@ -6,7 +6,6 @@ namespace App\Modules\Projects\Mcp\Tools;
 
 use App\Core\Mcp\AttachesPlan;
 use App\Core\Mcp\ResolvesWorkspace;
-use App\Models\User;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Support\ProjectActivityRecorder;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -24,8 +23,12 @@ use Laravel\Mcp\Server\Tool;
     .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html") to refresh '
     .'the project plan; previous plan rows are preserved as history but flagged inactive. '
     .'Plans render in an isolated sandboxed iframe (scripts run but cannot access the AIMS session/API). '
+    .'Mermaid diagrams and Chart.js charts REQUIRE plan_format="html" — the renderer skips '
+    .'plan_libs entirely for markdown plans, so a diagram in a "md" plan silently renders nothing. '
     .'For diagrams/charts pass plan_format="html" + plan_libs (e.g. ["mermaid"]) and use the documented markup; '
-    .'you may also load your own external CDNs inside the HTML if needed.'
+    .'you may also load your own external CDNs inside the HTML if needed. '
+    .'Goal and Scope live inside `description` (headings "## Goal" / "## Scope"); read the current '
+    .'description with `projects-get` first so you do not drop them when you rewrite it.'
 )]
 class ProjectsUpdate extends Tool
 {
@@ -36,7 +39,7 @@ class ProjectsUpdate extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
         $user = auth()->user();
 
@@ -97,9 +100,15 @@ class ProjectsUpdate extends Tool
         }
 
         if (array_key_exists('lead', $data)) {
-            $changes['lead_user_id'] = $data['lead']
-                ? $this->resolveUser($data['lead'], (int) $user?->getAuthIdentifier())
-                : null;
+            $leadId = $this->resolveWorkspaceMember(
+                $data['lead'], $workspace, (int) $user?->getAuthIdentifier(),
+            );
+            if ($leadId === false) {
+                return Response::error(
+                    "Lead '{$data['lead']}' is not a member of workspace '{$workspace->slug}'."
+                );
+            }
+            $changes['lead_user_id'] = $leadId;
         }
 
         $recorder = app(ProjectActivityRecorder::class);
@@ -130,27 +139,18 @@ class ProjectsUpdate extends Tool
         ]);
     }
 
-    private function resolveUser(string $value, int $currentUserId): ?int
-    {
-        if ($value === 'me') {
-            return $currentUserId;
-        }
-        if (is_numeric($value)) {
-            return (int) $value;
-        }
-        $id = User::query()->where('email', $value)->value('id');
-
-        return $id !== null ? (int) $id : null;
-    }
-
     public function schema(JsonSchema $schema): array
     {
         return [
             'slug' => $schema->string()->required(),
             'name' => $schema->string(),
-            'description' => $schema->string(),
+            'description' => $schema->string()->description(
+                'Replaces the whole description, including any "## Goal" / "## Scope" sections '
+                .'written by `projects-create`. Read the current value first and re-send those '
+                .'sections unless you mean to remove them.'
+            ),
             'state' => $schema->string(),
-            'lead' => $schema->string(),
+            'lead' => $schema->string()->description('"me", numeric user id, or email. Must be a member of the workspace.'),
             'color' => $schema->string(),
             'icon' => $schema->string(),
             'start_date' => $schema->string(),
@@ -159,15 +159,23 @@ class ProjectsUpdate extends Tool
                 'Full plan body. Markdown or HTML depending on plan_format. '
                 .'Required unless skip_plan=true.'
             ),
-            'plan_format' => $schema->string()->description('"md" (default) or "html". Required if plan_content is set.'),
+            'plan_format' => $schema->string()->description(
+                '"md" (default) or "html". Required if plan_content is set. '
+                .'Must be "html" for any plan containing Mermaid diagrams or Chart.js charts.'
+            ),
             'plan_libs' => $schema->array()->items($schema->string())->description(
                 'Local libraries to inject into the rendered plan iframe (no CDN needed): '
                 .'"mermaid" (diagrams: graph/sequence/gantt — write <pre class="mermaid">...</pre>), '
                 .'"chart" (Chart.js — write a <canvas id="..."> and a small init script). '
-                .'Only valid with plan_format=html.'
+                .'REQUIRES plan_format="html": the renderer ignores plan_libs for markdown plans, '
+                .'so a Mermaid or Chart.js plan sent as "md" renders no diagram at all.'
             ),
             'skip_plan' => $schema->boolean()->description('Set true to bypass the plan requirement (default false).'),
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

@@ -13,6 +13,7 @@ it('returns the current plan content and libs from issues.get', function () {
         'team_key' => 'ENG', 'title' => 'readable',
         'plan_content' => '<pre class="mermaid">graph TD; A-->B</pre>',
         'plan_format' => 'html', 'plan_libs' => ['mermaid'],
+        'skip_scrum' => true,
     ])->assertOk();
     $issue = Issue::where('title', 'readable')->firstOrFail();
 

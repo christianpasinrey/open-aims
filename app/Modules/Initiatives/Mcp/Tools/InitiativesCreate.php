@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Initiatives\Mcp\Tools;
 
 use App\Core\Mcp\ResolvesWorkspace;
-use App\Models\User;
 use App\Modules\Initiatives\Models\Initiative;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Validator;
@@ -15,7 +14,12 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('Create a workspace-level initiative grouping projects under a goal.')]
+#[Description(
+    'Create a workspace-level initiative grouping projects under a goal. '
+    .'Initiatives sit above projects: create the initiative first, then create its '
+    .'projects with `projects-create`. `projects-get` reports the initiative a project '
+    .'rolls up to, and `initiatives-list` reports how many projects each one holds.'
+)]
 class InitiativesCreate extends Tool
 {
     use ResolvesWorkspace;
@@ -24,7 +28,7 @@ class InitiativesCreate extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
         $user = auth()->user();
 
@@ -39,9 +43,14 @@ class InitiativesCreate extends Tool
             'icon' => 'nullable|string|max:64',
         ])->validate();
 
-        $ownerId = ! empty($data['owner'])
-            ? $this->resolveUser($data['owner'], (int) $user?->getAuthIdentifier())
-            : null;
+        $ownerId = $this->resolveWorkspaceMember(
+            $data['owner'] ?? null, $workspace, (int) $user?->getAuthIdentifier(),
+        );
+        if ($ownerId === false) {
+            return Response::error(
+                "Owner '{$data['owner']}' is not a member of workspace '{$workspace->slug}'."
+            );
+        }
 
         $slug = Str::slug($data['name']).'-'.Str::random(6);
 
@@ -65,31 +74,22 @@ class InitiativesCreate extends Tool
         ]);
     }
 
-    private function resolveUser(string $value, int $currentUserId): ?int
-    {
-        if ($value === 'me') {
-            return $currentUserId;
-        }
-        if (is_numeric($value)) {
-            return (int) $value;
-        }
-        $id = User::query()->where('email', $value)->value('id');
-
-        return $id !== null ? (int) $id : null;
-    }
-
     public function schema(JsonSchema $schema): array
     {
         return [
             'name' => $schema->string()->required(),
-            'description' => $schema->string(),
+            'description' => $schema->string()->description('The goal the grouped projects serve.'),
             'state' => $schema->string()->description('planned|active|completed|canceled'),
-            'owner' => $schema->string()->description('"me", numeric user id, or email.'),
+            'owner' => $schema->string()->description('"me", numeric user id, or email. Must be a member of the workspace.'),
             'start_date' => $schema->string(),
             'target_date' => $schema->string(),
             'color' => $schema->string(),
             'icon' => $schema->string(),
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }

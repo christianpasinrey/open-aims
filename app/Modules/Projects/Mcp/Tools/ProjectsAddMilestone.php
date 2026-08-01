@@ -15,7 +15,10 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('Add a milestone to a project.')]
+#[Description(
+    'Add a milestone to a project. Milestones are the dated checkpoints inside a '
+    .'project; `projects-get` returns them with their dates alongside the issue breakdown.'
+)]
 class ProjectsAddMilestone extends Tool
 {
     use ResolvesWorkspace;
@@ -24,7 +27,7 @@ class ProjectsAddMilestone extends Tool
     {
         $workspace = $this->bindWorkspace($request->get('workspace_slug'));
         if ($workspace === null) {
-            return Response::error('No active workspace.');
+            return Response::error($this->workspaceError());
         }
 
         $data = Validator::make($request->all(), [
@@ -68,7 +71,11 @@ class ProjectsAddMilestone extends Tool
             'description' => $schema->string(),
             'target_date' => $schema->string()->description('YYYY-MM-DD.'),
             'sort_order' => $schema->integer(),
-            'workspace_slug' => $schema->string(),
+            'workspace_slug' => $schema->string()->description(
+                'Workspace slug. Omit only when the user belongs to a single workspace — when omitted '
+                .'the FIRST membership by id is used, which may not be the one the user means. '
+                .'Get valid slugs from the `current` tool.'
+            ),
         ];
     }
 }
