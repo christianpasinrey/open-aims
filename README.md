@@ -4,7 +4,7 @@ A self-hosted, keyboard-driven issue tracker for managing issues, projects, and 
 
 ## Stack
 
-- **Laravel 12** + PHP 8.4 — modular monolith (`app/Modules/*`)
+- **Laravel 13** + PHP 8.4 — modular monolith (`app/Modules/*`)
 - **Vue 3.5** + **Inertia 2** — single-page client, server-driven routing
 - **Tailwind CSS v4** + **shadcn-vue** + **Reka UI** — design system
 - **Vite** + **Wayfinder** — typed routes generated from Laravel
@@ -36,6 +36,69 @@ npm run dev
 ```
 
 The app is now reachable at `http://localhost:8000`.
+
+## Creating users
+
+Registration is disabled on purpose: there is no register route and `Features::registration()` is not enabled in `config/fortify.php`. Accounts come from two places.
+
+**1. Invitations.** An existing workspace member invites someone by email; the invitee sets their name and password when accepting. This covers normal onboarding, but it cannot help on a fresh install — there is nobody to send the first invitation.
+
+**2. The `user:create` command.** For the first account, and as the escape hatch for anything the invitation flow cannot cover.
+
+```bash
+php artisan user:create
+```
+
+It is interactive by design, so the password never lands in shell history. It prompts for name, email and password, then optionally attaches the user to a workspace with a role (`admin`, `member` or `guest`). The workspace step is skipped when no workspace exists yet, which is the case when bootstrapping.
+
+Validation reuses the application's own profile and password rules, so the command cannot create an account the app itself would reject. The user is created with `email_verified_at` already set — with no register route there is no way for them to trigger the verification mail.
+
+Attach the user to a workspace unless you are bootstrapping. `ResolveWorkspace` never binds `current.workspace` for a user with no membership, so an account created without one can log in but lands on a broken app.
+
+## MCP access
+
+AIMS exposes an MCP server so clients such as Claude Desktop can drive the workspace. Clients self-register at `/oauth/register` and then run the standard OAuth authorization code flow at `/oauth/authorize`, served by Laravel Passport.
+
+Passport signs tokens with an RSA keypair that must be generated once per environment:
+
+```bash
+php artisan passport:keys
+chmod 600 storage/oauth-private.key storage/oauth-public.key
+```
+
+`storage/` is gitignored, so these keys are **not** carried by a deploy. A freshly deployed environment has none until you generate them.
+
+Run artisan as the system user that owns the site, not as root. Keys written by root are unreadable by the PHP-FPM pool.
+
+Verify the key loads without going through a browser:
+
+```bash
+php artisan tinker --execute="new League\OAuth2\Server\CryptKey('file://'.storage_path('oauth-private.key')); echo 'key OK';"
+```
+
+Regenerating the keys (`passport:keys --force`) invalidates every issued token, and connected MCP clients have to authorize again.
+
+### Troubleshooting `LogicException: Invalid key supplied`
+
+A 500 on `/oauth/authorize` with this exception from `league/oauth2-server` means Passport was handed something that is neither a valid PEM nor an existing file. Passport resolves the key like this:
+
+```php
+$key = str_replace('\\n', "\n", config("passport.{$type}_key") ?? '');
+
+if (! $key) {
+    $key = 'file://'.Passport::keyPath('oauth-'.$type.'.key');
+}
+```
+
+So there are two causes. Either `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY` are unset and `storage/oauth-private.key` does not exist — generate the keys — or they are set but their newlines are mangled, so the value is not a valid PEM. Fix the env values, or clear them and fall back to key files.
+
+The exact message narrows it down:
+
+| Message | Meaning |
+|---|---|
+| `Invalid key supplied` | The path does not exist, or the env value is not a PEM |
+| `Key path "…" does not exist or is not readable` | The file exists but the PHP process cannot read it — check ownership |
+| `Unable to read key from file …` | The file exists and is readable, but its contents are not a valid key |
 
 ## GitHub integration
 
@@ -105,6 +168,12 @@ The workspace is keyboard-first.
 ## Useful commands
 
 ```bash
+# Create a user account (registration is disabled by design)
+php artisan user:create
+
+# Generate the Passport keypair backing the MCP OAuth flow
+php artisan passport:keys
+
 # Run tests
 php artisan test
 
@@ -124,6 +193,7 @@ npm run build
 
 ```
 app/
+  Console/Commands/             Artisan commands (user:create, ...)
   Models/                       Eloquent models (User, Workspace, Team, Issue, ...)
   Modules/
     Issues/                     Issues domain (controllers, resources, requests)
