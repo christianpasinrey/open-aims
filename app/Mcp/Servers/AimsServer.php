@@ -26,7 +26,8 @@ use Laravel\Mcp\Server\Tool;
     'user can reach. When there is more than one, pass `workspace_slug` explicitly on '.
     'every subsequent call — omitting it silently uses the first membership by id, '.
     "which is often the wrong board.\n\n".
-    'Tool names are kebab-case, never dotted. The main ones: current, workspaces-list, issues-list, '.
+    'Tool names are kebab-case, never dotted. The main ones: current, workspaces-list, '.
+    'workspaces-create (makes a NEW board — never use it to switch to an existing one), issues-list, '.
     'issues-create, issues-update, issues-get, issues-transition, issues-link, '.
     'issues-comment, projects-list, projects-create, projects-get, cycles-list, '.
     'cycles-get, cycles-create, initiatives-list, inbox-list, teams-list, '.
@@ -74,7 +75,7 @@ class AimsServer extends Server
         WriteIssue::class,
     ];
 
-    // Override the package's pagination defaults — we ship 22 tools and
+    // Override the package's pagination defaults — we ship ~30 tools and
     // some clients (Claude Desktop) don't follow nextCursor on tools/list,
     // which would hide every tool past index 14.
     public int $defaultPaginationLength = 100;
