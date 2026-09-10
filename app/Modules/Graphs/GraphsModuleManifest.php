@@ -6,6 +6,10 @@ namespace App\Modules\Graphs;
 
 use App\Core\Contracts\ModuleManifest;
 use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Graphs\Mcp\Tools\GraphsAttach;
+use App\Modules\Graphs\Mcp\Tools\GraphsDelete;
+use App\Modules\Graphs\Mcp\Tools\GraphsGet;
+use App\Modules\Graphs\Mcp\Tools\GraphsList;
 
 final class GraphsModuleManifest implements ModuleManifest, ProvidesMcpTools
 {
@@ -53,6 +57,11 @@ final class GraphsModuleManifest implements ModuleManifest, ProvidesMcpTools
 
     public function mcpTools(): array
     {
-        return [];
+        return [
+            GraphsAttach::class,
+            GraphsList::class,
+            GraphsGet::class,
+            GraphsDelete::class,
+        ];
     }
 }

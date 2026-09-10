@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 
 /**
  * Stores a graph of code references for an owner (issue, project, milestone).
@@ -47,13 +48,32 @@ final readonly class IngestGraph
      */
     public function __invoke(Model $owner, array $payload, ?int $userId): Graph
     {
-        $workspaceId = (int) $owner->getAttribute('workspace_id');
+        $workspaceId = $this->workspaceIdOf($owner);
 
         $this->validateSchema($payload);
         $endpoints = $this->localEndpoints($payload);
         $this->validateEdges($payload, $endpoints, $workspaceId);
 
         return DB::transaction(fn (): Graph => $this->write($owner, $workspaceId, $payload, $endpoints, $userId));
+    }
+
+    /**
+     * Issues and projects carry workspace_id; milestones reach it through
+     * their project.
+     */
+    private function workspaceIdOf(Model $owner): int
+    {
+        $workspaceId = $owner->getAttribute('workspace_id');
+
+        if ($workspaceId === null && method_exists($owner, 'project')) {
+            $workspaceId = $owner->project()->withoutGlobalScopes()->value('workspace_id');
+        }
+
+        if ($workspaceId === null) {
+            throw new InvalidArgumentException('A graph owner must belong to a workspace.');
+        }
+
+        return (int) $workspaceId;
     }
 
     // ------------------------------------------------------------------
