@@ -65,6 +65,8 @@ final class IssueActivityTelegramFormatter
             'project_unset' => ['📁', 'Quitada del proyecto'],
             'cycle_set' => ['🔁', 'Ciclo: <b>'.self::e((string) ($p['cycle_name'] ?? '—')).'</b>'],
             'cycle_unset' => ['🔁', 'Quitada del ciclo'],
+            'milestone_set' => ['🏁', 'Hito: <b>'.self::e((string) ($p['milestone_name'] ?? '—')).'</b>'],
+            'milestone_unset' => ['🏁', 'Quitada del hito'],
             'due_date_changed' => ['📅', 'Fecha límite: '.self::transition($p['from'] ?? null, $p['to'] ?? null)],
             'estimate_changed' => ['⏱️', 'Estimación: '.self::transition(
                 self::num($p['from'] ?? null),

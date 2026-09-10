@@ -24,6 +24,7 @@ use Laravel\Mcp\Server\Tool;
     .'State transitions auto-set started_at / completed_at / canceled_at. '
     .'Supports Scrum fields: `estimate` (story points) and `parent` (issue identifier — '
     .'set to attach the issue to an epic, pass null to detach). '
+    .'Link the issue to a milestone of its project with `milestone` (name or id; null removes it). '
     .'Always attach a plan unless skip_plan is true. Plans live with the issue, not in the codebase. '
     .'Pass `plan_content` (markdown or HTML body) and `plan_format` ("md" or "html") to refresh '
     .'the issue plan; previous plan rows are preserved as history but flagged inactive. '
@@ -58,6 +59,7 @@ class IssuesUpdate extends Tool
             'priority' => 'sometimes|integer|min:0|max:4',
             'assignee' => 'sometimes|nullable|string|max:255',
             'project_slug' => 'sometimes|nullable|string|max:200',
+            'milestone' => 'sometimes|nullable|string|max:255',
             'cycle_number' => 'sometimes|nullable|integer|min:1',
             'estimate' => 'sometimes|nullable|numeric|min:0',
             'parent' => 'sometimes|nullable|string|regex:/^[A-Za-z]+-\d+$/',
@@ -184,6 +186,26 @@ class IssuesUpdate extends Tool
                 : null;
         }
 
+        if (array_key_exists('milestone', $data)) {
+            if ($data['milestone'] === null || trim((string) $data['milestone']) === '') {
+                $changes['project_milestone_id'] = null;
+            } else {
+                // Resolve against the project the issue will have after this
+                // call, so project_slug + milestone can move it in one step.
+                $targetProjectId = array_key_exists('project_id', $changes)
+                    ? $changes['project_id']
+                    : $issue->project_id;
+                [$milestoneId, $milestoneError] = $this->resolveProjectMilestone(
+                    $targetProjectId !== null ? (int) $targetProjectId : null,
+                    (string) $data['milestone'],
+                );
+                if ($milestoneId === null) {
+                    return Response::error((string) $milestoneError);
+                }
+                $changes['project_milestone_id'] = $milestoneId;
+            }
+        }
+
         $recorder = app(IssueActivityRecorder::class);
         $snapshot = $recorder->snapshot($issue);
 
@@ -237,6 +259,12 @@ class IssuesUpdate extends Tool
                 .'Pass null to unassign.'
             ),
             'project_slug' => $schema->string(),
+            'milestone' => $schema->string()->description(
+                'Milestone of the issue\'s project, by name (case-insensitive) or numeric id. '
+                .'Resolved against the project the issue has after this call, so it can be combined '
+                .'with project_slug. Pass null to remove the issue from its milestone. '
+                .'Moving the issue to another project drops a milestone that does not belong to it.'
+            ),
             'cycle_number' => $schema->integer(),
             'estimate' => $schema->number()->description('Story points for Scrum planning (e.g. 1, 2, 3, 5, 8).'),
             'parent' => $schema->string()->description(

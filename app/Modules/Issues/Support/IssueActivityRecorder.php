@@ -9,6 +9,7 @@ use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Issues\Models\IssueActivity;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectMilestone;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\WorkflowState;
 
@@ -56,6 +57,7 @@ final class IssueActivityRecorder
                 'priority' => (int) ($issue->priority?->value ?? 0),
                 'assignee_user_id' => $issue->assignee_user_id,
                 'project_id' => $issue->project_id,
+                'project_milestone_id' => $issue->project_milestone_id,
                 'cycle_id' => $issue->cycle_id,
                 'estimate' => $issue->estimate,
                 'due_date' => $issue->due_date?->toDateString(),
@@ -188,6 +190,25 @@ final class IssueActivityRecorder
                         'cycle_id' => $issue->cycle_id,
                         'cycle_name' => $cycle?->name,
                         'cycle_number' => $cycle?->number,
+                    ],
+                ]);
+            }
+        }
+
+        $beforeMilestone = $before['project_milestone_id'] ?? null;
+        if ((int) ($beforeMilestone ?? 0) !== (int) ($issue->project_milestone_id ?? 0)) {
+            if ($issue->project_milestone_id === null) {
+                IssueActivity::create($base + [
+                    'kind' => 'milestone_unset',
+                    'payload' => null,
+                ]);
+            } else {
+                $milestone = ProjectMilestone::query()->find($issue->project_milestone_id);
+                IssueActivity::create($base + [
+                    'kind' => 'milestone_set',
+                    'payload' => [
+                        'milestone_id' => $issue->project_milestone_id,
+                        'milestone_name' => $milestone?->name,
                     ],
                 ]);
             }

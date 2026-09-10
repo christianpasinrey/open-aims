@@ -21,7 +21,9 @@ use Laravel\Mcp\Server\Tool;
     'Fetch a project by slug with its full planning graph, so a caller can see the '
     .'structure without extra round trips: description, lead, members, linked teams, '
     .'issue counts and progress, plus `initiative` (the initiative this project rolls '
-    .'up to, or null), `milestones` (name, description, target_date, completed_at) and '
+    .'up to, or null), `milestones` (id, name, description, target_date, completed_at, and '
+    .'their own total_issues / completed_issues / progress_percent — link issues to a milestone '
+    .'with the `milestone` field of issues-create / issues-update) and '
     .'`issue_breakdown` (issue counts grouped by workflow state, with the state type). '
     .'Also returns the latest plan attached to the project — `plan` (summary) '
     .'and `plan_full_content` (full markdown/HTML body) so future Claude '
@@ -51,7 +53,13 @@ class ProjectsGet extends Tool
             ->with([
                 'lead:id,name,email',
                 'members.user:id,name,email',
-                'milestones',
+                'milestones' => fn ($q) => $q->withCount([
+                    'issues as total_issues',
+                    'issues as completed_issues' => fn ($i) => $i->whereHas(
+                        'workflowState',
+                        fn ($w) => $w->where('type', 'completed'),
+                    ),
+                ]),
                 'teams:id,key,name,color',
             ])
             ->withCount([
@@ -113,6 +121,11 @@ class ProjectsGet extends Tool
                 'description' => $ms->description,
                 'target_date' => $ms->target_date?->toDateString(),
                 'completed_at' => $ms->completed_at?->toIso8601String(),
+                'total_issues' => (int) $ms->total_issues,
+                'completed_issues' => (int) $ms->completed_issues,
+                'progress_percent' => (int) $ms->total_issues > 0
+                    ? (int) round(((int) $ms->completed_issues / (int) $ms->total_issues) * 100)
+                    : 0,
             ])->all(),
             'teams' => $project->teams->pluck('key')->all(),
             'total_issues' => $total,

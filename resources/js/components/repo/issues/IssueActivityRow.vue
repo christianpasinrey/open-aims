@@ -227,6 +227,19 @@ const userName = computed(() => payloadString('user_name'));
                 <span> removed the issue from its cycle</span>
             </template>
 
+            <template v-else-if="activity.kind === 'milestone_set'">
+                <span>
+                    moved the issue to milestone
+                    <span class="text-foreground">{{
+                        payloadString('milestone_name') ?? 'a milestone'
+                    }}</span>
+                </span>
+            </template>
+
+            <template v-else-if="activity.kind === 'milestone_unset'">
+                <span> removed the issue from its milestone</span>
+            </template>
+
             <template v-else-if="activity.kind === 'due_date_changed'">
                 <span v-if="payloadString('to')">
                     set the due date to
