@@ -28,9 +28,9 @@ use Laravel\Mcp\Server\Tool;
     '`workspace_slug` on every call — omitting it uses the first membership by id, often the wrong '.
     "board.\n\n".
     'Tools are kebab-case, never dotted: current, workspaces-list, workspaces-create (makes a NEW '.
-    'board), issues-list, issues-create, issues-update, issues-get, issues-transition, issues-link, '.
-    'issues-comment, projects-list, projects-create, projects-get, cycles-list, cycles-create, '.
-    "inbox-list, labels-ensure, search, graphs-schema, graphs-attach.\n\n".
+    'board), issues-list, issues-create, issues-update, issues-get, issues-link, projects-list, '.
+    'projects-create, cycles-create, inbox-list, labels-ensure, search, graphs-schema, graphs-attach, '.
+    "graphs-map, graphs-impact.\n\n".
     'Identifiers are TEAMKEY-N (LAM-275). Project slugs come from `projects-list`; cycles are '.
     "(team_key, number); 'me' is the caller.\n\n".
     'DOCUMENT EVERY PROJECT, MILESTONE AND ISSUE THE SAME WAY: HTML plan with Mermaid and Chart.js, '.

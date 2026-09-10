@@ -64,7 +64,9 @@ it('keeps auto-discovering module tools alongside the new primitives', function 
         ->toContain('graphs-attach')
         ->toContain('graphs-list')
         ->toContain('graphs-get')
-        ->toContain('graphs-delete');
+        ->toContain('graphs-delete')
+        ->toContain('graphs-map')
+        ->toContain('graphs-impact');
 });
 
 it('keeps the pagination overrides so no tool is hidden behind a cursor', function () {

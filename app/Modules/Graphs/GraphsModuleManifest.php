@@ -9,6 +9,7 @@ use App\Core\Contracts\ProvidesMcpTools;
 use App\Modules\Graphs\Mcp\Tools\GraphsAttach;
 use App\Modules\Graphs\Mcp\Tools\GraphsDelete;
 use App\Modules\Graphs\Mcp\Tools\GraphsGet;
+use App\Modules\Graphs\Mcp\Tools\GraphsImpact;
 use App\Modules\Graphs\Mcp\Tools\GraphsList;
 use App\Modules\Graphs\Mcp\Tools\GraphsMap;
 use App\Modules\Graphs\Mcp\Tools\GraphsSchema;
@@ -66,6 +67,7 @@ final class GraphsModuleManifest implements ModuleManifest, ProvidesMcpTools
             GraphsGet::class,
             GraphsDelete::class,
             GraphsMap::class,
+            GraphsImpact::class,
         ];
     }
 }
