@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Graphs\Mcp\Tools;
 
+use App\Modules\Graphs\Support\GraphOwnerDescriber;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Projects\Models\ProjectMilestone;
@@ -112,43 +113,6 @@ trait ResolvesGraphOwner
      */
     private function describeOwner(string $ownerType, int $ownerId): ?array
     {
-        if ($ownerType === (new Issue)->getMorphClass()) {
-            $issue = Issue::query()->with('team:id,key')->find($ownerId);
-            if ($issue === null) {
-                return null;
-            }
-            $identifier = ($issue->team?->key ?? '?').'-'.$issue->number;
-
-            return ['type' => 'issue', 'identifier' => $identifier, 'name' => $issue->title, 'url' => '/issues/'.$identifier];
-        }
-
-        if ($ownerType === (new Project)->getMorphClass()) {
-            $project = Project::query()->find($ownerId);
-
-            return $project === null ? null : [
-                'type' => 'project',
-                'identifier' => $project->slug,
-                'name' => $project->name,
-                'url' => '/projects/'.$project->slug,
-            ];
-        }
-
-        if ($ownerType === (new ProjectMilestone)->getMorphClass()) {
-            $milestone = ProjectMilestone::query()->with('project:id,slug')->find($ownerId);
-            if ($milestone === null) {
-                return null;
-            }
-            $slug = (string) $milestone->project?->slug;
-
-            return [
-                'type' => 'milestone',
-                'identifier' => (string) $milestone->id,
-                'name' => $milestone->name,
-                'project_slug' => $slug,
-                'url' => "/projects/{$slug}/milestones/{$milestone->id}",
-            ];
-        }
-
-        return null;
+        return GraphOwnerDescriber::describe($ownerType, $ownerId);
     }
 }
