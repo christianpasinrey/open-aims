@@ -3,7 +3,12 @@ import { Link } from '@inertiajs/vue3';
 import { Radar, Waypoints } from 'lucide-vue-next';
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { getJson, STAGE_CLASSES } from '@/lib/graphs';
-import type { ImpactResponse, OwnerGraphsResponse } from '@/lib/graphs';
+import type {
+    ImpactResponse,
+    OwnerGraph,
+    OwnerGraphsResponse,
+    OwnerGraphSummary,
+} from '@/lib/graphs';
 
 const GraphExplorer = defineAsyncComponent(
     () => import('@/components/repo/graphs/GraphExplorer.vue'),
@@ -20,6 +25,13 @@ const error = ref<string | null>(null);
 const response = ref<OwnerGraphsResponse | null>(null);
 const selectedId = ref<number | null>(null);
 
+// Nodes are fetched per graph when its tab is selected: a project can list
+// the graphs of every issue, and each one can hold hundreds of nodes.
+const graphData = ref<OwnerGraph | null>(null);
+const graphError = ref<string | null>(null);
+const graphCache = new Map<number, OwnerGraph>();
+let graphController: AbortController | null = null;
+
 const impact = ref<ImpactResponse | null>(null);
 const impactLoading = ref(false);
 const impactError = ref<string | null>(null);
@@ -31,6 +43,11 @@ const selected = computed(
         graphs.value[0] ??
         null,
 );
+const selectedData = computed(() =>
+    graphData.value && graphData.value.id === selected.value?.id
+        ? graphData.value
+        : null,
+);
 const highlight = computed(() =>
     impact.value
         ? [
@@ -39,10 +56,34 @@ const highlight = computed(() =>
           ]
         : [],
 );
+const emptyScope = computed(() => {
+    if (props.ownerType === 'project') {
+        return 'on this project, its milestones or its issues';
+    }
+
+    if (props.ownerType === 'milestone') {
+        return 'on this milestone or its issues';
+    }
+
+    return 'on this issue';
+});
+
+function ownerLabel(graph: OwnerGraphSummary): string | null {
+    if (graph.own || !graph.owner) {
+        return null;
+    }
+
+    return graph.owner.type === 'issue'
+        ? graph.owner.identifier
+        : graph.owner.name;
+}
 
 async function load(): Promise<void> {
     loading.value = true;
     error.value = null;
+    selectedId.value = null;
+    graphData.value = null;
+    graphCache.clear();
 
     try {
         response.value = await getJson<OwnerGraphsResponse>(
@@ -54,6 +95,43 @@ async function load(): Promise<void> {
             caught instanceof Error ? caught.message : 'Could not load graphs.';
     } finally {
         loading.value = false;
+    }
+}
+
+async function loadGraph(id: number | null): Promise<void> {
+    graphController?.abort();
+    graphController = null;
+    graphError.value = null;
+
+    if (id === null) {
+        return;
+    }
+
+    const cached = graphCache.get(id);
+
+    if (cached) {
+        graphData.value = cached;
+
+        return;
+    }
+
+    const controller = new AbortController();
+    graphController = controller;
+
+    try {
+        const data = await getJson<OwnerGraph>(
+            `/graphs/${id}`,
+            controller.signal,
+        );
+        graphCache.set(id, data);
+        graphData.value = data;
+    } catch (caught) {
+        if (caught instanceof DOMException && caught.name === 'AbortError') {
+            return;
+        }
+
+        graphError.value =
+            caught instanceof Error ? caught.message : 'Could not load graph.';
     }
 }
 
@@ -85,9 +163,13 @@ async function toggleImpact(): Promise<void> {
 
 onMounted(load);
 
-watch(selectedId, () => {
-    impact.value = null;
-});
+watch(
+    () => selected.value?.id ?? null,
+    (id) => {
+        impact.value = null;
+        void loadGraph(id);
+    },
+);
 
 watch(
     () => [props.ownerType, props.ownerId],
@@ -132,7 +214,7 @@ watch(
             v-else-if="!graphs.length"
             class="rounded-md border border-dashed border-border px-3 py-4 text-[12.5px] text-muted-foreground"
         >
-            No graphs yet. Claude attaches them over MCP with
+            No graphs {{ emptyScope }} yet. Claude attaches them over MCP with
             <code class="font-mono text-[11.5px]">graphs-attach</code> — a
             <em>planned</em> graph before coding and an <em>implemented</em> one
             when the work is done.
@@ -158,6 +240,11 @@ watch(
                     ]"
                     @click="selectedId = graph.id"
                 >
+                    <span
+                        v-if="ownerLabel(graph)"
+                        class="max-w-[120px] truncate font-mono text-[10.5px] text-muted-foreground"
+                        >{{ ownerLabel(graph) }}</span
+                    >
                     <span class="max-w-[220px] truncate">{{
                         graph.title
                     }}</span>
@@ -176,6 +263,19 @@ watch(
 
             <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
                 <p class="max-w-prose text-[12.5px] text-muted-foreground">
+                    <template v-if="!selected.own && selected.owner">
+                        From
+                        <Link
+                            :href="selected.owner.url"
+                            class="text-foreground hover:underline"
+                            >{{
+                                selected.owner.type === 'issue'
+                                    ? `${selected.owner.identifier} · ${selected.owner.name}`
+                                    : selected.owner.name
+                            }}</Link
+                        >
+                        ·
+                    </template>
                     {{ selected.summary }}
                     <span class="font-mono text-[11px]"
                         >· {{ selected.repo }}@{{ selected.ref }}</span
@@ -205,8 +305,18 @@ watch(
             </div>
 
             <div class="h-[420px] lg:h-[520px]">
+                <p v-if="graphError" class="text-[12.5px] text-rose-400">
+                    Could not load the graph ({{ graphError }}).
+                </p>
+                <div
+                    v-else-if="!selectedData"
+                    class="flex h-full items-center justify-center rounded-lg border border-border text-[12.5px] text-muted-foreground"
+                >
+                    Loading graph…
+                </div>
                 <GraphExplorer
-                    :data="selected"
+                    v-else
+                    :data="selectedData"
                     :highlight="highlight"
                     searchable
                 />

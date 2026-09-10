@@ -36,6 +36,26 @@ final class GraphView
     }
 
     /**
+     * A graph without its nodes: Graphs sections list these as tabs and fetch
+     * the nodes of the one selected.
+     *
+     * @return array{id:int,title:string,summary:string,stage:string,version:int,repo:string,ref:string,updated_at:string|null}
+     */
+    public static function summaryOf(Graph $graph): array
+    {
+        return [
+            'id' => (int) $graph->id,
+            'title' => (string) $graph->title,
+            'summary' => (string) $graph->summary,
+            'stage' => (string) $graph->stage,
+            'version' => (int) $graph->version,
+            'repo' => (string) $graph->repo,
+            'ref' => (string) $graph->ref,
+            'updated_at' => $graph->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
      * One graph as its owner sees it: node texts and change come from this
      * graph's references.
      *

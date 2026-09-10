@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Graphs\Http\Controllers;
 
 use App\Modules\Graphs\Models\Graph;
+use App\Modules\Graphs\Support\GraphOwnerDescriber;
+use App\Modules\Graphs\Support\GraphScope;
 use App\Modules\Graphs\Support\GraphView;
 use App\Modules\Issues\Models\Issue;
 use App\Modules\Projects\Models\Project;
@@ -12,15 +14,23 @@ use App\Modules\Projects\Models\ProjectMilestone;
 use App\Modules\Workspaces\Models\Workspace;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * JSON for the Graphs section of an issue, project or milestone page. Pages
- * only pass the owner id; the viewer fetches the graphs from here.
+ * only pass the owner id; the viewer lists the graphs from here and fetches
+ * the nodes of the selected one from GraphShowController.
+ *
+ * A project also lists the graphs of its milestones and issues, and a
+ * milestone those of its issues, so work documented on issues shows up there.
  */
 final class OwnerGraphsController
 {
-    public function show(GraphView $view, string $type, int $id): JsonResponse
+    /** Graphs of the requested owner come first, then by owner type. */
+    private const OWNER_ORDER = ['project' => 0, 'milestone' => 1, 'issue' => 2];
+
+    public function show(string $type, int $id): JsonResponse
     {
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
         if (! $workspace instanceof Workspace) {
@@ -34,25 +44,59 @@ final class OwnerGraphsController
 
         $graphs = Graph::query()
             ->where('workspace_id', $workspace->id)
-            ->where('owner_type', $owner->getMorphClass())
-            ->where('owner_id', $owner->getKey())
-            ->with(['references.node', 'edges'])
-            ->orderBy('title')
+            ->whereIn('id', $this->graphIds($workspace, $type, $owner))
             ->get();
 
         return response()->json([
             'owner' => $this->describe($type, $owner),
-            'graphs' => $graphs->map(fn (Graph $graph): array => [
-                'id' => $graph->id,
-                'title' => $graph->title,
-                'summary' => $graph->summary,
-                'stage' => $graph->stage,
-                'version' => $graph->version,
-                'repo' => $graph->repo,
-                'ref' => $graph->ref,
-                'updated_at' => $graph->updated_at?->toIso8601String(),
-            ] + $view->forGraph($graph))->all(),
+            'graphs' => $this->listing($graphs, $owner),
         ]);
+    }
+
+    /**
+     * @return Collection<int,int>
+     */
+    private function graphIds(Workspace $workspace, string $type, Model $owner): Collection
+    {
+        return match ($type) {
+            'project' => GraphScope::graphIds((int) $workspace->id, (string) $owner->slug),
+            'milestone' => GraphScope::graphIds((int) $workspace->id, null, (int) $owner->getKey()),
+            default => Graph::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('owner_type', $owner->getMorphClass())
+                ->where('owner_id', $owner->getKey())
+                ->pluck('id'),
+        };
+    }
+
+    /**
+     * @param  Collection<int,Graph>  $graphs
+     * @return list<array<string,mixed>>
+     */
+    private function listing(Collection $graphs, Model $owner): array
+    {
+        $owners = [];
+
+        return $graphs
+            ->map(function (Graph $graph) use ($owner, &$owners): array {
+                $key = $graph->owner_type.'|'.$graph->owner_id;
+                $owners[$key] ??= GraphOwnerDescriber::describe((string) $graph->owner_type, (int) $graph->owner_id);
+
+                return GraphView::summaryOf($graph) + [
+                    'own' => $graph->owner_type === $owner->getMorphClass()
+                        && (int) $graph->owner_id === (int) $owner->getKey(),
+                    'owner' => $owners[$key],
+                ];
+            })
+            ->sortBy([
+                static fn (array $a, array $b): int => $b['own'] <=> $a['own'],
+                static fn (array $a, array $b): int => (self::OWNER_ORDER[$a['owner']['type'] ?? ''] ?? 9)
+                    <=> (self::OWNER_ORDER[$b['owner']['type'] ?? ''] ?? 9),
+                static fn (array $a, array $b): int => strnatcmp($a['owner']['identifier'] ?? '', $b['owner']['identifier'] ?? ''),
+                static fn (array $a, array $b): int => strcmp($a['title'], $b['title']),
+            ])
+            ->values()
+            ->all();
     }
 
     private function owner(Workspace $workspace, string $type, int $id): ?Model

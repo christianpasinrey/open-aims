@@ -52,6 +52,12 @@ if (! function_exists('apiGraph')) {
             apiReference('page', 'resources/js/pages/Billing.vue', 'frontend', null, ['submit']),
         ], [['from' => 'page#submit', 'to' => 'svc#charge', 'relation' => 'calls']]);
     }
+
+    /** A graph that only references one file, to tell graphs apart by title. */
+    function fileGraph(string $title, string $file): array
+    {
+        return apiGraph($title, [apiReference('file', $file, 'backend')]);
+    }
 }
 
 beforeEach(function () {
@@ -60,7 +66,7 @@ beforeEach(function () {
         ->withSession(['current_workspace_id' => $this->fix['workspace']->id]);
 });
 
-it('returns the graphs of an issue ready for the viewer', function () {
+it('lists the graphs of an issue without their nodes', function () {
     $issue = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo']);
     app(IngestGraph::class)($issue, billingGraph(), null);
 
@@ -69,19 +75,117 @@ it('returns the graphs of an issue ready for the viewer', function () {
         ->assertOk();
 
     $graph = $response->json('graphs.0');
-    $kinds = collect($graph['nodes'])->pluck('kind')->sort()->values()->all();
-    $relations = collect($graph['links'])->pluck('relation')->sort()->values()->all();
-    $charge = collect($graph['nodes'])->firstWhere('function', 'charge');
 
     expect($response->json('owner.type'))->toBe('issue')
+        ->and($response->json('graphs'))->toHaveCount(1)
+        ->and($graph)->not->toHaveKeys(['nodes', 'links'])
         ->and($graph['title'])->toBe('Billing')
         ->and($graph['stage'])->toBe('implemented')
+        ->and($graph['own'])->toBeTrue()
+        ->and($graph['owner']['type'])->toBe('issue')
+        ->and($graph['owner']['url'])->toBe('/issues/'.$this->fix['team']->key.'-'.$issue->number);
+});
+
+it('returns one graph ready for the viewer', function () {
+    $issue = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo']);
+    $stored = app(IngestGraph::class)($issue, billingGraph(), null);
+
+    $response = ($this->as)()
+        ->getJson(route('graphs.show', ['graph' => $stored->id]))
+        ->assertOk();
+
+    $kinds = collect($response->json('nodes'))->pluck('kind')->sort()->values()->all();
+    $relations = collect($response->json('links'))->pluck('relation')->sort()->values()->all();
+    $charge = collect($response->json('nodes'))->firstWhere('function', 'charge');
+
+    expect($response->json('id'))->toBe($stored->id)
+        ->and($response->json('title'))->toBe('Billing')
+        ->and($response->json('version'))->toBe(1)
         ->and($kinds)->toBe(['class', 'file', 'file', 'function', 'function'])
         ->and($relations)->toBe(['calls', 'contains', 'contains', 'contains'])
         ->and($charge['label'])->toBe('Billing::charge')
         ->and($charge['change'])->toBe('modified')
         ->and($charge['summary'])->toBe('Runs charge')
         ->and($charge['context'])->toBe('backend');
+});
+
+it('lists the graphs of a project with those of its milestones and issues, its own first', function () {
+    $project = Project::factory()->create(['workspace_id' => $this->fix['workspace']->id]);
+    $other = Project::factory()->create(['workspace_id' => $this->fix['workspace']->id]);
+    $milestone = ProjectMilestone::create(['project_id' => $project->id, 'name' => 'M1', 'sort_order' => 0]);
+    $issue = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo'], [
+        'project_id' => $project->id,
+    ]);
+    $foreignIssue = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo'], [
+        'project_id' => $other->id,
+    ]);
+    $ingest = app(IngestGraph::class);
+
+    $ingest($issue, fileGraph('Issue graph', 'app/IssueLevel.php'), null);
+    $ingest($milestone, fileGraph('Milestone graph', 'app/MilestoneLevel.php'), null);
+    $ingest($project, fileGraph('Project graph', 'app/ProjectLevel.php'), null);
+    $ingest($other, fileGraph('Other project graph', 'app/OtherProject.php'), null);
+    $ingest($foreignIssue, fileGraph('Other issue graph', 'app/OtherIssue.php'), null);
+
+    $graphs = collect(($this->as)()
+        ->getJson(route('graphs.owner', ['type' => 'project', 'id' => $project->id]))
+        ->assertOk()
+        ->json('graphs'));
+
+    expect($graphs->pluck('title')->all())->toBe(['Project graph', 'Milestone graph', 'Issue graph'])
+        ->and($graphs->pluck('own')->all())->toBe([true, false, false])
+        ->and($graphs->pluck('owner.type')->all())->toBe(['project', 'milestone', 'issue'])
+        ->and($graphs->last()['owner']['identifier'])->toBe($this->fix['team']->key.'-'.$issue->number);
+});
+
+it('lists the graphs of a project that only has graphs on its issues', function () {
+    $project = Project::factory()->create(['workspace_id' => $this->fix['workspace']->id]);
+    $first = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo'], [
+        'project_id' => $project->id,
+    ]);
+    $second = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo'], [
+        'project_id' => $project->id,
+    ]);
+    $ingest = app(IngestGraph::class);
+
+    $ingest($second, fileGraph('Second', 'app/Second.php'), null);
+    $ingest($first, fileGraph('First', 'app/First.php'), null);
+
+    $graphs = collect(($this->as)()
+        ->getJson(route('graphs.owner', ['type' => 'project', 'id' => $project->id]))
+        ->assertOk()
+        ->json('graphs'));
+
+    expect($graphs->pluck('title')->all())->toBe(['First', 'Second'])
+        ->and($graphs->pluck('own')->unique()->all())->toBe([false]);
+});
+
+it('lists the graphs of a milestone with those of its issues only', function () {
+    $project = Project::factory()->create(['workspace_id' => $this->fix['workspace']->id]);
+    $milestone = ProjectMilestone::create(['project_id' => $project->id, 'name' => 'M1', 'sort_order' => 0]);
+    $otherMilestone = ProjectMilestone::create(['project_id' => $project->id, 'name' => 'M2', 'sort_order' => 1]);
+    $inMilestone = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo'], [
+        'project_id' => $project->id,
+        'project_milestone_id' => $milestone->id,
+    ]);
+    $elsewhere = makeIssue($this->fix['team'], $this->fix['workspace'], $this->fix['states']['Todo'], [
+        'project_id' => $project->id,
+        'project_milestone_id' => $otherMilestone->id,
+    ]);
+    $ingest = app(IngestGraph::class);
+
+    $ingest($project, fileGraph('Project graph', 'app/ProjectLevel.php'), null);
+    $ingest($milestone, fileGraph('Milestone graph', 'app/MilestoneLevel.php'), null);
+    $ingest($inMilestone, fileGraph('Issue graph', 'app/IssueLevel.php'), null);
+    $ingest($elsewhere, fileGraph('Elsewhere graph', 'app/Elsewhere.php'), null);
+
+    $graphs = collect(($this->as)()
+        ->getJson(route('graphs.owner', ['type' => 'milestone', 'id' => $milestone->id]))
+        ->assertOk()
+        ->json('graphs'));
+
+    expect($graphs->pluck('title')->all())->toBe(['Milestone graph', 'Issue graph'])
+        ->and($graphs->pluck('own')->all())->toBe([true, false]);
 });
 
 it('merges every graph of the workspace into the map with edge weights', function () {
@@ -134,13 +238,14 @@ it('filters the map by project, including its milestones and issues', function (
     expect($files)->toBe(['app/IssueLevel.php', 'app/MilestoneLevel.php', 'app/ProjectLevel.php']);
 });
 
-it('does not expose owners from another workspace or unknown owner types', function () {
+it('does not expose owners or graphs from another workspace, or unknown owner types', function () {
     $outsider = makeWorkspaceFixture();
     $foreignIssue = makeIssue($outsider['team'], $outsider['workspace'], $outsider['states']['Todo']);
-    app(IngestGraph::class)($foreignIssue, billingGraph(), null);
+    $foreignGraph = app(IngestGraph::class)($foreignIssue, billingGraph(), null);
 
     app()->instance('current.workspace', $this->fix['workspace']);
 
     ($this->as)()->getJson(route('graphs.owner', ['type' => 'issue', 'id' => $foreignIssue->id]))->assertNotFound();
+    ($this->as)()->getJson(route('graphs.show', ['graph' => $foreignGraph->id]))->assertNotFound();
     ($this->as)()->getJson('/graphs/owners/cycle/1')->assertNotFound();
 });
