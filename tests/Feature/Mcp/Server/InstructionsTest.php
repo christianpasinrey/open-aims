@@ -41,6 +41,21 @@ it('makes orientation and explicit workspace scoping non-negotiable', function (
         ->toContain('aims://guides/diagrams');
 });
 
+it('states the documentation protocol and points at the graph schema', function () {
+    $instructions = aimsInstructions();
+
+    expect($instructions)
+        ->toContain('DOCUMENT EVERY PROJECT, MILESTONE AND ISSUE')
+        ->toContain('Mermaid')
+        ->toContain('Chart.js')
+        ->toContain('planned')
+        ->toContain('implemented')
+        ->toContain('aims://guides/documentation')
+        ->toContain('aims://guides/graphs')
+        ->toContain('graphs-schema')
+        ->toContain('graphs-attach');
+});
+
 it('stays short enough that truncating clients keep the rules', function () {
     expect(mb_strlen(aimsInstructions()))->toBeLessThan(1200);
 });
