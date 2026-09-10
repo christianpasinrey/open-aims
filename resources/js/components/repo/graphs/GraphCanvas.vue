@@ -207,23 +207,31 @@ async function build(): Promise<void> {
     failed.value = null;
 
     try {
-        const created =
+        const create =
             props.mode === '3d'
-                ? new (await import('3d-force-graph')).default(element, {
-                      controlType: 'orbit',
-                  })
-                : new (await import('force-graph')).default(element);
+                ? await import('3d-force-graph').then(
+                      ({ default: ForceGraph3D }) =>
+                          () =>
+                              new ForceGraph3D(element, {
+                                  controlType: 'orbit',
+                              }),
+                  )
+                : await import('force-graph').then(
+                      ({ default: ForceGraph }) =>
+                          () =>
+                              new ForceGraph(element),
+                  );
 
         if (token !== buildToken) {
-            (created as unknown as GraphInstance)._destructor();
-
             return;
         }
 
+        // Constructing mounts the canvas into the element, so the previous
+        // graph is cleared before — clearing after wiped the new canvas.
         destroy();
         readTheme();
 
-        const graph = created as unknown as GraphInstance;
+        const graph = create() as unknown as GraphInstance;
         graph
             .width(element.clientWidth)
             .height(element.clientHeight)
