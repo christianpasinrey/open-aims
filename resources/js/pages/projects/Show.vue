@@ -189,6 +189,10 @@ const ProjectMilestonesTab = defineAsyncComponent(
     () => import('@/components/repo/projects/ProjectMilestonesTab.vue'),
 );
 
+const OwnerGraphs = defineAsyncComponent(
+    () => import('@/components/repo/graphs/OwnerGraphs.vue'),
+);
+
 const props = defineProps<{
     project: Project;
     issues: Issue[];
@@ -217,7 +221,7 @@ const props = defineProps<{
     linked_branches?: LinkedBranch[];
     linked_pull_requests?: LinkedPullRequest[];
     available_github_sources?: AvailableGithubSource[];
-    tab: 'overview' | 'activity' | 'issues' | 'milestones';
+    tab: 'overview' | 'activity' | 'issues' | 'milestones' | 'graphs';
 }>();
 
 const PROJECT_STATES = [
@@ -334,7 +338,9 @@ function fmtShort(iso: string | null): string {
     });
 }
 
-function tabHref(tab: 'overview' | 'activity' | 'issues' | 'milestones') {
+function tabHref(
+    tab: 'overview' | 'activity' | 'issues' | 'milestones' | 'graphs',
+) {
     return tab === 'overview'
         ? `/projects/${props.project.slug}`
         : `/projects/${props.project.slug}?tab=${tab}`;
@@ -1281,6 +1287,16 @@ watch(
                     ]"
                     >Milestones</Link
                 >
+                <Link
+                    :href="tabHref('graphs')"
+                    :class="[
+                        'rounded-md px-2 py-1 transition-colors',
+                        tab === 'graphs'
+                            ? 'bg-accent text-foreground'
+                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    ]"
+                    >Graphs</Link
+                >
             </nav>
         </div>
 
@@ -1859,6 +1875,18 @@ watch(
                     :milestones="project.milestones"
                     @create="openMilestoneDialog"
                 />
+
+                <!-- GRAPHS -->
+                <div
+                    v-else-if="tab === 'graphs'"
+                    class="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8"
+                >
+                    <OwnerGraphs
+                        owner-type="project"
+                        :owner-id="project.id"
+                        :map-href="`/map?project=${project.slug}`"
+                    />
+                </div>
 
                 <!-- ISSUES -->
                 <div v-else class="flex-1 overflow-y-auto">

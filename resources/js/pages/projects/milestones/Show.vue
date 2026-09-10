@@ -40,6 +40,9 @@ import { startedProgressByState } from '@/lib/states';
 const MarkdownContent = defineAsyncComponent(
     () => import('@/components/repo/MarkdownContent.vue'),
 );
+const OwnerGraphs = defineAsyncComponent(
+    () => import('@/components/repo/graphs/OwnerGraphs.vue'),
+);
 
 type Team = { id: number; name: string; key: string; color: string | null };
 type State = {
@@ -623,6 +626,13 @@ function submitEdit() {
                         </li>
                     </ul>
                 </section>
+                <div class="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
+                    <OwnerGraphs
+                        owner-type="milestone"
+                        :owner-id="milestone.id"
+                        :map-href="`/map?milestone=${milestone.id}`"
+                    />
+                </div>
             </main>
 
             <aside

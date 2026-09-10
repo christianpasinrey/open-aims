@@ -11,6 +11,7 @@ import {
     ChevronUp,
     FolderKanban,
     Users,
+    Waypoints,
     Search,
     PenSquare,
     Settings,
@@ -585,6 +586,18 @@ function logout() {
                             <Link :href="'/projects'">
                                 <FolderKanban />
                                 <span>Projects</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            as-child
+                            :is-active="currentPath === '/map'"
+                            tooltip="Map"
+                        >
+                            <Link :href="'/map'">
+                                <Waypoints />
+                                <span>Map</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

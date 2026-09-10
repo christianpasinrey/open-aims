@@ -28,7 +28,7 @@ final class ProjectDetailController
     public function show(Request $request, string $slug): Response
     {
         $tab = $request->query('tab');
-        $tab = is_string($tab) && in_array($tab, ['overview', 'activity', 'issues', 'milestones'], true)
+        $tab = is_string($tab) && in_array($tab, ['overview', 'activity', 'issues', 'milestones', 'graphs'], true)
             ? $tab
             : 'overview';
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;

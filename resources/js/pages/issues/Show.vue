@@ -60,6 +60,9 @@ const MarkdownContent = defineAsyncComponent(
 const PlanRenderer = defineAsyncComponent(
     () => import('@/components/repo/PlanRenderer.vue'),
 );
+const OwnerGraphs = defineAsyncComponent(
+    () => import('@/components/repo/graphs/OwnerGraphs.vue'),
+);
 const GithubLinksPanel = defineAsyncComponent(
     () => import('@/components/repo/github/GithubLinksPanel.vue'),
 );
@@ -718,6 +721,14 @@ function fmtBytes(bytes: number | null): string {
                             />
                         </div>
                     </section>
+
+                    <!-- Graphs (attached by Claude via MCP) -->
+                    <OwnerGraphs
+                        class="mt-10 block"
+                        owner-type="issue"
+                        :owner-id="issue.id"
+                        map-href="/map"
+                    />
 
                     <section class="mt-10">
                         <h2
