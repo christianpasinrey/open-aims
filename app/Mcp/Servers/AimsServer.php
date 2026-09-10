@@ -10,6 +10,8 @@ use App\Mcp\Prompts\BreakdownEpic;
 use App\Mcp\Prompts\PlanSprint;
 use App\Mcp\Prompts\WriteIssue;
 use App\Mcp\Resources\DiagramsGuide;
+use App\Mcp\Resources\DocumentationGuide;
+use App\Mcp\Resources\GraphsGuide;
 use App\Mcp\Resources\PlanningGuide;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Instructions;
@@ -22,22 +24,19 @@ use Laravel\Mcp\Server\Tool;
 #[Version('1.0.0')]
 #[Instructions(
     "Operate an AIMS issue tracker from natural language.\n\n".
-    'ORIENT BEFORE ANY WRITE: call `current` first. It returns every workspace the '.
-    'user can reach. When there is more than one, pass `workspace_slug` explicitly on '.
-    'every subsequent call — omitting it silently uses the first membership by id, '.
-    "which is often the wrong board.\n\n".
-    'Tool names are kebab-case, never dotted. The main ones: current, workspaces-list, '.
-    'workspaces-create (makes a NEW board — never use it to switch to an existing one), issues-list, '.
-    'issues-create, issues-update, issues-get, issues-transition, issues-link, '.
-    'issues-comment, projects-list, projects-create, projects-get, cycles-list, '.
-    'cycles-get, cycles-create, initiatives-list, inbox-list, teams-list, '.
-    "labels-list, search.\n\n".
-    'Identifiers are TEAMKEY-N, such as LAM-275. Project slugs come from `projects-list`. '.
-    "Cycles are addressed as (team_key, number). 'me' resolves to the authenticated ".
-    "user.\n\n".
-    'Read the resource aims://guides/planning before planning work (object model, '.
-    'Scrum mapping, story and estimate conventions), and aims://guides/diagrams '.
-    'before writing any plan containing a diagram or chart.'
+    'ORIENT BEFORE ANY WRITE: call `current` first. When it lists more than one workspace, pass '.
+    '`workspace_slug` on every call — omitting it uses the first membership by id, often the wrong '.
+    "board.\n\n".
+    'Tools are kebab-case, never dotted: current, workspaces-list, workspaces-create (makes a NEW '.
+    'board), issues-list, issues-create, issues-update, issues-get, issues-transition, issues-link, '.
+    'issues-comment, projects-list, projects-create, projects-get, cycles-list, cycles-create, '.
+    "inbox-list, labels-ensure, search, graphs-schema, graphs-attach.\n\n".
+    'Identifiers are TEAMKEY-N (LAM-275). Project slugs come from `projects-list`; cycles are '.
+    "(team_key, number); 'me' is the caller.\n\n".
+    'DOCUMENT EVERY PROJECT, MILESTONE AND ISSUE THE SAME WAY: HTML plan with Mermaid and Chart.js, '.
+    'labels, acceptance criteria and a code graph (stage planned before coding, implemented when '.
+    'done). Follow aims://guides/documentation; aims://guides/planning covers Scrum, '.
+    'aims://guides/diagrams plan markup, aims://guides/graphs and `graphs-schema` the graph model.'
 )]
 class AimsServer extends Server
 {
@@ -53,17 +52,20 @@ class AimsServer extends Server
     protected array $tools = [];
 
     /**
-     * Written guides the client can read instead of guessing: the planning
-     * methodology (hierarchy vs dependency graph, Scrum mapping, story
-     * template) and the plan rendering contract (mermaid / Chart.js markup).
+     * Written guides the client can read instead of guessing: the
+     * documentation protocol every work item follows, the planning
+     * methodology, the plan rendering contract (mermaid / Chart.js markup)
+     * and the code graph model.
      *
-     * Both are `Laravel\Mcp\Server\Resource` subclasses.
+     * All are `Laravel\Mcp\Server\Resource` subclasses.
      *
      * @var array<int, class-string>
      */
     protected array $resources = [
+        DocumentationGuide::class,
         PlanningGuide::class,
         DiagramsGuide::class,
+        GraphsGuide::class,
     ];
 
     /**

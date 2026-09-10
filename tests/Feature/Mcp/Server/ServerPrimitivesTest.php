@@ -6,6 +6,8 @@ use App\Mcp\Prompts\BreakdownEpic;
 use App\Mcp\Prompts\PlanSprint;
 use App\Mcp\Prompts\WriteIssue;
 use App\Mcp\Resources\DiagramsGuide;
+use App\Mcp\Resources\DocumentationGuide;
+use App\Mcp\Resources\GraphsGuide;
 use App\Mcp\Resources\PlanningGuide;
 use App\Mcp\Servers\AimsServer;
 use Laravel\Mcp\Server\Prompt;
@@ -21,16 +23,20 @@ function aimsServerContext(): ServerContext
     return $server->createContext();
 }
 
-it('lists both guide resources', function () {
+it('lists every guide resource', function () {
     $resources = aimsServerContext()->resources();
 
     expect($resources->map(fn (Resource $resource): string => $resource::class)->all())
+        ->toContain(DocumentationGuide::class)
         ->toContain(PlanningGuide::class)
-        ->toContain(DiagramsGuide::class);
+        ->toContain(DiagramsGuide::class)
+        ->toContain(GraphsGuide::class);
 
     expect($resources->map(fn (Resource $resource): string => $resource->uri())->all())
+        ->toContain('aims://guides/documentation')
         ->toContain('aims://guides/planning')
-        ->toContain('aims://guides/diagrams');
+        ->toContain('aims://guides/diagrams')
+        ->toContain('aims://guides/graphs');
 });
 
 it('lists every prompt', function () {
@@ -53,7 +59,12 @@ it('keeps auto-discovering module tools alongside the new primitives', function 
     expect($tools->count())->toBeGreaterThan(10);
     expect($tools->map(fn ($tool): string => $tool->name())->all())
         ->toContain('current')
-        ->toContain('issues-list');
+        ->toContain('issues-list')
+        ->toContain('graphs-schema')
+        ->toContain('graphs-attach')
+        ->toContain('graphs-list')
+        ->toContain('graphs-get')
+        ->toContain('graphs-delete');
 });
 
 it('keeps the pagination overrides so no tool is hidden behind a cursor', function () {
@@ -77,8 +88,10 @@ it('returns non-empty markdown for every resource', function (string $resourceCl
         ->and($payload['text'])->toBeString()
         ->and(mb_strlen($payload['text']))->toBeGreaterThan(500);
 })->with([
+    [DocumentationGuide::class, 'aims://guides/documentation'],
     [PlanningGuide::class, 'aims://guides/planning'],
     [DiagramsGuide::class, 'aims://guides/diagrams'],
+    [GraphsGuide::class, 'aims://guides/graphs'],
 ]);
 
 it('reads each resource through the server', function (string $resourceClass, array $expected) {
@@ -87,8 +100,10 @@ it('reads each resource through the server', function (string $resourceClass, ar
         ->assertHasNoErrors()
         ->assertSee($expected);
 })->with([
+    [DocumentationGuide::class, ['plan_format="html"', '<pre class="mermaid">', 'new Chart(', 'stage=planned', 'labels-ensure', 'acceptance_criteria']],
     [PlanningGuide::class, ['As a <role> I want <capability> so that <benefit>', 'Given', 'issues-link']],
     [DiagramsGuide::class, ['plan_format="html"', '<pre class="mermaid">', 'new Chart(']],
+    [GraphsGuide::class, ['graphs-schema', 'graphs-attach', 'stage=implemented', '{repo}:{file}#{Class}::{function}']],
 ]);
 
 it('renders each prompt', function (string $promptClass, array $arguments, array $expected) {
