@@ -28,7 +28,7 @@ final class ProjectDetailController
     public function show(Request $request, string $slug): Response
     {
         $tab = $request->query('tab');
-        $tab = is_string($tab) && in_array($tab, ['overview', 'activity', 'issues'], true)
+        $tab = is_string($tab) && in_array($tab, ['overview', 'activity', 'issues', 'milestones'], true)
             ? $tab
             : 'overview';
         $workspace = app()->bound('current.workspace') ? app('current.workspace') : null;
@@ -43,11 +43,10 @@ final class ProjectDetailController
                 'lead:id,name,email',
                 'members.user:id,name,email',
                 'milestones' => fn ($q) => $q->withCount([
-                    'issues as total_issues',
-                    'issues as completed_issues' => fn ($i) => $i->whereHas(
-                        'workflowState',
-                        fn ($w) => $w->where('type', 'completed'),
-                    ),
+                    'issues as total_issues' => fn ($i) => $i->whereNull('archived_at'),
+                    'issues as completed_issues' => fn ($i) => $i
+                        ->whereNull('archived_at')
+                        ->whereHas('workflowState', fn ($w) => $w->where('type', 'completed')),
                 ]),
                 'teams:id,name,key,color',
                 'labels:id,team_id,name,color',
@@ -254,6 +253,7 @@ final class ProjectDetailController
                     'name' => $ms->name,
                     'description' => $ms->description,
                     'target_date' => $ms->target_date,
+                    'completed_at' => $ms->completed_at?->toIso8601String(),
                     'issue_count' => (int) $ms->total_issues,
                     'completed_count' => (int) $ms->completed_issues,
                     'percent' => (int) $ms->total_issues > 0

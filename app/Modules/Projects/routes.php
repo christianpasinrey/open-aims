@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Projects\Http\Controllers\ProjectDetailController;
 use App\Modules\Projects\Http\Controllers\ProjectListController;
+use App\Modules\Projects\Http\Controllers\ProjectMilestoneDetailController;
 use App\Modules\Projects\Http\Controllers\ProjectPreviewController;
 use App\Modules\Projects\Http\Controllers\ProjectResourceController;
 use App\Modules\Projects\Http\Controllers\ProjectWriteController;
@@ -21,6 +22,9 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::delete('projects/{slug}/force', [ProjectWriteController::class, 'forceDestroy'])->name('projects.force-destroy');
     Route::post('projects/{slug}/milestones', [ProjectWriteController::class, 'storeMilestone'])
         ->name('projects.milestones.store');
+    Route::get('projects/{slug}/milestones/{milestone}', [ProjectMilestoneDetailController::class, 'show'])
+        ->whereNumber('milestone')
+        ->name('projects.milestones.show');
     Route::post('projects/{slug}/members', [ProjectWriteController::class, 'attachMember'])
         ->name('projects.members.attach');
     Route::delete('projects/{slug}/members/{userId}', [ProjectWriteController::class, 'detachMember'])

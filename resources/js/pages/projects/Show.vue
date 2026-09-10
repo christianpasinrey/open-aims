@@ -23,13 +23,21 @@ import {
     UserPlus,
     X,
 } from 'lucide-vue-next';
-import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
+import {
+    computed,
+    defineAsyncComponent,
+    nextTick,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
 import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import GithubLinksPanel from '@/components/repo/github/GithubLinksPanel.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
+import type { ProjectMilestone } from '@/components/repo/projects/ProjectMilestonesTab.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 
 import {
@@ -73,14 +81,7 @@ type Project = {
         email: string;
         role: string | null;
     }>;
-    milestones: Array<{
-        id: number;
-        name: string;
-        description: string | null;
-        target_date: string | null;
-        issue_count: number;
-        percent: number;
-    }>;
+    milestones: ProjectMilestone[];
     teams: Array<{
         id: number;
         name: string;
@@ -98,17 +99,15 @@ type Project = {
         created_at: string | null;
         creator: { id: number; name: string; email: string } | null;
     }>;
-    latest_plan:
-        | {
-              id: number;
-              format: 'md' | 'html';
-              name: string;
-              url: string | null;
-              content_preview: string;
-              uploaded_at: string | null;
-              libs?: string[] | null;
-          }
-        | null;
+    latest_plan: {
+        id: number;
+        format: 'md' | 'html';
+        name: string;
+        url: string | null;
+        content_preview: string;
+        uploaded_at: string | null;
+        libs?: string[] | null;
+    } | null;
     latest_plan_content: string | null;
     plan_too_large: boolean;
 };
@@ -186,6 +185,10 @@ const PlanRenderer = defineAsyncComponent(
     () => import('@/components/repo/PlanRenderer.vue'),
 );
 
+const ProjectMilestonesTab = defineAsyncComponent(
+    () => import('@/components/repo/projects/ProjectMilestonesTab.vue'),
+);
+
 const props = defineProps<{
     project: Project;
     issues: Issue[];
@@ -214,7 +217,7 @@ const props = defineProps<{
     linked_branches?: LinkedBranch[];
     linked_pull_requests?: LinkedPullRequest[];
     available_github_sources?: AvailableGithubSource[];
-    tab: 'overview' | 'activity' | 'issues';
+    tab: 'overview' | 'activity' | 'issues' | 'milestones';
 }>();
 
 const PROJECT_STATES = [
@@ -331,7 +334,7 @@ function fmtShort(iso: string | null): string {
     });
 }
 
-function tabHref(tab: 'overview' | 'activity' | 'issues') {
+function tabHref(tab: 'overview' | 'activity' | 'issues' | 'milestones') {
     return tab === 'overview'
         ? `/projects/${props.project.slug}`
         : `/projects/${props.project.slug}?tab=${tab}`;
@@ -1268,6 +1271,16 @@ watch(
                     ]"
                     >Issues</Link
                 >
+                <Link
+                    :href="tabHref('milestones')"
+                    :class="[
+                        'rounded-md px-2 py-1 transition-colors',
+                        tab === 'milestones'
+                            ? 'bg-accent text-foreground'
+                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    ]"
+                    >Milestones</Link
+                >
             </nav>
         </div>
 
@@ -1524,7 +1537,9 @@ watch(
                                         : undefined
                                 "
                             >
-                                {{ planFormat === 'html' ? 'HTML' : 'Markdown' }}
+                                {{
+                                    planFormat === 'html' ? 'HTML' : 'Markdown'
+                                }}
                             </span>
                         </div>
 
@@ -1754,43 +1769,52 @@ watch(
                             v-if="project.milestones.length"
                             class="divide-y divide-border rounded-md border border-border"
                         >
-                            <li
-                                v-for="ms in project.milestones"
-                                :key="ms.id"
-                                class="px-3 py-2"
-                            >
-                                <div
-                                    class="flex items-center justify-between gap-3"
+                            <li v-for="ms in project.milestones" :key="ms.id">
+                                <Link
+                                    :href="`/projects/${project.slug}/milestones/${ms.id}`"
+                                    class="block px-3 py-2 transition-colors hover:bg-accent/40"
                                 >
                                     <div
-                                        class="flex min-w-0 items-center gap-2"
+                                        class="flex items-center justify-between gap-3"
                                     >
-                                        <Diamond
-                                            class="size-3 shrink-0"
-                                            :style="{
-                                                color:
-                                                    project.color || '#6366f1',
-                                                fill:
-                                                    project.color || '#6366f1',
-                                            }"
-                                        />
+                                        <div
+                                            class="flex min-w-0 items-center gap-2"
+                                        >
+                                            <Diamond
+                                                class="size-3 shrink-0"
+                                                :style="{
+                                                    color:
+                                                        project.color ||
+                                                        '#6366f1',
+                                                    fill:
+                                                        project.color ||
+                                                        '#6366f1',
+                                                }"
+                                            />
+                                            <span
+                                                class="truncate text-[13px] font-medium"
+                                                >{{ ms.name }}</span
+                                            >
+                                        </div>
                                         <span
-                                            class="truncate text-[13px] font-medium"
-                                            >{{ ms.name }}</span
+                                            class="shrink-0 text-[12px] text-muted-foreground tabular-nums"
+                                            >{{ ms.completed_count }}/{{
+                                                ms.issue_count
+                                            }}<template v-if="ms.target_date">
+                                                ·
+                                                {{
+                                                    fmtShort(ms.target_date)
+                                                }}</template
+                                            ></span
                                         >
                                     </div>
-                                    <span
-                                        v-if="ms.target_date"
-                                        class="text-[12px] text-muted-foreground"
-                                        >{{ fmtShort(ms.target_date) }}</span
+                                    <p
+                                        v-if="ms.description"
+                                        class="mt-1 text-[12.5px] text-muted-foreground"
                                     >
-                                </div>
-                                <p
-                                    v-if="ms.description"
-                                    class="mt-1 text-[12.5px] text-muted-foreground"
-                                >
-                                    {{ ms.description }}
-                                </p>
+                                        {{ ms.description }}
+                                    </p>
+                                </Link>
                             </li>
                         </ul>
                         <p v-else class="text-[12.5px] text-muted-foreground">
@@ -1826,6 +1850,15 @@ watch(
                         </ul>
                     </div>
                 </div>
+
+                <!-- MILESTONES -->
+                <ProjectMilestonesTab
+                    v-else-if="tab === 'milestones'"
+                    :project-slug="project.slug"
+                    :color="project.color"
+                    :milestones="project.milestones"
+                    @create="openMilestoneDialog"
+                />
 
                 <!-- ISSUES -->
                 <div v-else class="flex-1 overflow-y-auto">
@@ -2615,37 +2648,38 @@ watch(
                             "
                             class="space-y-1.5"
                         >
-                            <li
-                                v-for="ms in project.milestones"
-                                :key="ms.id"
-                                class="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/40"
-                            >
-                                <Diamond
-                                    class="size-3 shrink-0"
-                                    :style="{
-                                        color: project.color || '#6366f1',
-                                        fill: project.color || '#6366f1',
-                                    }"
-                                />
-                                <div class="min-w-0 flex-1">
-                                    <div
-                                        class="truncate text-[12.5px] font-medium text-foreground"
-                                    >
-                                        {{ ms.name }}
-                                    </div>
-                                    <div
-                                        class="text-[11px] text-muted-foreground"
-                                    >
-                                        {{ ms.percent }}% of
-                                        {{ ms.issue_count }}
-                                    </div>
-                                </div>
-                                <span
-                                    v-if="ms.target_date"
-                                    class="shrink-0 rounded-md border border-border bg-card px-1.5 py-px text-[11px] text-muted-foreground tabular-nums"
+                            <li v-for="ms in project.milestones" :key="ms.id">
+                                <Link
+                                    :href="`/projects/${project.slug}/milestones/${ms.id}`"
+                                    class="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/40"
                                 >
-                                    {{ fmtShort(ms.target_date) }}
-                                </span>
+                                    <Diamond
+                                        class="size-3 shrink-0"
+                                        :style="{
+                                            color: project.color || '#6366f1',
+                                            fill: project.color || '#6366f1',
+                                        }"
+                                    />
+                                    <div class="min-w-0 flex-1">
+                                        <div
+                                            class="truncate text-[12.5px] font-medium text-foreground"
+                                        >
+                                            {{ ms.name }}
+                                        </div>
+                                        <div
+                                            class="text-[11px] text-muted-foreground"
+                                        >
+                                            {{ ms.percent }}% of
+                                            {{ ms.issue_count }}
+                                        </div>
+                                    </div>
+                                    <span
+                                        v-if="ms.target_date"
+                                        class="shrink-0 rounded-md border border-border bg-card px-1.5 py-px text-[11px] text-muted-foreground tabular-nums"
+                                    >
+                                        {{ fmtShort(ms.target_date) }}
+                                    </span>
+                                </Link>
                             </li>
                         </ul>
 
