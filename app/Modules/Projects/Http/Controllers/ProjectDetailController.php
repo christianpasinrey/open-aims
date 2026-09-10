@@ -42,7 +42,13 @@ final class ProjectDetailController
             ->with([
                 'lead:id,name,email',
                 'members.user:id,name,email',
-                'milestones',
+                'milestones' => fn ($q) => $q->withCount([
+                    'issues as total_issues',
+                    'issues as completed_issues' => fn ($i) => $i->whereHas(
+                        'workflowState',
+                        fn ($w) => $w->where('type', 'completed'),
+                    ),
+                ]),
                 'teams:id,name,key,color',
                 'labels:id,team_id,name,color',
                 'resources.media',
@@ -248,10 +254,11 @@ final class ProjectDetailController
                     'name' => $ms->name,
                     'description' => $ms->description,
                     'target_date' => $ms->target_date,
-                    // TODO: when an `issues.project_milestone_id` column exists,
-                    // count issues per milestone here and compute the % completed.
-                    'issue_count' => 0,
-                    'percent' => 0,
+                    'issue_count' => (int) $ms->total_issues,
+                    'completed_count' => (int) $ms->completed_issues,
+                    'percent' => (int) $ms->total_issues > 0
+                        ? (int) round(((int) $ms->completed_issues / (int) $ms->total_issues) * 100)
+                        : 0,
                 ])->all(),
                 'teams' => $project->teams->map(fn ($t): array => [
                     'id' => $t->id,

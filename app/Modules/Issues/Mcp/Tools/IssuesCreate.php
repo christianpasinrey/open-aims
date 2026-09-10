@@ -78,6 +78,7 @@ class IssuesCreate extends Tool
             'state' => 'nullable|string|max:64',
             'assignee' => 'nullable|string|max:255',
             'project_slug' => 'nullable|string|max:200',
+            'milestone' => 'nullable|string|max:255',
             'cycle_number' => 'nullable|integer|min:1',
             'estimate' => 'nullable|numeric|min:0',
             'parent' => 'nullable|string|regex:/^[A-Za-z]+-\d+$/',
@@ -184,6 +185,17 @@ class IssuesCreate extends Tool
                 ->value('id');
         }
 
+        $milestoneId = null;
+        if (! empty($data['milestone'])) {
+            [$milestoneId, $milestoneError] = $this->resolveProjectMilestone(
+                $projectId !== null ? (int) $projectId : null,
+                (string) $data['milestone'],
+            );
+            if ($milestoneId === null) {
+                return Response::error((string) $milestoneError);
+            }
+        }
+
         $cycleId = null;
         if (! empty($data['cycle_number'])) {
             $cycleId = Cycle::query()
@@ -194,7 +206,7 @@ class IssuesCreate extends Tool
 
         $description = $this->composeDescription($data['description'] ?? null, $criteria);
 
-        $issue = DB::transaction(function () use ($team, $workspace, $user, $stateId, $assigneeId, $projectId, $cycleId, $parentId, $description, $data) {
+        $issue = DB::transaction(function () use ($team, $workspace, $user, $stateId, $assigneeId, $projectId, $milestoneId, $cycleId, $parentId, $description, $data) {
             $team->refresh();
             $next = ((int) $team->issue_counter) + 1;
             $team->update(['issue_counter' => $next]);
@@ -210,6 +222,7 @@ class IssuesCreate extends Tool
                 'assignee_user_id' => $assigneeId,
                 'creator_user_id' => $user->getAuthIdentifier(),
                 'project_id' => $projectId,
+                'project_milestone_id' => $milestoneId,
                 'cycle_id' => $cycleId,
                 'parent_issue_id' => $parentId,
                 'estimate' => $data['estimate'] ?? null,
@@ -288,6 +301,10 @@ class IssuesCreate extends Tool
                 '"me", numeric user id, or email. Must be a member of the target workspace.'
             ),
             'project_slug' => $schema->string()->description('Project slug from projects.list.'),
+            'milestone' => $schema->string()->description(
+                'Milestone of that project, by name (case-insensitive) or numeric id — see `milestones` '
+                .'in projects-get. Requires project_slug.'
+            ),
             'cycle_number' => $schema->integer()->description('Cycle number for this team.'),
             'estimate' => $schema->number()->description('Story points for Scrum planning (e.g. 1, 2, 3, 5, 8).'),
             'parent' => $schema->string()->description(

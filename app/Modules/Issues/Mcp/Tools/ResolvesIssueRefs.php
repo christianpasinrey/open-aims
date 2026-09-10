@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Issues\Mcp\Tools;
 
 use App\Modules\Issues\Models\Issue;
+use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectMilestone;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Workspaces\Models\Workspace;
@@ -117,5 +119,66 @@ trait ResolvesIssueRefs
             'applied' => $applied,
             'unknown' => array_values(array_unique($unknown)),
         ];
+    }
+
+    /**
+     * Resolve a milestone reference — its numeric id, or its name compared
+     * case-insensitively — inside ONE project. A milestone only means
+     * something within its project, so a name is never matched workspace-wide,
+     * and the error lists what the caller can pick instead.
+     *
+     * @return array{0: ?int, 1: ?string} [milestone id, error message]
+     */
+    private function resolveProjectMilestone(?int $projectId, string $reference): array
+    {
+        $reference = trim($reference);
+
+        if ($projectId === null) {
+            return [null, 'The issue has no project, so it cannot join a milestone. '
+                .'Pass project_slug in the same call or set the project first.'];
+        }
+
+        $projectName = (string) (Project::query()->whereKey($projectId)->value('name') ?? $projectId);
+
+        $milestones = ProjectMilestone::query()
+            ->where('project_id', $projectId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'name']);
+
+        if (ctype_digit($reference)) {
+            $byId = $milestones->firstWhere('id', (int) $reference);
+            if ($byId !== null) {
+                return [(int) $byId->id, null];
+            }
+        }
+
+        $describe = static fn (ProjectMilestone $m): string => "{$m->name} (id {$m->id})";
+
+        $matches = $milestones->filter(
+            static fn (ProjectMilestone $m): bool => mb_strtolower((string) $m->name) === mb_strtolower($reference)
+        );
+
+        if ($matches->count() > 1) {
+            return [null, sprintf(
+                "Milestone name '%s' is ambiguous in project '%s'. Pass its id instead: %s.",
+                $reference,
+                $projectName,
+                $matches->map($describe)->implode(', '),
+            )];
+        }
+
+        if ($matches->count() === 1) {
+            return [(int) $matches->first()->id, null];
+        }
+
+        $available = $milestones->map($describe)->implode(', ');
+
+        return [null, sprintf(
+            "Milestone '%s' not found in project '%s'. Available: %s.",
+            $reference,
+            $projectName,
+            $available !== '' ? $available : 'none yet — create one with projects-add-milestone',
+        )];
     }
 }

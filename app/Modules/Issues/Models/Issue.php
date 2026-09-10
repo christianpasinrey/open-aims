@@ -11,6 +11,7 @@ use App\Modules\Cycles\Models\Cycle;
 use App\Modules\Integrations\Github\Models\GithubLink;
 use App\Modules\Issues\Enums\IssuePriority;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Models\ProjectMilestone;
 use App\Modules\Teams\Models\Label;
 use App\Modules\Teams\Models\Team;
 use App\Modules\Teams\Models\WorkflowState;
@@ -31,6 +32,7 @@ class Issue extends Model
         'workspace_id',
         'team_id',
         'project_id',
+        'project_milestone_id',
         'cycle_id',
         'parent_issue_id',
         'number',
@@ -62,6 +64,29 @@ class Issue extends Model
         'number' => 'integer',
     ];
 
+    protected static function booted(): void
+    {
+        // A milestone only exists inside its project, so an issue may only
+        // point at a milestone of its own project. Enforced on the model so
+        // every write path keeps it — including moving the issue elsewhere.
+        static::saving(function (Issue $issue): void {
+            if ($issue->project_milestone_id === null
+                || ! $issue->isDirty(['project_id', 'project_milestone_id'])) {
+                return;
+            }
+
+            $belongsToProject = $issue->project_id !== null
+                && ProjectMilestone::query()
+                    ->whereKey($issue->project_milestone_id)
+                    ->where('project_id', $issue->project_id)
+                    ->exists();
+
+            if (! $belongsToProject) {
+                $issue->project_milestone_id = null;
+            }
+        });
+    }
+
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
@@ -70,6 +95,11 @@ class Issue extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function milestone(): BelongsTo
+    {
+        return $this->belongsTo(ProjectMilestone::class, 'project_milestone_id');
     }
 
     public function cycle(): BelongsTo

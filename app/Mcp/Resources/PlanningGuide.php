@@ -58,6 +58,14 @@ class PlanningGuide extends Resource
             | Issue | `issues-list`, `issues-get`, `issues-create`, `issues-update` | `project_slug` |
             | Sub-issue | same issue tools | `parent` (a `TEAMKEY-N` identifier) |
 
+            A **milestone** is not a level of this hierarchy: it is a dated checkpoint
+            inside one project (`projects-add-milestone`). Link an issue to it with the
+            `milestone` field (name or id) on `issues-create` / `issues-update`; the issue
+            must belong to that project, and moving it to another project drops the
+            link. `projects-get` reports `total_issues`, `completed_issues` and
+            `progress_percent` per milestone, and `issues-list` filters by `milestone`.
+            Do not fake milestones with parent issues.
+
             A sub-issue is not a different object type — it is an issue whose `parent`
             points at another issue. Every node has at most one parent. Use the
             hierarchy to roll scope and progress up: sub-issues roll into their story,

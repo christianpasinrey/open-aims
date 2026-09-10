@@ -19,7 +19,8 @@ use Laravel\Mcp\Server\Tool;
     'List issues in the active workspace with rich filtering. Returns at '
     .'most `limit` items, ordered by priority then last update. Use '
     .'`team` to scope to a single team (e.g. "LAM"); omit for all teams. '
-    .'Each issue includes a `plan` summary (or null) so callers can tell '
+    .'Filter by `milestone` (name or id) to see what is left in one milestone of a project. '
+    .'Each issue includes its `milestone` name (or null) and a `plan` summary (or null) so callers can tell '
     .'at a glance which issues have a plan attached.'
 )]
 class IssuesList extends Tool
@@ -43,6 +44,7 @@ class IssuesList extends Tool
             'labels' => 'nullable|array',
             'labels.*' => 'string',
             'project' => 'nullable|string',
+            'milestone' => 'nullable|string|max:255',
             'cycle_number' => 'nullable|integer|min:1',
             'limit' => 'nullable|integer|min:1|max:200',
         ])->validate();
@@ -55,6 +57,7 @@ class IssuesList extends Tool
                 'workflowState:id,name,type,color',
                 'assignee:id,name,email',
                 'project:id,name,slug',
+                'milestone:id,name',
                 'labels:id,name,color',
                 'plan',
             ]);
@@ -101,6 +104,13 @@ class IssuesList extends Tool
             $query->whereHas('project', fn ($q) => $q->where('slug', $data['project']));
         }
 
+        if (! empty($data['milestone'])) {
+            $milestone = trim((string) $data['milestone']);
+            $query->whereHas('milestone', fn ($q) => ctype_digit($milestone)
+                ? $q->whereKey((int) $milestone)
+                : $q->whereRaw('LOWER(name) = ?', [mb_strtolower($milestone)]));
+        }
+
         if (! empty($data['cycle_number'])) {
             $query->whereHas('cycle', fn ($q) => $q->where('number', (int) $data['cycle_number']));
         }
@@ -122,6 +132,7 @@ class IssuesList extends Tool
                 'priority' => $i->priority?->label(),
                 'assignee' => $i->assignee?->name,
                 'project' => $i->project?->name,
+                'milestone' => $i->milestone?->name,
                 'labels' => $i->labels->pluck('name')->all(),
                 'updated_at' => $i->updated_at?->toIso8601String(),
                 'plan' => $this->planSummary($i->plan),
@@ -139,6 +150,10 @@ class IssuesList extends Tool
             'priority' => $schema->integer()->description('0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low'),
             'labels' => $schema->array()->items($schema->string())->description('Label names; AND across labels.'),
             'project' => $schema->string()->description('Project slug.'),
+            'milestone' => $schema->string()->description(
+                'Milestone name (case-insensitive) or numeric id. Milestone names only need to be unique '
+                .'inside a project, so combine a name with `project`.'
+            ),
             'cycle_number' => $schema->integer()->description('Cycle number.'),
             'limit' => $schema->integer()->description('Max results, default 50.'),
             'workspace_slug' => $schema->string()->description('Optional workspace override.'),

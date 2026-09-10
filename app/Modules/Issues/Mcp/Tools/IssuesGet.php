@@ -19,8 +19,8 @@ use Laravel\Mcp\Server\Tool;
 
 #[Description(
     'Fetch the full detail for a single issue: description (markdown), '
-    .'state, priority, assignee, creator, project, cycle, labels, comments, '
-    .'parent and sub-issues. Use the LAM-N identifier. '
+    .'state, priority, assignee, creator, project, milestone (the project milestone it belongs to, or null), '
+    .'cycle, labels, comments, parent and sub-issues. Use the LAM-N identifier. '
     .'Also returns the issue RELATION GRAPH as four separate lists — `blocks` '
     .'(issues this one blocks), `blocked_by` (issues blocking this one), '
     .'`related`, and `duplicate_of` — each entry being {identifier, title, state}. '
@@ -65,6 +65,7 @@ class IssuesGet extends Tool
                 'assignee:id,name,email',
                 'creator:id,name,email',
                 'project:id,name,slug,color',
+                'milestone:id,project_id,name,target_date',
                 'cycle:id,number,name,starts_at,ends_at',
                 'labels:id,name,color',
                 'parent:id,team_id,number,title',
@@ -128,6 +129,11 @@ class IssuesGet extends Tool
             'project' => $issue->project ? [
                 'name' => $issue->project->name,
                 'slug' => $issue->project->slug,
+            ] : null,
+            'milestone' => $issue->milestone ? [
+                'id' => $issue->milestone->id,
+                'name' => $issue->milestone->name,
+                'target_date' => $issue->milestone->target_date?->toDateString(),
             ] : null,
             'cycle' => $issue->cycle ? [
                 'number' => $issue->cycle->number,
