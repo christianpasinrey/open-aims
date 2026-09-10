@@ -45,7 +45,7 @@ export type GraphData = {
     links: GraphLinkData[];
 };
 
-export type OwnerGraph = GraphData & {
+export type GraphSummary = {
     id: number;
     title: string;
     summary: string;
@@ -56,9 +56,29 @@ export type OwnerGraph = GraphData & {
     updated_at: string | null;
 };
 
+/** Where a graph is attached: its issue, milestone or project. */
+export type GraphOwnerRef = {
+    type: 'issue' | 'project' | 'milestone';
+    identifier: string;
+    name: string;
+    url: string;
+};
+
+/**
+ * A graph listed in a Graphs section. `own` is false for graphs of the
+ * milestones and issues of the project or milestone being viewed.
+ */
+export type OwnerGraphSummary = GraphSummary & {
+    own: boolean;
+    owner: GraphOwnerRef | null;
+};
+
+/** One graph with its nodes, from `GET /graphs/{id}`. */
+export type OwnerGraph = GraphSummary & GraphData;
+
 export type OwnerGraphsResponse = {
     owner: { type: string; id: number; name: string; url: string };
-    graphs: OwnerGraph[];
+    graphs: OwnerGraphSummary[];
 };
 
 export type MapResponse = GraphData & {
