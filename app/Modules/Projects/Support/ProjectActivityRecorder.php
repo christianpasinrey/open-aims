@@ -42,6 +42,45 @@ final class ProjectActivityRecorder
     }
 
     /**
+     * One row when the milestone's details changed and another when it was
+     * completed or reopened, so the feed reads the same as for projects.
+     *
+     * @param  list<string>  $changedFields
+     */
+    public function milestoneUpdated(
+        Project $project,
+        ProjectMilestone $milestone,
+        array $changedFields,
+        bool $wasCompleted,
+        ?int $actorId,
+    ): void {
+        $base = [
+            'project_id' => $project->id,
+            'actor_user_id' => $actorId,
+            'occurred_at' => now(),
+        ];
+        $payload = [
+            'milestone_id' => $milestone->id,
+            'milestone_name' => $milestone->name,
+        ];
+
+        if ($changedFields !== []) {
+            ProjectActivity::create($base + [
+                'kind' => 'milestone_updated',
+                'payload' => $payload + ['fields' => $changedFields],
+            ]);
+        }
+
+        $isCompleted = $milestone->completed_at !== null;
+        if ($isCompleted !== $wasCompleted) {
+            ProjectActivity::create($base + [
+                'kind' => $isCompleted ? 'milestone_completed' : 'milestone_reopened',
+                'payload' => $payload,
+            ]);
+        }
+    }
+
+    /**
      * Snapshot the diff-relevant fields of a project before a mutation.
      *
      * @return array<string,mixed>

@@ -25,6 +25,9 @@ Route::middleware(['web', 'auth', 'verified'])->group(function (): void {
     Route::get('projects/{slug}/milestones/{milestone}', [ProjectMilestoneDetailController::class, 'show'])
         ->whereNumber('milestone')
         ->name('projects.milestones.show');
+    Route::patch('projects/{slug}/milestones/{milestone}', [ProjectWriteController::class, 'updateMilestone'])
+        ->whereNumber('milestone')
+        ->name('projects.milestones.update');
     Route::post('projects/{slug}/members', [ProjectWriteController::class, 'attachMember'])
         ->name('projects.members.attach');
     Route::delete('projects/{slug}/members/{userId}', [ProjectWriteController::class, 'detachMember'])

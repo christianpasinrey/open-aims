@@ -45,11 +45,20 @@ function isPast(iso: string): boolean {
 
 const rows = computed(() =>
     props.milestones.map((ms) => {
-        let status: 'completed' | 'overdue' | 'scheduled' | 'unscheduled' =
-            'unscheduled';
+        let status:
+            | 'completed'
+            | 'done'
+            | 'overdue'
+            | 'scheduled'
+            | 'unscheduled' = 'unscheduled';
 
         if (ms.completed_at) {
             status = 'completed';
+        } else if (
+            ms.issue_count > 0 &&
+            ms.completed_count === ms.issue_count
+        ) {
+            status = 'done';
         } else if (ms.target_date && isPast(ms.target_date)) {
             status = 'overdue';
         } else if (ms.target_date) {
@@ -145,6 +154,11 @@ const rows = computed(() =>
                             v-if="ms.status === 'completed'"
                             class="text-emerald-500"
                             >Completed</span
+                        >
+                        <span
+                            v-else-if="ms.status === 'done'"
+                            class="text-emerald-500"
+                            >All issues done</span
                         >
                         <template v-else-if="ms.status === 'overdue'">
                             <span class="text-rose-400">Overdue</span>

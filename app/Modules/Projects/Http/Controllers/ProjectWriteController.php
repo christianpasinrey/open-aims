@@ -174,6 +174,54 @@ final class ProjectWriteController
     }
 
     /**
+     * Partial update of a milestone: name, description, target date, and
+     * `completed` (true stamps completed_at, false clears it).
+     */
+    public function updateMilestone(Request $request, string $slug, int $milestone): RedirectResponse
+    {
+        $project = $this->resolveProject($slug);
+
+        $model = ProjectMilestone::query()
+            ->where('project_id', $project->id)
+            ->whereKey($milestone)
+            ->first();
+        if ($model === null) {
+            throw new NotFoundHttpException('Milestone not found.');
+        }
+
+        $data = $request->validate([
+            'name' => 'sometimes|required|string|max:200',
+            'description' => 'sometimes|nullable|string',
+            'target_date' => 'sometimes|nullable|date',
+            'completed' => 'sometimes|boolean',
+        ]);
+
+        $changes = array_intersect_key($data, array_flip(['name', 'description', 'target_date']));
+        if (array_key_exists('completed', $data)) {
+            // Completing an already completed milestone keeps its original date.
+            $changes['completed_at'] = $data['completed'] ? ($model->completed_at ?? now()) : null;
+        }
+
+        $wasCompleted = $model->completed_at !== null;
+
+        DB::transaction(function () use ($project, $model, $changes, $wasCompleted, $request): void {
+            $model->fill($changes);
+            $changedFields = array_values(array_diff(array_keys($model->getDirty()), ['completed_at']));
+            $model->save();
+
+            $this->recorder->milestoneUpdated(
+                $project,
+                $model,
+                $changedFields,
+                $wasCompleted,
+                $request->user()?->getKey(),
+            );
+        });
+
+        return back();
+    }
+
+    /**
      * Soft-delete a project together with its issues and milestones.
      *
      * Items are stamped with the same deleted_at so we can restore the

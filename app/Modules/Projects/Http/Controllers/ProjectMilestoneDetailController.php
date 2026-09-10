@@ -100,7 +100,7 @@ final class ProjectMilestoneDetailController
                 'description' => $current->description,
                 'target_date' => $current->target_date?->toDateString(),
                 'completed_at' => $current->completed_at?->toIso8601String(),
-                ...$this->schedule($current),
+                ...$this->schedule($current, $total, $completed),
             ],
             'progress' => [
                 'total' => $total,
@@ -177,21 +177,30 @@ final class ProjectMilestoneDetailController
     }
 
     /**
-     * @return array{status: 'completed'|'overdue'|'on_track'|'unscheduled', days_left: ?int}
+     * @return array{status: 'completed'|'done'|'overdue'|'on_track'|'unscheduled', days_left: ?int}
      */
-    private function schedule(ProjectMilestone $milestone): array
+    private function schedule(ProjectMilestone $milestone, int $total, int $completed): array
     {
         if ($milestone->completed_at !== null) {
             return ['status' => 'completed', 'days_left' => null];
         }
 
-        if ($milestone->target_date === null) {
-            return ['status' => 'unscheduled', 'days_left' => null];
+        $daysLeft = $milestone->target_date === null
+            ? null
+            : (int) CarbonImmutable::today()->diffInDays(
+                CarbonImmutable::instance($milestone->target_date)->startOfDay(),
+                false,
+            );
+
+        // Every issue finished but nobody closed the milestone: that is a
+        // prompt to complete it, not a missed deadline.
+        if ($total > 0 && $completed === $total) {
+            return ['status' => 'done', 'days_left' => $daysLeft];
         }
 
-        $today = CarbonImmutable::today();
-        $target = CarbonImmutable::instance($milestone->target_date)->startOfDay();
-        $daysLeft = (int) $today->diffInDays($target, false);
+        if ($daysLeft === null) {
+            return ['status' => 'unscheduled', 'days_left' => null];
+        }
 
         return [
             'status' => $daysLeft < 0 ? 'overdue' : 'on_track',

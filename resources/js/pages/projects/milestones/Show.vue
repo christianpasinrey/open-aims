@@ -1,26 +1,45 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     Calendar,
     Check,
+    CheckCircle2,
     ChevronDown,
     ChevronRight,
     ChevronsUpDown,
     Diamond,
+    Loader2,
+    Pencil,
+    RotateCcw,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import Avatar from '@/components/repo/Avatar.vue';
 import LabelBadge from '@/components/repo/LabelBadge.vue';
 import PriorityIcon from '@/components/repo/PriorityIcon.vue';
 import ProjectIcon from '@/components/repo/ProjectIcon.vue';
 import StatusIcon from '@/components/repo/StatusIcon.vue';
 import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { startedProgressByState } from '@/lib/states';
+
+const MarkdownContent = defineAsyncComponent(
+    () => import('@/components/repo/MarkdownContent.vue'),
+);
 
 type Team = { id: number; name: string; key: string; color: string | null };
 type State = {
@@ -41,7 +60,12 @@ type Issue = {
     labels: Array<{ id: number; name: string; color?: string | null }>;
     updated_at: string | null;
 };
-type MilestoneStatus = 'completed' | 'overdue' | 'on_track' | 'unscheduled';
+type MilestoneStatus =
+    | 'completed'
+    | 'done'
+    | 'overdue'
+    | 'on_track'
+    | 'unscheduled';
 
 const props = defineProps<{
     project: {
@@ -96,16 +120,22 @@ const team = computed(() => props.project.teams[0] ?? null);
 const projectMilestonesHref = computed(
     () => `/projects/${props.project.slug}?tab=milestones`,
 );
+const updateUrl = computed(
+    () => `/projects/${props.project.slug}/milestones/${props.milestone.id}`,
+);
 const startedProgress = computed(() => startedProgressByState(props.states));
+const isCompleted = computed(() => props.milestone.completed_at !== null);
 
 const STATUS_LABEL: Record<MilestoneStatus, string> = {
     completed: 'Completed',
+    done: 'All issues done',
     overdue: 'Overdue',
     on_track: 'In progress',
     unscheduled: 'No target date',
 };
 const STATUS_CLASS: Record<MilestoneStatus, string> = {
     completed: 'text-emerald-500',
+    done: 'text-emerald-500',
     overdue: 'text-rose-400',
     on_track: 'text-foreground',
     unscheduled: 'text-muted-foreground',
@@ -137,7 +167,12 @@ function fmtShort(iso: string | null): string {
 const scheduleNote = computed(() => {
     const days = props.milestone.days_left;
 
-    if (props.milestone.status === 'completed' || days === null) {
+    // Once the work is done, how late the date was stops being news.
+    if (
+        days === null ||
+        props.milestone.status === 'completed' ||
+        props.milestone.status === 'done'
+    ) {
         return null;
     }
 
@@ -204,6 +239,84 @@ function toggleGroup(key: string) {
     }
 
     collapsed.value = next;
+}
+
+// ---- Complete / reopen ----
+const togglingCompleted = ref(false);
+
+function toggleCompleted() {
+    const completing = !isCompleted.value;
+    togglingCompleted.value = true;
+
+    router.patch(
+        updateUrl.value,
+        { completed: completing },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success(
+                    completing ? 'Milestone completed' : 'Milestone reopened',
+                );
+            },
+            onError: () => {
+                toast.error('Could not update the milestone.');
+            },
+            onFinish: () => {
+                togglingCompleted.value = false;
+            },
+        },
+    );
+}
+
+// ---- Edit dialog ----
+const editOpen = ref(false);
+const editSubmitting = ref(false);
+const editError = ref<string | null>(null);
+const editForm = ref({ name: '', description: '', target_date: '' });
+
+function openEdit() {
+    editForm.value = {
+        name: props.milestone.name,
+        description: props.milestone.description ?? '',
+        target_date: props.milestone.target_date ?? '',
+    };
+    editError.value = null;
+    editOpen.value = true;
+}
+
+function submitEdit() {
+    if (!editForm.value.name.trim()) {
+        editError.value = 'Name is required.';
+
+        return;
+    }
+
+    editSubmitting.value = true;
+    editError.value = null;
+
+    router.patch(
+        updateUrl.value,
+        {
+            name: editForm.value.name.trim(),
+            description: editForm.value.description.trim() || null,
+            target_date: editForm.value.target_date || null,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                editOpen.value = false;
+                toast.success('Milestone updated');
+            },
+            onError: (errors) => {
+                editError.value =
+                    Object.values(errors)[0] ??
+                    'Could not update the milestone.';
+            },
+            onFinish: () => {
+                editSubmitting.value = false;
+            },
+        },
+    );
 }
 </script>
 
@@ -293,6 +406,34 @@ function toggleGroup(key: string) {
                     </DropdownMenuContent>
                 </DropdownMenu>
             </nav>
+
+            <div class="flex shrink-0 items-center gap-1">
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    @click="openEdit"
+                >
+                    <Pencil class="size-3.5" />
+                    <span class="hidden sm:inline">Edit</span>
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[12.5px] text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    :disabled="togglingCompleted"
+                    @click="toggleCompleted"
+                >
+                    <Loader2
+                        v-if="togglingCompleted"
+                        class="size-3.5 animate-spin"
+                        aria-hidden="true"
+                    />
+                    <RotateCcw v-else-if="isCompleted" class="size-3.5" />
+                    <CheckCircle2 v-else class="size-3.5 text-emerald-500" />
+                    <span>{{
+                        isCompleted ? 'Reopen' : 'Mark as completed'
+                    }}</span>
+                </button>
+            </div>
         </header>
 
         <div class="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row">
@@ -305,10 +446,7 @@ function toggleGroup(key: string) {
                             class="size-4 shrink-0"
                             :style="{
                                 color: accent,
-                                fill:
-                                    milestone.status === 'completed'
-                                        ? accent
-                                        : 'transparent',
+                                fill: isCompleted ? accent : 'transparent',
                             }"
                         />
                         <h2
@@ -317,12 +455,33 @@ function toggleGroup(key: string) {
                             {{ milestone.name }}
                         </h2>
                     </div>
-                    <p
+
+                    <MarkdownContent
                         v-if="milestone.description"
-                        class="mt-2 text-[13.5px] leading-relaxed whitespace-pre-line text-muted-foreground"
+                        :source="milestone.description"
+                        :interactive-tasks="false"
+                        class="mt-3 text-[13.5px] leading-relaxed text-muted-foreground"
+                    />
+
+                    <div
+                        v-if="milestone.status === 'done'"
+                        class="mt-5 flex flex-col gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-[13px] sm:flex-row sm:items-center sm:justify-between"
                     >
-                        {{ milestone.description }}
-                    </p>
+                        <span class="flex items-center gap-2 text-foreground">
+                            <CheckCircle2
+                                class="size-4 shrink-0 text-emerald-500"
+                            />
+                            All issues in this milestone are done.
+                        </span>
+                        <button
+                            type="button"
+                            class="self-start rounded-md bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 sm:self-auto"
+                            :disabled="togglingCompleted"
+                            @click="toggleCompleted"
+                        >
+                            Mark as completed
+                        </button>
+                    </div>
 
                     <div class="mt-5">
                         <div
@@ -478,7 +637,7 @@ function toggleGroup(key: string) {
                         Properties
                     </h3>
                     <dl
-                        class="grid grid-cols-[90px_1fr] items-center gap-x-3 gap-y-2"
+                        class="grid grid-cols-[76px_1fr] items-start gap-x-3 gap-y-2"
                     >
                         <dt class="text-[12px] text-muted-foreground">
                             Status
@@ -489,25 +648,31 @@ function toggleGroup(key: string) {
                         <dt class="text-[12px] text-muted-foreground">
                             Target
                         </dt>
-                        <dd class="flex items-center gap-1.5 tabular-nums">
-                            <Calendar class="size-3.5 text-muted-foreground" />
-                            {{ fmtDate(milestone.target_date) }}
+                        <dd class="min-w-0 tabular-nums">
+                            <span
+                                class="flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                                <Calendar
+                                    class="size-3.5 shrink-0 text-muted-foreground"
+                                />
+                                {{ fmtDate(milestone.target_date) }}
+                            </span>
                             <span
                                 v-if="scheduleNote"
-                                class="text-[11.5px]"
+                                class="mt-0.5 block text-[11.5px]"
                                 :class="
                                     milestone.status === 'overdue'
                                         ? 'text-rose-400'
                                         : 'text-muted-foreground'
                                 "
-                                >· {{ scheduleNote }}</span
+                                >{{ scheduleNote }}</span
                             >
                         </dd>
                         <template v-if="milestone.completed_at">
                             <dt class="text-[12px] text-muted-foreground">
                                 Completed
                             </dt>
-                            <dd class="tabular-nums">
+                            <dd class="whitespace-nowrap tabular-nums">
                                 {{ fmtDate(milestone.completed_at) }}
                             </dd>
                         </template>
@@ -580,5 +745,81 @@ function toggleGroup(key: string) {
                 </section>
             </aside>
         </div>
+
+        <Dialog v-model:open="editOpen">
+            <DialogContent class="sm:max-w-[480px]">
+                <DialogHeader>
+                    <DialogTitle>Edit milestone</DialogTitle>
+                    <DialogDescription>
+                        Change the name, description or target date. The
+                        description supports markdown.
+                    </DialogDescription>
+                </DialogHeader>
+                <form class="space-y-4" @submit.prevent="submitEdit">
+                    <div class="space-y-1">
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="ms-edit-name"
+                            >Name</label
+                        >
+                        <Input
+                            id="ms-edit-name"
+                            v-model="editForm.name"
+                            type="text"
+                            class="h-8 text-[13px]"
+                        />
+                    </div>
+                    <div class="space-y-1">
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="ms-edit-desc"
+                            >Description</label
+                        >
+                        <textarea
+                            id="ms-edit-desc"
+                            v-model="editForm.description"
+                            rows="6"
+                            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                            placeholder="What is delivered at this milestone?"
+                        />
+                    </div>
+                    <div class="space-y-1">
+                        <label
+                            class="text-[12px] font-medium text-foreground"
+                            for="ms-edit-target"
+                            >Target date</label
+                        >
+                        <input
+                            id="ms-edit-target"
+                            v-model="editForm.target_date"
+                            type="date"
+                            class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]"
+                        />
+                    </div>
+                    <p v-if="editError" class="text-[12px] text-rose-400">
+                        {{ editError }}
+                    </p>
+                    <DialogFooter>
+                        <DialogClose
+                            class="rounded-md px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                            Cancel
+                        </DialogClose>
+                        <button
+                            type="submit"
+                            :disabled="editSubmitting"
+                            class="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                            <Loader2
+                                v-if="editSubmitting"
+                                class="size-3.5 animate-spin"
+                                aria-hidden="true"
+                            />
+                            {{ editSubmitting ? 'Saving…' : 'Save changes' }}
+                        </button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

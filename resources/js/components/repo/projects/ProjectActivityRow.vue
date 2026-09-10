@@ -145,6 +145,27 @@ function stateLabel(key: string | undefined): string {
                 }}</span>
             </template>
 
+            <template v-else-if="activity.kind === 'milestone_updated'">
+                <span> updated milestone </span>
+                <span class="text-foreground">{{
+                    payloadString('milestone_name') ?? '—'
+                }}</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'milestone_completed'">
+                <span> completed milestone </span>
+                <span class="text-foreground">{{
+                    payloadString('milestone_name') ?? '—'
+                }}</span>
+            </template>
+
+            <template v-else-if="activity.kind === 'milestone_reopened'">
+                <span> reopened milestone </span>
+                <span class="text-foreground">{{
+                    payloadString('milestone_name') ?? '—'
+                }}</span>
+            </template>
+
             <template v-else-if="activity.kind === 'member_added'">
                 <span> added </span>
                 <span class="text-foreground">{{
