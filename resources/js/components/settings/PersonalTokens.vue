@@ -229,9 +229,7 @@ onMounted(load);
         </p>
         <p v-else-if="loadFailed" class="text-[13px] text-destructive">
             Could not load your tokens.
-            <button type="button" class="underline" @click="load">
-                Retry
-            </button>
+            <button type="button" class="underline" @click="load">Retry</button>
         </p>
         <p
             v-else-if="tokens.length === 0"
