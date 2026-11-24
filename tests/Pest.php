@@ -120,3 +120,24 @@ function makeIssue(Team $team, Workspace $workspace, WorkflowState $state, array
         'creator_user_id' => $workspace->owner_user_id,
     ], $overrides));
 }
+
+/**
+ * Passport needs an RSA pair to mint tokens. Machines without
+ * storage/oauth-*.key (CI) get a throwaway pair for the test process.
+ */
+function usePassportTestKeys(): void
+{
+    static $pair = null;
+
+    if (is_file(storage_path('oauth-private.key')) && is_file(storage_path('oauth-public.key'))) {
+        return;
+    }
+
+    if ($pair === null) {
+        $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+        openssl_pkey_export($key, $private);
+        $pair = ['private' => $private, 'public' => openssl_pkey_get_details($key)['key']];
+    }
+
+    config(['passport.private_key' => $pair['private'], 'passport.public_key' => $pair['public']]);
+}
