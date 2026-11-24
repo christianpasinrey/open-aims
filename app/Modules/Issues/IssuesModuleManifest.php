@@ -6,6 +6,8 @@ namespace App\Modules\Issues;
 
 use App\Core\Contracts\ModuleManifest;
 use App\Core\Contracts\ProvidesMcpTools;
+use App\Modules\Issues\Mcp\Tools\BoardIssue;
+use App\Modules\Issues\Mcp\Tools\BoardIssues;
 use App\Modules\Issues\Mcp\Tools\InboxList;
 use App\Modules\Issues\Mcp\Tools\IssuesArchive;
 use App\Modules\Issues\Mcp\Tools\IssuesComment;
@@ -69,6 +71,8 @@ final class IssuesModuleManifest implements ModuleManifest, ProvidesMcpTools
             InboxList::class,
             IssuesList::class,
             IssuesGet::class,
+            BoardIssues::class,
+            BoardIssue::class,
             IssuesCreate::class,
             IssuesUpdate::class,
             IssuesTransition::class,
