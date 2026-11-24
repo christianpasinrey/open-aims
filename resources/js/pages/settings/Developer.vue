@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { Terminal, Copy, ExternalLink, AlertTriangle, Trash2, Layers } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
+
+const PersonalTokens = defineAsyncComponent(
+    () => import('@/components/settings/PersonalTokens.vue'),
+);
 
 defineOptions({
     layout: {
@@ -412,6 +416,15 @@ const claudeCodeCli = `claude mcp add --transport http aims ${props.mcp.endpoint
                 </li>
             </ul>
         </section>
+
+        <div class="space-y-4">
+            <Heading
+                variant="small"
+                title="Personal tokens"
+                description="Generate a token to connect Herdr or any MCP client that cannot use OAuth."
+            />
+            <PersonalTokens />
+        </div>
 
         <p class="text-[11.5px] text-muted-foreground">
             <a

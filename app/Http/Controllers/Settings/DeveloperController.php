@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Settings;
 
+use App\Support\Passport\PersonalTokens;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,8 @@ use Inertia\Response;
  */
 final class DeveloperController
 {
+    public function __construct(private readonly PersonalTokens $personalTokens) {}
+
     public function show(Request $request): Response
     {
         $appUrl = rtrim((string) config('app.url'), '/');
@@ -38,6 +41,8 @@ final class DeveloperController
                         ->where('m.user_id', $user->getAuthIdentifier());
                 })
                 ->where('t.user_id', $user->getAuthIdentifier())
+                // Personal tokens have their own section; they are not a connected client.
+                ->whereNotIn('t.client_id', $this->personalTokens->clientIds())
                 ->where('t.revoked', false)
                 ->where(function ($q) {
                     $q->whereNull('t.expires_at')
@@ -134,6 +139,12 @@ final class DeveloperController
             abort(401);
         }
 
+        // Every personal token shares one client: "keep latest" there would
+        // revoke all of them but the newest.
+        if (in_array($clientId, $this->personalTokens->clientIds(), true)) {
+            abort(404);
+        }
+
         $tokens = DB::table('oauth_access_tokens')
             ->where('user_id', $user->getAuthIdentifier())
             ->where('client_id', $clientId)
@@ -165,6 +176,7 @@ final class DeveloperController
 
         $perClient = DB::table('oauth_access_tokens')
             ->where('user_id', $user->getAuthIdentifier())
+            ->whereNotIn('client_id', $this->personalTokens->clientIds())
             ->where('revoked', false)
             ->orderByDesc('created_at')
             ->orderByDesc('id')

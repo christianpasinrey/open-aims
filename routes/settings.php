@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\DeveloperController;
+use App\Http\Controllers\Settings\PersonalTokenController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Support\Facades\Route;
@@ -31,4 +32,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('settings.developer.client.keep-latest');
     Route::delete('settings/developer/clients/{clientId}', [DeveloperController::class, 'revokeClient'])
         ->name('settings.developer.client.revoke');
+
+    Route::get('settings/developer/tokens', [PersonalTokenController::class, 'index'])
+        ->name('settings.developer.tokens.index');
+    Route::post('settings/developer/tokens', [PersonalTokenController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('settings.developer.tokens.store');
+    Route::delete('settings/developer/tokens/{tokenId}', [PersonalTokenController::class, 'destroy'])
+        ->name('settings.developer.tokens.destroy');
 });
