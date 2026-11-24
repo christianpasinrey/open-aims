@@ -194,6 +194,21 @@ it('answers not found for another workspace\'s identifier and changes nothing', 
         ->and($foreign->assignee_user_id)->toBeNull();
 });
 
+it('refuses to start an archived issue and changes nothing', function () {
+    $fix = makeWorkspaceFixture();
+    $issue = makeIssue($fix['team'], $fix['workspace'], $fix['states']['Todo'], ['archived_at' => now()]);
+    $id = 'ENG-'.$issue->number;
+
+    AimsServer::actingAs($fix['user'])
+        ->tool(IssuesStart::class, ['identifier' => $id])
+        ->assertHasErrors(["{$id} is archived. Unarchive it before starting work."]);
+
+    $issue->refresh();
+    expect($issue->workflow_state_id)->toBe($fix['states']['Todo']->id)
+        ->and($issue->assignee_user_id)->toBeNull()
+        ->and($issue->git_branch_name)->toBeNull();
+});
+
 it('is registered', function () {
     expect((new IssuesModuleManifest)->mcpTools())->toContain(IssuesStart::class);
 });

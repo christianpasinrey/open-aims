@@ -53,6 +53,14 @@ class IssuesStart extends Tool
         }
 
         $issue = Issue::query()->with(['team:id,key,color', 'workflowState'])->findOrFail($found->getKey());
+
+        // An archived issue is hidden from every list: starting it would put
+        // work on something nobody can see.
+        if ($issue->archived_at !== null) {
+            return Response::error(
+                $this->issueIdentifier($issue).' is archived. Unarchive it before starting work.'
+            );
+        }
         $startable = in_array($issue->workflowState?->type, self::STARTABLE, true);
 
         $started = null;
