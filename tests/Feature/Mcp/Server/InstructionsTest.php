@@ -59,3 +59,11 @@ it('states the documentation protocol and points at the graph schema', function 
 it('stays short enough that truncating clients keep the rules', function () {
     expect(mb_strlen(aimsInstructions()))->toBeLessThan(1200);
 });
+
+it('names the tools for interface clients and for picking up an issue', function () {
+    $instructions = aimsInstructions();
+
+    foreach (['board-overview', 'board-issues', 'board-issue', 'issues-start'] as $tool) {
+        expect($instructions)->toContain($tool);
+    }
+});

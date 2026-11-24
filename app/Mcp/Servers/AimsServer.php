@@ -33,6 +33,8 @@ use Laravel\Mcp\Server\Tool;
     "graphs-map, graphs-impact.\n\n".
     'Identifiers are TEAMKEY-N (LAM-275). Project slugs come from `projects-list`; cycles are '.
     "(team_key, number); 'me' is the caller.\n\n".
+    'Clients drawing an interface use board-overview, board-issues, board-issue. Pick up an issue '.
+    "with issues-start (branch + brief).\n\n".
     'DOCUMENT EVERY PROJECT, MILESTONE AND ISSUE THE SAME WAY: HTML plan with Mermaid and Chart.js, '.
     'labels, acceptance criteria and a code graph (stage planned before coding, implemented when '.
     'done). Follow aims://guides/documentation; aims://guides/planning covers Scrum, '.
